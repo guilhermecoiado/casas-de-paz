@@ -31,7 +31,7 @@ export function UnlockWatcher() {
     });
     REWARDS.forEach((r) => {
       if (r.free || (r.path && !r.pct) || !isUnlocked(group, r, prog)) return;
-      const from = r.path ? PATHS.find((x) => x.id === r.path)!.name : 'Coleção';
+      const from = r.path ? PATHS.find((x) => x.id === r.path)!.name : r.req ? 'Conquista' : 'Recompensa';
       keys.push({ key: `r:${r.id}`, title: r.name, subtitle: `${KIND_LABEL[r.kind]} · ${from}`, kind: 'reward', icon: r.icon });
     });
     PATHS.forEach((path) => {

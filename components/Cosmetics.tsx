@@ -30,6 +30,26 @@ const AVATAR_ORN: Record<string, Orn[]> = {
     { e: '🌿', s: 0.3, style: { left: '-12%', top: '30%', transform: 'rotate(-30deg)' } },
     { e: '🌿', s: 0.3, style: { right: '-12%', top: '30%', transform: 'scaleX(-1) rotate(-30deg)' } },
   ],
+  'af-pedra': [
+    { e: '🪨', s: 0.26, style: { left: '-6%', bottom: '-2%' } },
+  ],
+  'af-aguas': [
+    { e: '💧', s: 0.26, style: { right: '-6%', top: '0%' }, cls: 'orn-bob' },
+    { e: '💧', s: 0.2, style: { left: '-4%', bottom: '8%' } },
+  ],
+  'af-videira': [
+    { e: '🍇', s: 0.3, style: { left: '-10%', top: '-4%' } },
+    { e: '🍃', s: 0.24, style: { right: '-8%', bottom: '6%' }, cls: 'orn-bob' },
+  ],
+  'af-rebanho': [
+    { e: '🐑', s: 0.32, style: { right: '-14%', bottom: '-4%' }, cls: 'orn-bob' },
+  ],
+  'af-alianca': [
+    { e: '🌈', s: 0.36, style: { left: '30%', top: '-26%' } },
+  ],
+  'af-leao': [
+    { e: '🦁', s: 0.34, style: { right: '-14%', bottom: '-6%' } },
+  ],
   'af-belem': [
     { e: '⭐', s: 0.3, style: { right: '-6%', top: '-10%' }, cls: 'orn-flicker' },
     { e: '✨', s: 0.22, style: { left: '-6%', bottom: '0%' }, cls: 'orn-bob' },
@@ -64,6 +84,29 @@ const TILE_ORN: Record<string, Orn[]> = {
   ],
   'tf-reino': [
     { e: '👑', s: 1, style: { left: '50%', top: 3, marginLeft: -9 } },
+  ],
+  'tf-pedras': [
+    { e: '🪨', s: 0.9, style: { left: 6, top: 6 } },
+  ],
+  'tf-ondas': [
+    { e: '🌊', s: 1, style: { left: 6, top: 6 } },
+  ],
+  'tf-estrelas': [
+    { e: '⭐', s: 0.9, style: { left: 6, top: 6 }, cls: 'orn-flicker' },
+    { e: '✨', s: 0.8, style: { right: 8, top: 40 }, cls: 'orn-bob' },
+  ],
+  'tf-ramos': [
+    { e: '🌿', s: 1, style: { left: 5, top: 5, transform: 'rotate(-20deg)' } },
+    { e: '🌿', s: 0.9, style: { right: 6, top: 40, transform: 'scaleX(-1) rotate(-20deg)' } },
+  ],
+  'tf-arca': [
+    { e: '🕊️', s: 1, style: { left: 6, top: 6 }, cls: 'orn-bob' },
+  ],
+  'tf-tabua': [
+    { e: '📜', s: 1, style: { left: 6, top: 6 } },
+  ],
+  'tf-alianca': [
+    { e: '🌈', s: 1, style: { left: '50%', top: 3, marginLeft: -10 } },
   ],
   'tf-videira': [
     { e: '🍇', s: 1, style: { left: 5, top: 5 } },
@@ -106,6 +149,18 @@ export function TileFx({ anim, kit }: { anim: string | null | undefined; kit: Pa
           {anim === 'ta-gloria' && [10, 28, 46, 64, 82].map((x, i) => <span key={i} className="fx-spark" style={{ left: `${x}%`, ...d(i * 0.65) }}>✦</span>)}
           {anim === 'ta-gotas' && [15, 40, 65, 85].map((x, i) => <span key={i} className="fx-drop" style={{ left: `${x}%`, ...d(i * 0.6) }}>💧</span>)}
           {anim === 'ta-pomba' && <span className="fx-dove" style={{ left: 0 }}>🕊️</span>}
+          {anim === 'ta-brilho' && <span className="fx-shine" />}
+          {anim === 'ta-estrelas' && [[14, 18], [70, 12], [40, 34], [82, 46], [22, 58]].map(([x, y], i) => <span key={i} className="fx-twinkle" style={{ left: `${x}%`, top: `${y}%`, ...d(i * 0.45) }}>✦</span>)}
+          {anim === 'ta-vento' && [20, 45, 62].map((y, i) => <span key={i} className="fx-leaf" style={{ top: `${y}%`, left: 0, ...d(i * 1.6) }}>🍃</span>)}
+          {anim === 'ta-ceifa' && [4, 80].map((x, i) => <span key={i} className="fx-reap" style={{ left: `${x}%`, ...d(i * 0.5) }}>🌾</span>)}
+          {anim === 'ta-belem' && <span className="fx-comet" style={{ left: 0 }}>🌟</span>}
+          {anim === 'ta-arvore' && (
+            <>
+              <span className="fx-tree">🌳</span>
+              {[18, 72].map((x, i) => <span key={i} className="fx-bud" style={{ left: `${x}%`, bottom: '18%', ...d(1.2 + i * 0.8) }}>🍃</span>)}
+            </>
+          )}
+          {anim === 'ta-alianca' && <span className="fx-rainbow" />}
         </div>
       )}
       {kit && <KitFx kit={kit} />}

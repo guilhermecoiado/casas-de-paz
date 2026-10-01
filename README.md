@@ -101,7 +101,11 @@ O catálogo completo fica em `lib/rewards.ts`.
 
 O nome do kit só aparece quando o caminho está completo, e o perfil tem um botão "Usar kit completo".
 
-**Coleção (por ações).** Conquistas ligadas a check-ins, convidados, evangelismo, constância (dias postando), lanche, fotos em grupo e enquetes. Elas não aumentam a pontuação necessária para a linha da evolução.
+**Itens por categoria (avulsos).** Além dos itens dos caminhos, cada categoria tem pelo menos 8 itens avulsos: títulos, molduras de perfil, cores do tile (incluindo a **Túnica de José**, com listras multicoloridas), molduras do tile e animações. Eles são liberados de dois jeitos:
+- **por pontos:** espalhados entre os marcos dos caminhos, então sempre tem algo novo chegando;
+- **por ações:** conquistas como check-ins, convidados, evangelismo, dias postando, lanche e fotos em grupo.
+
+Nenhum desses itens é necessário para completar a linha da evolução.
 
 **Frases de sobrepor.** Ao compartilhar uma foto com moldura, a pessoa escolhe uma frase, que aparece estilizada sobre a imagem. As frases vêm de quatro fontes:
 - 3 frases liberadas desde o início

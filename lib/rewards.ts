@@ -98,6 +98,44 @@ export const REWARDS: Reward[] = [
   { id: 'tc-mana', kind: 'tile_color', name: 'Cor Maná', icon: '🍯', req: { stat: 'snacks', n: 3, label: 'Ajude no lanche 3 vezes' } },
   { id: 't-comunhao', kind: 'title', name: 'Construtor de Comunhão', icon: '🤝', req: { stat: 'groupPhotos', n: 3, label: '3 fotos em grupo' } },
 
+  /* 🎁 Itens avulsos por pontos (intercalados com os caminhos; não são necessários para completar a evolução) */
+  // Títulos
+  { id: 't-discipulo', kind: 'title', name: 'Discípulo', icon: '📖', pct: 6 },
+  { id: 't-testemunha', kind: 'title', name: 'Testemunha', icon: '🙌', pct: 30 },
+  { id: 't-luz-caminho', kind: 'title', name: 'Luz do Caminho', icon: '🕯️', pct: 57 },
+  { id: 't-sal', kind: 'title', name: 'Sal da Terra', icon: '🧂', pct: 96 },
+  // Molduras de perfil
+  { id: 'af-pedra', kind: 'avatar_frame', name: 'Moldura Pedra', icon: '🪨', pct: 3 },
+  { id: 'af-aguas', kind: 'avatar_frame', name: 'Moldura Águas', icon: '💧', pct: 15 },
+  { id: 'af-videira', kind: 'avatar_frame', name: 'Moldura Videira', icon: '🍇', pct: 35 },
+  { id: 'af-rebanho', kind: 'avatar_frame', name: 'Moldura Rebanho', icon: '🐑', pct: 52 },
+  { id: 'af-alianca', kind: 'avatar_frame', name: 'Moldura Aliança', icon: '🌈', pct: 76 },
+  { id: 'af-leao', kind: 'avatar_frame', name: 'Moldura Leão de Judá', icon: '🦁', pct: 97 },
+  // Cores do tile
+  { id: 'tc-areia', kind: 'tile_color', name: 'Areia do Deserto', icon: '🏜️', pct: 2 },
+  { id: 'tc-oliveira', kind: 'tile_color', name: 'Oliveira', icon: '🫒', pct: 11 },
+  { id: 'tc-linho', kind: 'tile_color', name: 'Linho Branco', icon: '🤍', pct: 20 },
+  { id: 'tc-ceu', kind: 'tile_color', name: 'Céu da Galileia', icon: '☁️', pct: 34 },
+  { id: 'tc-rosa', kind: 'tile_color', name: 'Rosa de Sarom', icon: '🌹', pct: 47 },
+  { id: 'tc-jose', kind: 'tile_color', name: 'Túnica de José', icon: '🧥', pct: 62 },
+  { id: 'tc-ouro', kind: 'tile_color', name: 'Ouro do Tabernáculo', icon: '🪙', pct: 94 },
+  // Molduras do tile
+  { id: 'tf-pedras', kind: 'tile_frame', name: 'Tile Pedras', icon: '🪨', pct: 5 },
+  { id: 'tf-ondas', kind: 'tile_frame', name: 'Tile Ondas', icon: '🌊', pct: 16 },
+  { id: 'tf-estrelas', kind: 'tile_frame', name: 'Tile Estrelas', icon: '⭐', pct: 25 },
+  { id: 'tf-ramos', kind: 'tile_frame', name: 'Tile Ramos', icon: '🌿', pct: 40 },
+  { id: 'tf-arca', kind: 'tile_frame', name: 'Tile Arca', icon: '🕊️', pct: 53 },
+  { id: 'tf-tabua', kind: 'tile_frame', name: 'Tile Tábua da Lei', icon: '📜', pct: 70 },
+  { id: 'tf-alianca', kind: 'tile_frame', name: 'Tile Arco da Aliança', icon: '🌈', pct: 88 },
+  // Animações do tile
+  { id: 'ta-brilho', kind: 'tile_anim', name: 'Animação Brilho', icon: '✨', pct: 7 },
+  { id: 'ta-estrelas', kind: 'tile_anim', name: 'Animação Estrelas', icon: '⭐', pct: 21 },
+  { id: 'ta-vento', kind: 'tile_anim', name: 'Animação Vento', icon: '🍃', pct: 29 },
+  { id: 'ta-ceifa', kind: 'tile_anim', name: 'Animação Ceifa', icon: '🌾', pct: 39 },
+  { id: 'ta-belem', kind: 'tile_anim', name: 'Animação Estrela de Belém', icon: '🌟', pct: 71 },
+  { id: 'ta-arvore', kind: 'tile_anim', name: 'Animação Árvore da Vida', icon: '🌳', pct: 84 },
+  { id: 'ta-alianca', kind: 'tile_anim', name: 'Animação Aliança', icon: '🌈', pct: 99 },
+
   /* 💬 Frases de sobrepor */
   { id: 'ph-esperanca', kind: 'phrase', name: 'Há esperança', icon: '💬', free: true },
   { id: 'ph-transforma', kind: 'phrase', name: 'Jesus transforma', icon: '💬', free: true },

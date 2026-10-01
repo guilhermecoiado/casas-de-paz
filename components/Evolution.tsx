@@ -110,12 +110,12 @@ function RewardRow({ r, last, url, name, member, titleId, onEquip, saving }: Pro
   const { group, me, progress } = useGroup();
   const p = progress(me);
   const ok = isUnlocked(group, r, p);
-  const worn = isWorn(r, member, titleId);
+  const worn = ok && isWorn(r, member, titleId);
   const need = r.req ? `${Math.min(p[r.req.stat], r.req.n)}/${r.req.n} ${ACH_LABEL[r.req.stat]}` : `${rewardThreshold(group, r)} pts`;
   return (
     <li className="relative flex items-center gap-3 py-2 pl-1">
       {!last && <span className="absolute left-[26px] top-[52px] h-[calc(100%-44px)] w-0.5 bg-sand" />}
-      <div className={ok ? '' : 'opacity-45 grayscale'}><RewardPreview r={r} url={url} name={name} /></div>
+      <div className={ok ? '' : 'opacity-55'}><RewardPreview r={r} url={url} name={name} /></div>
       <div className="min-w-0 flex-1">
         <p className={`truncate text-sm font-extrabold ${ok ? '' : 'text-[#8A6F57]'}`}>{r.name}</p>
         <p className="text-[11px] font-bold text-[#a8927a]">{KIND_LABEL[r.kind]}</p>
@@ -172,19 +172,22 @@ const BLOCKS: { kind: Reward['kind']; label: string }[] = [
   { kind: 'tile_anim', label: 'Animações do tile' },
 ];
 
-/** Itens fora dos caminhos (conquistas por ação), em blocos por categoria. */
+/** Itens fora dos caminhos (por pontos ou por ação), em blocos por categoria. */
 export function Collection(props: Props) {
   const { group, me, progress, profiles } = useGroup();
   const p = progress(me);
   const prof = profiles[me];
-  const all = REWARDS.filter((r) => r.req && r.kind !== 'phrase');
+  // por pontos primeiro (em ordem), depois as conquistas por ação
+  const all = REWARDS.filter((r) => !r.path && r.kind !== 'phrase').sort(
+    (a, b) => (a.req ? 1 : 0) - (b.req ? 1 : 0) || (a.pct ?? 0) - (b.pct ?? 0),
+  );
   const got = all.filter((r) => isUnlocked(group, r, p)).length;
   return (
     <section className="mx-4 mt-8">
       <div className="mb-1 flex items-end justify-between">
         <div>
-          <h2 className="font-display text-xl font-bold">Conquistas</h2>
-          <p className="text-sm text-[#8A6F57]">Ganhe por ação: convide, evangelize, participe.</p>
+          <h2 className="font-display text-xl font-bold">Itens por categoria</h2>
+          <p className="text-sm text-[#8A6F57]">Liberados por pontos ou por ações: convide, evangelize, participe.</p>
         </div>
         <span className="chip bg-white text-[#6b5643]">{got}/{all.length}</span>
       </div>
@@ -199,15 +202,16 @@ export function Collection(props: Props) {
             <div className="grid grid-cols-2 gap-2.5">
               {items.map((r) => {
                 const ok = isUnlocked(group, r, p);
-                const worn = isWorn(r, props.member, props.titleId);
-                const cur = Math.min(p[r.req!.stat], r.req!.n);
+                const worn = ok && isWorn(r, props.member, props.titleId);
+                const need = r.req ? r.req.n : rewardThreshold(group, r);
+                const cur = Math.min(r.req ? p[r.req.stat] : p.points, need);
                 return (
                   <div key={r.id} className={`flex flex-col rounded-2xl bg-white p-3 ${worn ? 'ring-2 ring-terra' : ''}`}>
                     <div className="flex items-center gap-2">
-                      <div className={ok ? '' : 'opacity-45 grayscale'}><RewardPreview r={r} url={prof?.avatar_url} name={prof?.name} /></div>
+                      <div className={ok ? '' : 'opacity-55'}><RewardPreview r={r} url={prof?.avatar_url} name={prof?.name} /></div>
                       <p className="min-w-0 flex-1 text-[13px] font-extrabold leading-tight">{r.name}</p>
                     </div>
-                    <p className="mt-2 text-[11px] leading-snug text-[#6b5643]">{r.req!.label}</p>
+                    <p className="mt-2 text-[11px] leading-snug text-[#6b5643]">{r.req ? r.req.label : `Libera com ${need} pontos`}</p>
                     {ok ? (
                       <button
                         onClick={() => props.onEquip(r)}
@@ -218,8 +222,8 @@ export function Collection(props: Props) {
                       </button>
                     ) : (
                       <div className="mt-auto pt-2">
-                        <ProgressBar value={cur} max={r.req!.n} height={6} color="bg-amber" />
-                        <p className="mt-1 text-[10px] font-bold text-[#a8927a]">{cur}/{r.req!.n} {ACH_LABEL[r.req!.stat]}</p>
+                        <ProgressBar value={cur} max={need} height={6} color="bg-amber" />
+                        <p className="mt-1 text-[10px] font-bold text-[#a8927a]">{cur}/{need} {r.req ? ACH_LABEL[r.req.stat] : 'pts'}</p>
                       </div>
                     )}
                   </div>
