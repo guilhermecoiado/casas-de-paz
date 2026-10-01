@@ -3,7 +3,7 @@
 import { useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
-import { Home, Images, Plus, Trophy, Hammer } from 'lucide-react';
+import { Home, Images, Plus, Trophy, Heart } from 'lucide-react';
 import { useAuth } from '@/components/Providers';
 import { FullLoader } from '@/components/ui';
 import { GroupProvider } from '@/lib/group-context';
@@ -46,7 +46,7 @@ function BottomNav({ id }: { id: string }) {
     { href: `${base}/feed`, icon: Images, label: 'Feed' },
     { href: `${base}/postar`, icon: Plus, label: 'Postar', center: true },
     { href: `${base}/ranking`, icon: Trophy, label: 'Ranking' },
-    { href: `${base}/casa`, icon: Hammer, label: 'Casa' },
+    { href: `${base}/casa`, icon: Heart, label: 'Casa' },
   ];
   if (path?.endsWith('/postar') || path?.endsWith('/chat')) return null;
   return (
