@@ -258,7 +258,6 @@ export interface HouseShareOptions {
   points: number;
   members: number;
   checkins: number;
-  guests?: number;
   groupPhoto?: string | null; // última foto em grupo (pequena, estilo polaroid)
   photoDate?: string;
 }
@@ -330,7 +329,7 @@ export async function houseShareImage(svg: SVGSVGElement, o: HouseShareOptions):
   ctx.stroke();
 
   // texto da conquista (lado esquerdo, abaixo da casa)
-  const ty = py + ph + 80;
+  const ty = py + ph + 100;
   const textW = o.groupPhoto ? 540 : W - 200;
   ctx.textAlign = o.groupPhoto ? 'left' : 'center';
   const tx = o.groupPhoto ? 90 : W / 2;
@@ -339,12 +338,9 @@ export async function houseShareImage(svg: SVGSVGElement, o: HouseShareOptions):
   wrapLines(ctx, 'Construímos juntos!', textW).forEach((l, i) => ctx.fillText(l, tx, ty + i * 70));
   ctx.font = '800 34px Nunito, system-ui, sans-serif';
   ctx.fillStyle = terra;
-  ctx.fillText(`${o.points.toLocaleString('pt-BR')} pts · ${o.members} ${o.members === 1 ? 'membro' : 'membros'}`, tx, ty + 62);
+  ctx.fillText(`${o.points.toLocaleString('pt-BR')} pts · ${o.members} ${o.members === 1 ? 'membro' : 'membros'}`, tx, ty + 68);
   ctx.fillStyle = title;
-  ctx.fillText(`📍 ${o.checkins.toLocaleString('pt-BR')} ${o.checkins === 1 ? 'check-in' : 'check-ins'}`, tx, ty + 112);
-  if (o.guests) {
-    ctx.fillText(`🙌 ${o.guests.toLocaleString('pt-BR')} ${o.guests === 1 ? 'convidado' : 'convidados'}`, tx, ty + 162);
-  }
+  ctx.fillText(`📍 ${o.checkins.toLocaleString('pt-BR')} ${o.checkins === 1 ? 'check-in' : 'check-ins'}`, tx, ty + 124);
   ctx.textAlign = 'left';
 
   // polaroid com a última foto em grupo, sobrepondo a casa

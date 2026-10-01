@@ -43,7 +43,6 @@ export default function Casa() {
         points: stats.groupPoints,
         members: members.length,
         checkins: checkins.length,
-        guests: checkins.reduce((n, p) => n + (p.guests || 0), 0),
         groupPhoto: lastPhoto?.photo_url ?? null,
         photoDate: date,
       });
