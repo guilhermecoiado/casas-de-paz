@@ -164,54 +164,71 @@ function KitRow({ path, unlockedAll, active, onEquipKit, saving }: { path: PathI
 
 /* ===================== Coleção ===================== */
 
+const BLOCKS: { kind: Reward['kind']; label: string }[] = [
+  { kind: 'title', label: 'Títulos' },
+  { kind: 'avatar_frame', label: 'Molduras de perfil' },
+  { kind: 'tile_color', label: 'Cores do tile' },
+  { kind: 'tile_frame', label: 'Molduras do tile' },
+  { kind: 'tile_anim', label: 'Animações do tile' },
+];
+
+/** Itens fora dos caminhos (conquistas por ação), em blocos por categoria. */
 export function Collection(props: Props) {
   const { group, me, progress, profiles } = useGroup();
   const p = progress(me);
   const prof = profiles[me];
-  const items = REWARDS.filter((r) => r.req && r.kind !== 'phrase');
-  const got = items.filter((r) => isUnlocked(group, r, p)).length;
+  const all = REWARDS.filter((r) => r.req && r.kind !== 'phrase');
+  const got = all.filter((r) => isUnlocked(group, r, p)).length;
   return (
     <section className="mx-4 mt-8">
-      <div className="mb-3 flex items-end justify-between">
+      <div className="mb-1 flex items-end justify-between">
         <div>
-          <h2 className="font-display text-xl font-bold">Coleção</h2>
-          <p className="text-sm text-[#8A6F57]">Conquistas por ação: convide, evangelize, participe.</p>
+          <h2 className="font-display text-xl font-bold">Conquistas</h2>
+          <p className="text-sm text-[#8A6F57]">Ganhe por ação: convide, evangelize, participe.</p>
         </div>
-        <span className="chip bg-white text-[#6b5643]">{got}/{items.length}</span>
+        <span className="chip bg-white text-[#6b5643]">{got}/{all.length}</span>
       </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        {items.map((r) => {
-          const ok = isUnlocked(group, r, p);
-          const worn = isWorn(r, props.member, props.titleId);
-          const cur = Math.min(p[r.req!.stat], r.req!.n);
-          return (
-            <div key={r.id} className={`flex flex-col rounded-2xl bg-white p-3 ${worn ? 'ring-2 ring-terra' : ''}`}>
-              <div className="flex items-start gap-2">
-                <div className={ok ? '' : 'opacity-45 grayscale'}><RewardPreview r={r} url={prof?.avatar_url} name={prof?.name} /></div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-extrabold leading-tight">{r.name}</p>
-                  <p className="text-[10px] font-bold text-[#a8927a]">{KIND_LABEL[r.kind]}</p>
-                </div>
-              </div>
-              <p className="mt-2 text-[11px] leading-snug text-[#6b5643]">{r.req!.label}</p>
-              {ok ? (
-                <button
-                  onClick={() => props.onEquip(r)}
-                  disabled={props.saving !== null}
-                  className={`chip mt-2 justify-center !py-1.5 ${worn ? 'bg-terra text-white' : 'bg-ink text-white'}`}
-                >
-                  {props.saving === r.id ? <Spinner className="h-3 w-3" /> : worn ? <><Check size={12} strokeWidth={3} /> Em uso</> : 'Usar'}
-                </button>
-              ) : (
-                <div className="mt-2">
-                  <ProgressBar value={cur} max={r.req!.n} height={6} color="bg-amber" />
-                  <p className="mt-1 text-[10px] font-bold text-[#a8927a]">{cur}/{r.req!.n} {ACH_LABEL[r.req!.stat]}</p>
-                </div>
-              )}
+      {BLOCKS.map((b) => {
+        const items = all.filter((r) => r.kind === b.kind);
+        if (!items.length) return null;
+        return (
+          <div key={b.kind} className="mt-4">
+            <h3 className="mb-2 text-sm font-extrabold uppercase tracking-wider text-[#a8927a]">
+              {b.label} <span className="font-bold normal-case tracking-normal">· {items.filter((r) => isUnlocked(group, r, p)).length}/{items.length}</span>
+            </h3>
+            <div className="grid grid-cols-2 gap-2.5">
+              {items.map((r) => {
+                const ok = isUnlocked(group, r, p);
+                const worn = isWorn(r, props.member, props.titleId);
+                const cur = Math.min(p[r.req!.stat], r.req!.n);
+                return (
+                  <div key={r.id} className={`flex flex-col rounded-2xl bg-white p-3 ${worn ? 'ring-2 ring-terra' : ''}`}>
+                    <div className="flex items-center gap-2">
+                      <div className={ok ? '' : 'opacity-45 grayscale'}><RewardPreview r={r} url={prof?.avatar_url} name={prof?.name} /></div>
+                      <p className="min-w-0 flex-1 text-[13px] font-extrabold leading-tight">{r.name}</p>
+                    </div>
+                    <p className="mt-2 text-[11px] leading-snug text-[#6b5643]">{r.req!.label}</p>
+                    {ok ? (
+                      <button
+                        onClick={() => props.onEquip(r)}
+                        disabled={props.saving !== null}
+                        className={`chip mt-2 justify-center !py-1.5 ${worn ? 'bg-terra text-white' : 'bg-ink text-white'}`}
+                      >
+                        {props.saving === r.id ? <Spinner className="h-3 w-3" /> : worn ? <><Check size={12} strokeWidth={3} /> Em uso</> : 'Usar'}
+                      </button>
+                    ) : (
+                      <div className="mt-auto pt-2">
+                        <ProgressBar value={cur} max={r.req!.n} height={6} color="bg-amber" />
+                        <p className="mt-1 text-[10px] font-bold text-[#a8927a]">{cur}/{r.req!.n} {ACH_LABEL[r.req!.stat]}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </section>
   );
 }
