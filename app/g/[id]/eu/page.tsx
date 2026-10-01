@@ -3,26 +3,23 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftRight, Check, Lock, LogOut, Pencil, Settings } from 'lucide-react';
+import { ArrowLeftRight, LogOut, Pencil, Settings } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { useAuth, useToast } from '@/components/Providers';
 import { Avatar, PhotoPicker, ProgressBar, Sheet, Spinner } from '@/components/ui';
 import { MemberTile } from '@/components/Tile';
 import { PushToggle } from '@/components/PushToggle';
-import { REWARDS, REWARD_KIND_LABEL, isRewardUnlocked, rewardThreshold, type RewardKind } from '@/lib/game';
+import { KIND_LABEL, fieldOf, kitItems, nextPathReward, rewardThreshold, type PathInfo, type Reward } from '@/lib/rewards';
+import { Collection, EvolutionLine, Phrases } from '@/components/Evolution';
 import { errMsg, supabase, uploadImage } from '@/lib/supabase';
 import { squareAvatar } from '@/lib/image';
 
-const KINDS: RewardKind[] = ['title', 'avatar_frame', 'tile_color', 'tile_frame', 'tile_anim'];
-const FIELD: Record<RewardKind, 'title' | 'avatar_frame' | 'tile_frame' | 'tile_color' | 'tile_anim'> = {
-  title: 'title', avatar_frame: 'avatar_frame', tile_frame: 'tile_frame', tile_color: 'tile_color', tile_anim: 'tile_anim',
-};
 
 export default function Eu() {
   const router = useRouter();
   const toast = useToast();
   const { signOut, refreshProfile } = useAuth();
-  const { group, me, members, profiles, stats, look, myPoints, maxInd, unlocked, isAdmin, reloadProfiles } = useGroup();
+  const { group, me, members, profiles, stats, look, progress, myPoints, maxInd, unlocked, isAdmin, reloadProfiles } = useGroup();
   const member = members.find((m) => m.user_id === me);
   const prof = profiles[me];
   const l = look(me);
@@ -33,26 +30,32 @@ export default function Eu() {
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const nextReward = useMemo(
-    () => REWARDS.filter((r) => !isRewardUnlocked(group, r, myPoints)).sort((a, b) => a.pct - b.pct)[0],
-    [group, myPoints],
-  );
+  const nextReward = useMemo(() => nextPathReward(group, progress(me)), [group, progress, me]);
 
-  const equip = async (kind: RewardKind, id: string) => {
+  const save = async (patch: Partial<Record<'title' | 'avatar_frame' | 'tile_frame' | 'tile_color' | 'tile_anim', string | null>>, key: string) => {
     if (!member) return;
-    const field = FIELD[kind];
-    const current = member[field];
-    const nextVal = kind === 'title' ? id : current === id ? null : id;
-    const payload = {
-      p_group: group.id,
-      p_title: member.title, p_avatar_frame: member.avatar_frame, p_tile_frame: member.tile_frame,
-      p_tile_color: member.tile_color, p_tile_anim: member.tile_anim,
-      [`p_${field}`]: nextVal,
-    };
-    setSaving(id);
-    const { error } = await supabase.rpc('set_cosmetics', payload);
+    const cur = { title: member.title, avatar_frame: member.avatar_frame, tile_frame: member.tile_frame, tile_color: member.tile_color, tile_anim: member.tile_anim, ...patch };
+    setSaving(key);
+    const { error } = await supabase.rpc('set_cosmetics', {
+      p_group: group.id, p_title: cur.title, p_avatar_frame: cur.avatar_frame, p_tile_frame: cur.tile_frame,
+      p_tile_color: cur.tile_color, p_tile_anim: cur.tile_anim,
+    });
     setSaving(null);
     if (error) toast(errMsg(error), 'error');
+  };
+
+  /** Toca para usar; toca de novo para tirar. */
+  const equip = async (r: Reward) => {
+    if (r.kind === 'phrase' || !member) return;
+    const field = fieldOf(r.kind);
+    const worn = r.kind === 'title' ? l.titleId === r.id : member[field] === r.id;
+    await save({ [field]: worn ? null : r.id }, r.id);
+  };
+
+  const equipKit = async (path: PathInfo) => {
+    const patch: Record<string, string> = {};
+    kitItems(path.id).forEach((r) => { if (r.kind !== 'phrase') patch[fieldOf(r.kind)] = r.id; });
+    await save(patch, `kit:${path.id}`);
   };
 
   const saveProfile = async () => {
@@ -85,7 +88,7 @@ export default function Eu() {
 
       <section className="mx-4 mt-4 flex gap-4">
         <div className="w-[118px] shrink-0">
-          <MemberTile profile={prof} stats={stats.byUser[me]} look={l} alive={unlocked.has('tile_anim')} isAdmin={isAdmin} />
+          <MemberTile profile={prof} stats={stats.byUser[me]} look={l} alive={unlocked.has("tile_anim")} isAdmin={isAdmin} forcePosted />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -108,40 +111,16 @@ export default function Eu() {
         <div className="mt-2"><ProgressBar value={myPoints} max={maxInd} color="bg-amber" /></div>
         <p className="mt-2 text-sm font-bold text-[#6b5643]">
           {nextReward
-            ? <>Próximo prêmio: <span className="text-terra">{nextReward.name}</span> ({REWARD_KIND_LABEL[nextReward.kind].toLowerCase()}) em {rewardThreshold(group, nextReward) - myPoints} pts</>
-            : 'Todos os prêmios desbloqueados! 👑'}
+            ? <>Próximo na evolução: <span className="text-terra">{nextReward.icon} {nextReward.name}</span> ({KIND_LABEL[nextReward.kind].toLowerCase()}) em {rewardThreshold(group, nextReward) - myPoints} pts</>
+            : 'Linha da evolução completa! 👑'}
         </p>
       </section>
 
       <div className="mx-4 mt-4"><PushToggle /></div>
 
-      {KINDS.map((kind) => (
-        <section key={kind} className="mx-4 mt-6">
-          <h2 className="mb-2 font-display text-lg font-bold">{REWARD_KIND_LABEL[kind]}</h2>
-          <div className="grid grid-cols-3 gap-2">
-            {REWARDS.filter((r) => r.kind === kind).map((r) => {
-              const ok = isRewardUnlocked(group, r, myPoints);
-              const active = kind === 'title' ? l.title === r.id : member?.[FIELD[kind]] === r.id;
-              return (
-                <button
-                  key={r.id}
-                  disabled={!ok || saving !== null}
-                  onClick={() => equip(kind, r.id)}
-                  className={`relative flex flex-col items-center gap-1.5 rounded-2xl border-2 p-2.5 text-center transition active:scale-95 ${
-                    active ? 'border-terra bg-white' : 'border-transparent bg-white/70'
-                  } ${ok ? '' : 'opacity-60'}`}
-                >
-                  <RewardPreview kind={kind} id={r.id} url={prof?.avatar_url} name={prof?.name} />
-                  <span className="text-xs font-extrabold leading-tight">{r.name}</span>
-                  {!ok && <span className="flex items-center gap-0.5 text-[10px] font-bold text-[#a8927a]"><Lock size={10} /> {rewardThreshold(group, r)} pts</span>}
-                  {active && <span className="absolute right-1.5 top-1.5 rounded-full bg-terra p-0.5 text-white"><Check size={10} strokeWidth={4} /></span>}
-                  {saving === r.id && <Spinner className="absolute h-4 w-4 text-terra" />}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+      <EvolutionLine member={member} titleId={l.titleId} kit={l.kit} onEquip={equip} onEquipKit={equipKit} saving={saving} />
+      <Collection member={member} titleId={l.titleId} kit={l.kit} onEquip={equip} onEquipKit={equipKit} saving={saving} />
+      <Phrases />
 
       <Sheet open={edit} onClose={() => setEdit(false)} title="Editar perfil">
         <div className="space-y-4">
@@ -159,11 +138,4 @@ export default function Eu() {
       </Sheet>
     </div>
   );
-}
-
-function RewardPreview({ kind, id, url, name }: { kind: RewardKind; id: string; url?: string | null; name?: string }) {
-  if (kind === 'title') return <span className="flex h-12 items-center text-2xl">🏅</span>;
-  if (kind === 'avatar_frame') return <Avatar url={url} name={name} size={40} frame={id} />;
-  const cls = kind === 'tile_color' ? id : kind === 'tile_frame' ? `tc-default ${id}` : `tc-amber ${id}`;
-  return <span className={`block h-12 w-10 rounded-xl ${cls}`} style={{ boxShadow: kind === 'tile_frame' ? undefined : 'inset 0 0 0 1px rgba(0,0,0,.06)' }} />;
 }

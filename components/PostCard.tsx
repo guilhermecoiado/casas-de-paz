@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Ban, Gavel, MoreHorizontal, RotateCcw, Share2, ThumbsDown, ThumbsUp, Users } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { TYPE_LABEL, formatDate, timeAgo } from '@/lib/game';
-import { frameImage, shareImage } from '@/lib/image';
+import { ShareSheet } from './ShareSheet';
 import { errMsg, supabase } from '@/lib/supabase';
 import { Avatar, Sheet, Spinner } from './ui';
 import { useToast } from './Providers';
@@ -14,7 +14,7 @@ export function PostCard({ post }: { post: Post }) {
   const { profiles, look, isAdmin, me, votes, members, group } = useGroup();
   const toast = useToast();
   const [menu, setMenu] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const author = profiles[post.user_id];
   const l = look(post.user_id);
   const myVote = votes.find((v) => v.post_id === post.id && v.user_id === me);
@@ -33,21 +33,6 @@ export function PostCard({ post }: { post: Post }) {
     const { data, error } = await supabase.rpc('vote_post', { p_post: post.id, p_keep: k });
     if (error) return toast(errMsg(error), 'error');
     toast(data === 'voting' ? 'Voto registrado' : data === 'ok' ? 'Maioria decidiu: pontos mantidos' : 'Maioria decidiu: pontos cancelados');
-  };
-
-  const share = async () => {
-    if (!post.photo_url) return;
-    setBusy(true);
-    try {
-      const blob = await frameImage(post.photo_url, {
-        groupName: group.name, label: TYPE_LABEL[post.type], username: author?.username ?? '', dateLabel: formatDate(post.local_date, { day: '2-digit', month: 'long' }),
-      });
-      await shareImage(blob);
-    } catch (e) {
-      toast(errMsg(e), 'error');
-    } finally {
-      setBusy(false);
-    }
   };
 
   return (
@@ -80,8 +65,8 @@ export function PostCard({ post }: { post: Post }) {
           {post.capped && <span className="chip bg-sand text-[#8A6F57]">limite semanal</span>}
           {cancelled && <span className="chip bg-[#7a2618] text-white">cancelado</span>}
           {post.photo_url && !cancelled && (
-            <button onClick={share} disabled={busy} className="ml-auto flex items-center gap-1 text-sm font-extrabold text-terra">
-              {busy ? <Spinner className="h-4 w-4" /> : <Share2 size={16} />} Moldura
+            <button onClick={() => setSharing(true)} className="ml-auto flex items-center gap-1 text-sm font-extrabold text-terra">
+              <Share2 size={16} /> Moldura
             </button>
           )}
         </div>
@@ -117,6 +102,9 @@ export function PostCard({ post }: { post: Post }) {
           )}
         </div>
       </Sheet>
+      {post.photo_url && (
+        <ShareSheet open={sharing} onClose={() => setSharing(false)} source={post.photo_url} label={TYPE_LABEL[post.type]} dateLabel={formatDate(post.local_date, { day: '2-digit', month: 'long' })} />
+      )}
     </article>
   );
 }

@@ -3,7 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from './supabase';
-import { computeStats, equipped, groupUnlocked, maxGroup, maxIndividual, todayIn, type Stats } from './game';
+import { computeStats, groupUnlocked, maxGroup, maxIndividual, todayIn, type Stats } from './game';
+import { emptyProgress, equipped, type Look, type Progress } from './rewards';
 import type { Group, Member, Poll, PollAnswer, Post, Profile, Vote } from './types';
 
 export interface GroupData {
@@ -22,7 +23,8 @@ export interface GroupData {
   myPoints: number;
   maxInd: number;
   maxGrp: number;
-  look: (userId: string) => ReturnType<typeof equipped>;
+  look: (userId: string) => Look;
+  progress: (userId: string) => Progress;
   reload: () => Promise<void>;
   reloadProfiles: () => Promise<void>;
 }
@@ -150,7 +152,8 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
       myPoints: stats.byUser[userId]?.points ?? 0,
       maxInd: maxIndividual(group),
       maxGrp: maxGroup(group),
-      look: (uid: string) => equipped(group, memberMap.get(uid), stats.byUser[uid]?.points ?? 0),
+      look: (uid: string) => equipped(group, memberMap.get(uid), stats.byUser[uid] ?? emptyProgress()),
+      progress: (uid: string) => stats.byUser[uid] ?? emptyProgress(),
       reload, reloadProfiles,
     };
   }, [group, members, profiles, posts, votes, polls, answers, today, userId, reload, reloadProfiles]);

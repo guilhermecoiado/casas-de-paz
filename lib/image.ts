@@ -85,6 +85,57 @@ export interface FrameOptions {
   label: string;
   username: string;
   dateLabel: string;
+  phrase?: string | null;
+}
+
+/** Quebra o texto em linhas que cabem na largura. */
+function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    const t = cur ? `${cur} ${w}` : w;
+    if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+/** Frase estilizada sobre a parte de baixo da foto. */
+function drawPhrase(ctx: CanvasRenderingContext2D, phrase: string, px: number, py: number, pw: number, ph: number) {
+  ctx.save();
+  roundRect(ctx, px, py, pw, ph, 40);
+  ctx.clip();
+  const g = ctx.createLinearGradient(0, py + ph * 0.45, 0, py + ph);
+  g.addColorStop(0, 'rgba(20,12,6,0)');
+  g.addColorStop(1, 'rgba(20,12,6,0.72)');
+  ctx.fillStyle = g;
+  ctx.fillRect(px, py + ph * 0.45, pw, ph * 0.55);
+
+  let size = phrase.length > 32 ? 64 : phrase.length > 20 ? 76 : 92;
+  ctx.font = `italic 700 ${size}px Fraunces, Georgia, serif`;
+  let lines = wrapLines(ctx, phrase, pw - 140);
+  while (lines.length > 3 && size > 44) {
+    size -= 6;
+    ctx.font = `italic 700 ${size}px Fraunces, Georgia, serif`;
+    lines = wrapLines(ctx, phrase, pw - 140);
+  }
+  const lh = size * 1.12;
+  const bottom = py + ph - 70;
+  const top = bottom - lh * (lines.length - 1);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  // ornamento acima da frase
+  ctx.fillStyle = '#FFD56B';
+  ctx.font = `700 ${Math.round(size * 0.42)}px Nunito, system-ui, sans-serif`;
+  ctx.fillText('✦', px + pw / 2, top - size * 0.95);
+  ctx.font = `italic 700 ${size}px Fraunces, Georgia, serif`;
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = '#FFFFFF';
+  lines.forEach((l, i) => ctx.fillText(l, px + pw / 2, top + i * lh));
+  ctx.restore();
 }
 
 /** Gera a foto com a moldura "Casa de Paz" em 1080×1350 (formato retrato do Instagram). */
@@ -131,6 +182,8 @@ export async function frameImage(source: Blob | string, o: FrameOptions): Promis
   ctx.strokeStyle = '#F2A541';
   roundRect(ctx, px, py, pw, ph, 40);
   ctx.stroke();
+
+  if (o.phrase) drawPhrase(ctx, o.phrase, px, py, pw, ph);
 
   // selo do tipo
   ctx.font = '800 30px Nunito, system-ui, sans-serif';

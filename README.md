@@ -81,8 +81,33 @@ Cada tipo de foto vale uma vez por dia por pessoa. Todas as regras são validada
 - Os desbloqueios usam **percentuais** desses máximos, então se ajustam sozinhos quando o adm muda os limites ou as datas.
 - Atenção: quando a equipe atinge o limite da semana, os pontos individuais também param até a semana seguinte.
 
-### Prêmios individuais
-Títulos (Semente → Coluna da Casa), molduras de perfil (bronze, prata, ouro, coroa de luz animada), cores do tile, molduras do tile e animações do tile (pulsar, flutuar, reflexo, faíscas). Cada um escolhe o que usar em **Meu perfil**.
+### Recompensas individuais
+O catálogo completo fica em `lib/rewards.ts`.
+
+**Linha da evolução (por pontos).** São quatro caminhos, um por semana. Como o limite semanal libera no máximo 25% da pontuação por semana, cada caminho fecha logo antes do fim da sua semana:
+
+| Caminho | Itens, nesta ordem | Fecha em |
+|---|---|---|
+| 🌱 Semeador | Semente → Cor Terra → Moldura Semente → Tile Trigo → Animação Broto → Título Semeador | 22% |
+| 🐟 Pescador | Cor Mar da Galileia → Moldura Peixes → Tile Pesca → Animação Pesca Milagrosa → Título Pescador de Gente | 45% |
+| 🔥 Mensageiro | Cor Fogo → Moldura Chama → Animação Pentecostes → Frase "Leve a Boa Nova" → Título Mensageiro | 68% |
+| 👑 Reino | Púrpura Real → Moldura Coroa → Tile Reino → Animação Glória → Título Embaixador do Reino | 90% |
+
+**Kits secretos.** Quem usa juntos todos os itens de um caminho revela uma animação única no tile:
+- Semeador: **Campo Fértil**
+- Pescador: **Rede Cheia**
+- Mensageiro: **Línguas de Fogo**
+- Reino: **Glória do Reino**
+
+O nome do kit só aparece quando o caminho está completo, e o perfil tem um botão "Usar kit completo".
+
+**Coleção (por ações).** Conquistas ligadas a check-ins, convidados, evangelismo, constância (dias postando), lanche, fotos em grupo e enquetes. Elas não aumentam a pontuação necessária para a linha da evolução.
+
+**Frases de sobrepor.** Ao compartilhar uma foto com moldura, a pessoa escolhe uma frase, que aparece estilizada sobre a imagem. As frases vêm de quatro fontes:
+- 3 frases liberadas desde o início
+- 1 frase na linha da evolução
+- frases da coleção
+- versículos que a equipe inteira ganha conforme a casa avança
 
 ### Desbloqueios da equipe (a casinha)
 A moldura Casa de Paz já vem liberada desde o início. Depois, conforme a equipe pontua: fundação → **chat** → paredes → **tiles animados** → porta → janelas → **foto de fundo no início** → telhado → chaminé → jardim → luzes → cerca → **casa completa**, com animação de conquista e confete. A barra e a casa atualizam em tempo real para todos.

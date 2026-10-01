@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { ACTIONS, actionAvailability, actionPoints, formatDate, type ActionInfo } from '@/lib/game';
-import { compressImage, frameImage, shareImage } from '@/lib/image';
+import { compressImage } from '@/lib/image';
+import { ShareSheet } from '@/components/ShareSheet';
 import { errMsg, supabase, uploadImage } from '@/lib/supabase';
 import { PhotoPicker, Spinner } from '@/components/ui';
 import { useToast } from '@/components/Providers';
@@ -27,18 +28,10 @@ export default function Postar() {
   const [text, setText] = useState('');
   const [guests, setGuests] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ post: Post; framed: Blob | null } | null>(null);
-  const [framedUrl, setFramedUrl] = useState<string | null>(null);
+  const [done, setDone] = useState<{ post: Post; photo: Blob | null; label: string } | null>(null);
 
   const myToday = useMemo(() => posts.filter((p) => p.user_id === me && p.local_date === today), [posts, me, today]);
   const back = () => (action ? setAction(null) : router.push(`/g/${group.id}`));
-
-  useEffect(() => {
-    if (!done?.framed) return;
-    const u = URL.createObjectURL(done.framed);
-    setFramedUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [done]);
 
   const submit = async () => {
     if (!action) return;
@@ -57,13 +50,7 @@ export default function Postar() {
         p_group: group.id, p_type: action.type, p_photo_url: photoUrl, p_description: text.trim() || null, p_guests: guests,
       });
       if (error) throw error;
-      let framed: Blob | null = null;
-      if (small) {
-        framed = await frameImage(small, {
-          groupName: group.name, label: action.short, username: profiles[me]?.username ?? '', dateLabel: formatDate(today, { day: '2-digit', month: 'long' }),
-        }).catch(() => null);
-      }
-      setDone({ post: data as Post, framed });
+      setDone({ post: data as Post, photo: small, label: action.short });
       reload();
     } catch (e) {
       toast(errMsg(e), 'error');
@@ -88,13 +75,9 @@ export default function Postar() {
             </p>
           )}
         </div>
-        {framedUrl && (
-          <div className="mt-6 anim-rise">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={framedUrl} alt="Foto com moldura" className="mx-auto w-full max-w-[320px] rounded-2xl shadow-xl" />
-            <button className="btn-primary mx-auto mt-5 flex w-full max-w-[320px]" onClick={() => shareImage(done.framed!)}>
-              <Share2 size={18} /> Compartilhar no Instagram
-            </button>
+        {done.photo && (
+          <div className="mx-auto mt-6 max-w-[360px] anim-rise">
+            <ShareSheet inline open onClose={() => {}} source={done.photo} label={done.label} dateLabel={formatDate(today, { day: '2-digit', month: 'long' })} />
           </div>
         )}
         <button className="btn-soft mx-auto mt-3 flex w-full max-w-[320px]" onClick={() => router.push(`/g/${group.id}`)}>

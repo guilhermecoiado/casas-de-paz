@@ -128,6 +128,10 @@ export interface UserStats {
   postedToday: boolean;
   todayPhoto: string | null;
   pending: number;
+  days: number;        // dias diferentes com post (constância)
+  polls: number;       // enquetes respondidas
+  snacks: number;      // ajudas no lanche
+  groupPhotos: number; // fotos em grupo
 }
 
 export interface Stats {
@@ -139,6 +143,7 @@ export interface Stats {
 
 const emptyStats = (): UserStats => ({
   points: 0, weekPoints: 0, checkins: 0, guests: 0, evangelism: 0, posts: 0, postedToday: false, todayPhoto: null, pending: 0,
+  days: 0, polls: 0, snacks: 0, groupPhotos: 0,
 });
 
 export function computeStats(g: Group, members: Member[], posts: Post[], today: string): Stats {
@@ -147,6 +152,7 @@ export function computeStats(g: Group, members: Member[], posts: Post[], today: 
   members.forEach((m) => (byUser[m.user_id] = emptyStats()));
   let groupPoints = 0;
   let groupWeekPoints = 0;
+  const dayKeys = new Set<string>();
   // posts vêm do mais novo para o mais antigo
   for (const p of posts) {
     if (p.status === 'cancelled') continue;
@@ -160,6 +166,13 @@ export function computeStats(g: Group, members: Member[], posts: Post[], today: 
       s.guests += p.guests;
     }
     if (p.type === 'evangelism') s.evangelism += 1;
+    if (p.type === 'poll') s.polls += 1;
+    if (p.type === 'snack') s.snacks += 1;
+    if (p.type === 'group') s.groupPhotos += 1;
+    if (p.type !== 'poll' && p.type !== 'adjust' && !dayKeys.has(`${p.user_id}|${p.local_date}`)) {
+      dayKeys.add(`${p.user_id}|${p.local_date}`);
+      s.days += 1;
+    }
     if (p.local_date === today && p.type !== 'poll' && p.type !== 'adjust') {
       s.postedToday = true;
       if (!s.todayPhoto && p.photo_url) s.todayPhoto = p.photo_url;
@@ -168,82 +181,6 @@ export function computeStats(g: Group, members: Member[], posts: Post[], today: 
     if (p.week === week) groupWeekPoints += p.points + p.group_bonus;
   }
   return { byUser, groupPoints, groupWeekPoints, week };
-}
-
-/* ------------------------------------------------------------------ */
-/*  Recompensas individuais (percentual da pontuação máxima individual) */
-/* ------------------------------------------------------------------ */
-
-export type RewardKind = 'title' | 'avatar_frame' | 'tile_frame' | 'tile_color' | 'tile_anim';
-
-export interface Reward {
-  id: string;
-  kind: RewardKind;
-  name: string;
-  pct: number; // 0–100 da pontuação máxima individual
-}
-
-export const REWARD_KIND_LABEL: Record<RewardKind, string> = {
-  title: 'Títulos',
-  avatar_frame: 'Molduras de perfil',
-  tile_frame: 'Molduras do tile',
-  tile_color: 'Cores do tile',
-  tile_anim: 'Animações do tile',
-};
-
-export const REWARDS: Reward[] = [
-  { id: 'Semente', kind: 'title', name: 'Semente', pct: 0 },
-  { id: 'Mensageiro', kind: 'title', name: 'Mensageiro', pct: 10 },
-  { id: 'Anfitrião', kind: 'title', name: 'Anfitrião', pct: 25 },
-  { id: 'Pescador de Gente', kind: 'title', name: 'Pescador de Gente', pct: 45 },
-  { id: 'Construtor de Paz', kind: 'title', name: 'Construtor de Paz', pct: 65 },
-  { id: 'Embaixador da Paz', kind: 'title', name: 'Embaixador da Paz', pct: 85 },
-  { id: 'Coluna da Casa', kind: 'title', name: 'Coluna da Casa', pct: 100 },
-
-  { id: 'af-bronze', kind: 'avatar_frame', name: 'Bronze', pct: 8 },
-  { id: 'af-silver', kind: 'avatar_frame', name: 'Prata', pct: 30 },
-  { id: 'af-gold', kind: 'avatar_frame', name: 'Ouro', pct: 55 },
-  { id: 'af-light', kind: 'avatar_frame', name: 'Coroa de luz', pct: 90 },
-
-  { id: 'tc-amber', kind: 'tile_color', name: 'Âmbar', pct: 5 },
-  { id: 'tc-olive', kind: 'tile_color', name: 'Oliva', pct: 18 },
-  { id: 'tc-terra', kind: 'tile_color', name: 'Terracota', pct: 35 },
-  { id: 'tc-sky', kind: 'tile_color', name: 'Céu', pct: 50 },
-  { id: 'tc-lilac', kind: 'tile_color', name: 'Lilás', pct: 72 },
-  { id: 'tc-gold', kind: 'tile_color', name: 'Dourado', pct: 95 },
-
-  { id: 'tf-dashed', kind: 'tile_frame', name: 'Pontilhada', pct: 15 },
-  { id: 'tf-double', kind: 'tile_frame', name: 'Dupla', pct: 40 },
-  { id: 'tf-glow', kind: 'tile_frame', name: 'Brilho', pct: 70 },
-
-  { id: 'ta-pulse', kind: 'tile_anim', name: 'Pulsar', pct: 22 },
-  { id: 'ta-float', kind: 'tile_anim', name: 'Flutuar', pct: 48 },
-  { id: 'ta-shine', kind: 'tile_anim', name: 'Reflexo', pct: 60 },
-  { id: 'ta-sparkle', kind: 'tile_anim', name: 'Faíscas', pct: 80 },
-];
-
-export const rewardThreshold = (g: Group, r: Reward) => Math.ceil((maxIndividual(g) * r.pct) / 100);
-export const isRewardUnlocked = (g: Group, r: Reward, points: number) => points >= rewardThreshold(g, r);
-
-export function defaultTitle(g: Group, points: number) {
-  const titles = REWARDS.filter((r) => r.kind === 'title' && isRewardUnlocked(g, r, points));
-  return titles[titles.length - 1]?.name ?? 'Semente';
-}
-
-/** Só aplica cosméticos que o membro realmente desbloqueou. */
-export function equipped(g: Group, m: Member | undefined, points: number) {
-  const ok = (id: string | null | undefined) => {
-    if (!id) return null;
-    const r = REWARDS.find((x) => x.id === id);
-    return r && isRewardUnlocked(g, r, points) ? id : null;
-  };
-  return {
-    title: ok(m?.title) ?? defaultTitle(g, points),
-    avatarFrame: ok(m?.avatar_frame),
-    tileFrame: ok(m?.tile_frame),
-    tileColor: ok(m?.tile_color),
-    tileAnim: ok(m?.tile_anim),
-  };
 }
 
 /* ------------------------------------------------------------------ */

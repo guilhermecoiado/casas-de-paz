@@ -1,0 +1,254 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { Check, Gift, Lock, Sparkles } from 'lucide-react';
+import { useGroup } from '@/lib/group-context';
+import {
+  ACH_LABEL, KIND_LABEL, PATHS, REWARDS, TEAM_PHRASES, isUnlocked, kitItems, rewardThreshold,
+  type PathInfo, type Reward,
+} from '@/lib/rewards';
+import { GROUP_UNLOCKS } from '@/lib/game';
+import { Avatar, ProgressBar, Spinner } from './ui';
+import { KitFx, TileFx } from './Cosmetics';
+import type { Member } from '@/lib/types';
+
+type Field = 'title' | 'avatar_frame' | 'tile_frame' | 'tile_color' | 'tile_anim';
+
+/** Item está equipado? (título conta o padrão como equipado) */
+function isWorn(r: Reward, member: Member | undefined, titleId: string) {
+  if (r.kind === 'phrase') return false;
+  if (r.kind === 'title') return titleId === r.id;
+  return member?.[r.kind as Field] === r.id;
+}
+
+export function RewardPreview({ r, url, name }: { r: Reward; url?: string | null; name?: string }) {
+  switch (r.kind) {
+    case 'title':
+      return <span className="flex h-11 w-11 items-center justify-center rounded-full bg-amber/20 text-xl">{r.icon}</span>;
+    case 'avatar_frame':
+      return <div className="flex h-11 w-11 items-center justify-center"><Avatar url={url} name={name} size={34} frame={r.id} /></div>;
+    case 'tile_color':
+      return <span className={`block h-12 w-10 rounded-xl ${r.id}`} style={{ boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.06)' }} />;
+    case 'tile_frame':
+      return (
+        <span className="relative flex h-12 w-10 items-center justify-center rounded-xl bg-white text-base">
+          <span className={`absolute inset-0 rounded-xl ${r.id}`} />
+          {r.icon}
+        </span>
+      );
+    case 'tile_anim':
+      return <span className="relative block h-12 w-10 overflow-hidden rounded-xl bg-white" style={{ boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.06)' }}><TileFx anim={r.id} kit={null} /></span>;
+    default:
+      return <span className="flex h-11 w-11 items-center justify-center rounded-full bg-terra/10 text-xl">💬</span>;
+  }
+}
+
+interface Props {
+  member: Member | undefined;
+  titleId: string;
+  kit: string | null;
+  onEquip: (r: Reward) => Promise<void>;
+  onEquipKit: (path: PathInfo) => Promise<void>;
+  saving: string | null;
+}
+
+/* ===================== Linha da evolução ===================== */
+
+export function EvolutionLine(props: Props) {
+  const { group, me, progress, profiles } = useGroup();
+  const p = progress(me);
+  const prof = profiles[me];
+  const [open, setOpen] = useState<string | null>(null);
+  const current = useMemo(
+    () => PATHS.find((path) => REWARDS.some((r) => r.path === path.id && !isUnlocked(group, r, p)))?.id ?? 'reino',
+    [group, p],
+  );
+  const shown = open ?? current;
+
+  return (
+    <section className="mx-4 mt-6">
+      <h2 className="font-display text-xl font-bold">Linha da evolução</h2>
+      <p className="mb-3 text-sm text-[#8A6F57]">Um caminho por semana. Equipe o caminho inteiro para revelar um kit secreto ✨</p>
+      <div className="space-y-3">
+        {PATHS.map((path) => {
+          const items = REWARDS.filter((r) => r.path === path.id);
+          const got = items.filter((r) => isUnlocked(group, r, p)).length;
+          const done = got === items.length;
+          const start = rewardThreshold(group, items[0]);
+          const end = rewardThreshold(group, items[items.length - 1]);
+          const expanded = shown === path.id;
+          const kitOn = props.kit === path.id;
+          return (
+            <div key={path.id} className={`card overflow-hidden ${kitOn ? 'ring-2 ring-amber' : ''}`}>
+              <button className="flex w-full items-center gap-3 p-4 text-left" onClick={() => setOpen(expanded ? '' : path.id)}>
+                <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl ${done ? 'bg-amber/25' : got ? 'bg-sand' : 'bg-sand grayscale'}`}>{path.icon}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-extrabold leading-tight">{path.name}</p>
+                  <p className="text-xs font-bold text-[#a8927a]">Semana {path.week} · {got}/{items.length} desbloqueados</p>
+                  <div className="mt-1.5"><ProgressBar value={Math.max(0, p.points - start)} max={Math.max(1, end - start)} height={8} color={done ? 'bg-olive' : 'bg-amber'} /></div>
+                </div>
+              </button>
+              {expanded && (
+                <div className="border-t border-sand px-3 pb-3">
+                  <ol className="relative mt-2">
+                    {items.map((r, i) => (
+                      <RewardRow key={r.id} r={r} last={i === items.length - 1} url={prof?.avatar_url} name={prof?.name} {...props} />
+                    ))}
+                  </ol>
+                  <KitRow path={path} unlockedAll={done} active={kitOn} onEquipKit={props.onEquipKit} saving={props.saving} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function RewardRow({ r, last, url, name, member, titleId, onEquip, saving }: Props & { r: Reward; last: boolean; url?: string | null; name?: string }) {
+  const { group, me, progress } = useGroup();
+  const p = progress(me);
+  const ok = isUnlocked(group, r, p);
+  const worn = isWorn(r, member, titleId);
+  const need = r.req ? `${Math.min(p[r.req.stat], r.req.n)}/${r.req.n} ${ACH_LABEL[r.req.stat]}` : `${rewardThreshold(group, r)} pts`;
+  return (
+    <li className="relative flex items-center gap-3 py-2 pl-1">
+      {!last && <span className="absolute left-[26px] top-[52px] h-[calc(100%-44px)] w-0.5 bg-sand" />}
+      <div className={ok ? '' : 'opacity-45 grayscale'}><RewardPreview r={r} url={url} name={name} /></div>
+      <div className="min-w-0 flex-1">
+        <p className={`truncate text-sm font-extrabold ${ok ? '' : 'text-[#8A6F57]'}`}>{r.name}</p>
+        <p className="text-[11px] font-bold text-[#a8927a]">{KIND_LABEL[r.kind]}</p>
+      </div>
+      {!ok ? (
+        <span className="chip bg-sand text-[#8A6F57]"><Lock size={11} /> {need}</span>
+      ) : r.kind === 'phrase' ? (
+        <span className="chip bg-olive/15 text-olive"><Check size={11} /> nas frases</span>
+      ) : worn ? (
+        <button onClick={() => onEquip(r)} className="chip bg-terra text-white !py-1.5"><Check size={12} strokeWidth={3} /> Em uso</button>
+      ) : (
+        <button onClick={() => onEquip(r)} disabled={saving !== null} className="chip bg-ink text-white !py-1.5">
+          {saving === r.id ? <Spinner className="h-3 w-3" /> : 'Usar'}
+        </button>
+      )}
+    </li>
+  );
+}
+
+function KitRow({ path, unlockedAll, active, onEquipKit, saving }: { path: PathInfo; unlockedAll: boolean; active: boolean; onEquipKit: Props['onEquipKit']; saving: string | null }) {
+  const n = kitItems(path.id).length;
+  return (
+    <div className={`relative mt-2 overflow-hidden rounded-2xl p-3 ${active ? 'bg-ink text-white' : 'bg-cream'}`}>
+      {active && <div className="absolute inset-y-0 right-0 w-24"><KitFx kit={path.id} /></div>}
+      <div className="relative flex items-center gap-3">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${active ? 'bg-white/15' : 'bg-white'}`}>
+          {active ? <Sparkles size={20} className="text-amber" /> : <Gift size={20} className="text-terra" />}
+        </span>
+        <div className="min-w-0 flex-1 pr-16">
+          <p className="text-sm font-extrabold leading-tight">
+            Kit secreto: {unlockedAll ? path.kit.name : '???'}
+          </p>
+          <p className={`text-[11px] leading-snug ${active ? 'text-white/75' : 'text-[#8A6F57]'}`}>
+            {active ? `${path.kit.desc}. Ativo!` : unlockedAll ? `Use os ${n} itens juntos para ativar` : `Desbloqueie e use os ${n} itens do caminho juntos`}
+          </p>
+        </div>
+      </div>
+      {unlockedAll && !active && (
+        <button className="btn-primary relative mt-3 w-full !min-h-[42px] !text-sm" disabled={saving !== null} onClick={() => onEquipKit(path)}>
+          {saving === `kit:${path.id}` ? <Spinner className="h-4 w-4" /> : <>✨ Usar kit completo</>}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ===================== Coleção ===================== */
+
+export function Collection(props: Props) {
+  const { group, me, progress, profiles } = useGroup();
+  const p = progress(me);
+  const prof = profiles[me];
+  const items = REWARDS.filter((r) => r.req && r.kind !== 'phrase');
+  const got = items.filter((r) => isUnlocked(group, r, p)).length;
+  return (
+    <section className="mx-4 mt-8">
+      <div className="mb-3 flex items-end justify-between">
+        <div>
+          <h2 className="font-display text-xl font-bold">Coleção</h2>
+          <p className="text-sm text-[#8A6F57]">Conquistas por ação: convide, evangelize, participe.</p>
+        </div>
+        <span className="chip bg-white text-[#6b5643]">{got}/{items.length}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        {items.map((r) => {
+          const ok = isUnlocked(group, r, p);
+          const worn = isWorn(r, props.member, props.titleId);
+          const cur = Math.min(p[r.req!.stat], r.req!.n);
+          return (
+            <div key={r.id} className={`flex flex-col rounded-2xl bg-white p-3 ${worn ? 'ring-2 ring-terra' : ''}`}>
+              <div className="flex items-start gap-2">
+                <div className={ok ? '' : 'opacity-45 grayscale'}><RewardPreview r={r} url={prof?.avatar_url} name={prof?.name} /></div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-extrabold leading-tight">{r.name}</p>
+                  <p className="text-[10px] font-bold text-[#a8927a]">{KIND_LABEL[r.kind]}</p>
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] leading-snug text-[#6b5643]">{r.req!.label}</p>
+              {ok ? (
+                <button
+                  onClick={() => props.onEquip(r)}
+                  disabled={props.saving !== null}
+                  className={`chip mt-2 justify-center !py-1.5 ${worn ? 'bg-terra text-white' : 'bg-ink text-white'}`}
+                >
+                  {props.saving === r.id ? <Spinner className="h-3 w-3" /> : worn ? <><Check size={12} strokeWidth={3} /> Em uso</> : 'Usar'}
+                </button>
+              ) : (
+                <div className="mt-2">
+                  <ProgressBar value={cur} max={r.req!.n} height={6} color="bg-amber" />
+                  <p className="mt-1 text-[10px] font-bold text-[#a8927a]">{cur}/{r.req!.n} {ACH_LABEL[r.req!.stat]}</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/* ===================== Frases ===================== */
+
+export function Phrases() {
+  const { group, me, progress, unlocked } = useGroup();
+  const p = progress(me);
+  const own = REWARDS.filter((r) => r.kind === 'phrase');
+  return (
+    <section className="mx-4 mt-8">
+      <h2 className="font-display text-xl font-bold">Frases de sobrepor</h2>
+      <p className="mb-3 text-sm text-[#8A6F57]">Use sobre suas fotos ao compartilhar com a moldura.</p>
+      <div className="space-y-2">
+        {own.map((r) => {
+          const ok = isUnlocked(group, r, p);
+          return (
+            <div key={r.id} className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${ok ? 'bg-white' : 'bg-white/50'}`}>
+              <p className={`flex-1 font-display text-[17px] font-bold italic ${ok ? 'text-ink' : 'text-[#b9a690]'}`}>{r.name}</p>
+              {ok ? <Check size={16} className="text-olive" /> : (
+                <span className="chip bg-sand text-[#8A6F57]"><Lock size={10} /> {r.req ? r.req.label : `${rewardThreshold(group, r)} pts`}</span>
+              )}
+            </div>
+          );
+        })}
+        {TEAM_PHRASES.map((t) => {
+          const ok = unlocked.has(t.unlock);
+          const u = GROUP_UNLOCKS.find((x) => x.id === t.unlock);
+          return (
+            <div key={t.text} className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${ok ? 'bg-white' : 'bg-white/50'}`}>
+              <p className={`flex-1 font-display text-[17px] font-bold italic ${ok ? 'text-ink' : 'text-[#b9a690]'}`}>{t.text}</p>
+              {ok ? <Check size={16} className="text-olive" /> : <span className="chip bg-sand text-[#8A6F57]"><Lock size={10} /> Equipe: {u?.name}</span>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}

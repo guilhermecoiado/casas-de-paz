@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Camera, ImagePlus, Loader2, X } from 'lucide-react';
+import { AvatarOrnaments } from './Cosmetics';
 
 /* ---------------- Avatar com moldura ---------------- */
 
@@ -24,8 +25,11 @@ export function Avatar({
   );
   if (!frame) return inner;
   return (
-    <div className={`af-ring ${frame} shrink-0`} style={{ padding: Math.max(2, size * 0.06) }}>
-      <div className="rounded-full bg-white p-[2px]">{inner}</div>
+    <div className="relative shrink-0">
+      <div className={`af-ring ${frame}`} style={{ padding: Math.max(2, size * 0.06) }}>
+        <div className="af-inner rounded-full bg-white p-[2px]">{inner}</div>
+      </div>
+      <AvatarOrnaments frame={frame} size={size} />
     </div>
   );
 }
