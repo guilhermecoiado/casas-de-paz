@@ -1,4 +1,4 @@
-// Testes das regras do banco (64 casos). Rodar contra um Postgres local vazio na porta 5499
+// Testes das regras do banco. Rodar contra um Postgres local vazio na porta 5499
 // com o schema.sql na mesma pasta: node regras.test.mjs
 import pg from 'pg';
 import { readFileSync } from 'node:fs';
@@ -46,7 +46,7 @@ for (const u of ['bia', 'caio', 'davi']) await as(u, `select join_group('Casa Ja
 ok((await as('bia', `select * from group_secrets`)).length === 0, 'hash da senha invisível');
 ok((await as('bia', `update groups set weekly_user_cap = 9999 where id = $1 returning id`, [gid])).length === 0, 'membro não altera config');
 const g0 = (await c.query(`select weekly_user_cap, group_cap_auto, group_cap_factor, diminishing, points from groups where id=$1`, [gid])).rows[0];
-ok(g0.weekly_user_cap === 1000 && g0.group_cap_auto && Number(g0.group_cap_factor) === 0.6 && g0.diminishing && g0.points.checkin === 100, 'padrões novos: 1000/semana, equipe automática 60%, pontos decrescentes');
+ok(g0.weekly_user_cap === 1000 && g0.group_cap_auto && Number(g0.group_cap_factor) === 0.6 && g0.points.checkin === 100 && g0.points.evangelism === 25, 'padrões: 1000/semana, equipe automática 60%, pontos v4');
 
 const dow = (await c.query(`select extract(dow from (now() at time zone 'America/Sao_Paulo')::date)::int d`)).rows[0].d;
 const setHouse = (d) => as('ana', `update groups set house_weekday = $2 where id = $1`, [gid, d]);
@@ -57,39 +57,32 @@ await setHouse((dow + 1) % 7);
 for (const t of ['checkin', 'group', 'dynamic', 'relax', 'fellowship', 'snack'])
   ok((await post('bia', t, 'http://x/a.jpg', 'Bolo de cenoura')).error?.includes('dia do encontro'), `${t} só no dia do encontro`);
 
-// ---- ações diárias ----
+// ---- ações diárias: 1 vez por dia cada ----
 let r = await post('bia', 'individual', 'http://x/1.jpg', null);
-ok(r[0]?.points === 10, `foto individual 1ª = 10 (${r[0]?.points ?? r.error})`);
-r = await post('bia', 'individual', 'http://x/2.jpg', null);
-ok(r[0]?.points === 5, `2ª do dia vale 50% (${r[0]?.points ?? r.error})`);
-r = await post('bia', 'individual', 'http://x/3.jpg', null);
-ok(r[0]?.points === 3, `3ª do dia vale 25% (${r[0]?.points ?? r.error})`);
-ok((await post('bia', 'individual', 'http://x/4.jpg', null)).error?.includes('3 vezes'), 'máximo 3 por dia');
+ok(r[0]?.points === 5, `foto individual = 5 (${r[0]?.points ?? r.error})`);
+ok((await post('bia', 'individual', 'http://x/2.jpg', null)).error?.includes('já fez isso hoje'), 'só 1 foto individual por dia');
 ok((await post('davi', 'individual', null, null)).error?.includes('foto'), 'foto individual exige foto');
 r = await post('bia', 'verse', null, 'João 3:16');
 ok(r[0]?.points === 10 && r[0]?.photo_url === null, 'versículo sem foto = 10');
-ok((await post('bia', 'verse', null, 'x')).error?.includes('mínimo 5'), 'versículo exige texto');
+ok((await post('caio', 'verse', null, 'x')).error?.includes('mínimo 5'), 'versículo exige texto');
 r = await post('bia', 'encourage', 'http://x/e.jpg', 'Bora pessoal, sexta tem Casa de Paz!');
-ok(r[0]?.points === 15 && r[0]?.photo_url, 'encorajamento com foto opcional = 15');
+ok(r[0]?.points === 10 && r[0]?.photo_url, 'encorajamento com foto opcional = 10');
 ok((await post('bia', 'devotional', null, 'curto')).error?.includes('mínimo 10'), 'TSD exige texto');
 r = await post('bia', 'devotional', null, 'Hoje li Salmos 23 e aprendi a confiar');
-ok(r[0]?.points === 20, 'TSD = 20');
+ok(r[0]?.points === 15, 'TSD = 15');
 r = await post('bia', 'prayer', null, null);
-ok(r[0]?.points === 10, 'orei pela casa de paz sem texto = 10');
+ok(r[0]?.points === 10, 'oração = 10');
 r = await post('bia', 'fasting', null, 'Jejum até 12h');
-ok(r[0]?.points === 25, 'jejum = 25');
+ok(r[0]?.points === 15, 'jejum = 15');
 r = await post('bia', 'testimony', null, 'Deus abriu uma porta no trabalho');
-ok(r[0]?.points === 20, 'testemunho = 20');
-for (let i = 0; i < 3; i++) r = await post('bia', 'evangelism', 'http://x/ev.jpg', 'Convidei meu vizinho para sexta');
-ok(r[0]?.points === 30 && r[0]?.photo_url === null, 'evangelismo não diminui (3º ainda vale 30) e não leva foto');
-ok((await post('bia', 'evangelism', null, 'Convidei mais alguém hoje')).error?.includes('3 vezes'), 'evangelismo máximo 3 por dia');
-
-// ---- pontos decrescentes desligados ----
-await as('ana', `update groups set diminishing = false where id = $1`, [gid]);
+ok(r[0]?.points === 10, 'testemunho = 10');
+r = await post('bia', 'evangelism', 'http://x/ev.jpg', 'Convidei meu vizinho para sexta');
+ok(r[0]?.points === 25 && r[0]?.photo_url === null, 'evangelismo = 25, sem foto');
+ok((await post('bia', 'evangelism', null, 'Convidei mais alguém hoje')).error?.includes('já fez isso hoje'), 'evangelismo 1 por dia');
+const day = (await c.query(`select sum(points)::int s from posts where user_id=$1`, [users.bia])).rows[0].s;
+ok(day === 100, `máximo do dia a dia = 100 pts (${day})`);
 await post('caio', 'prayer', null, null);
-r = await post('caio', 'prayer', null, null);
-ok(r[0]?.points === 10, 'sem decrescente: 2º post vale cheio');
-await as('ana', `update groups set diminishing = true where id = $1`, [gid]);
+ok((await post('caio', 'prayer', null, null)).error?.includes('já fez isso hoje'), 'oração 1 por dia');
 
 // ---- dia do encontro ----
 await setHouse(dow);
@@ -97,7 +90,7 @@ r = await post('caio', 'checkin', 'http://x/c.jpg', null, 2);
 ok(r[0]?.points === 500, `check-in com 2 convidados = 100×5 = 500 (${r[0]?.points ?? r.error})`);
 ok((await post('caio', 'checkin', 'http://x/c2.jpg', null)).error?.includes('já registrou'), 'um check-in por dia');
 r = await post('davi', 'group', 'http://x/g.jpg', null);
-ok(r[0]?.points === 50 && r[0]?.group_bonus === 50, 'foto em grupo: 50 + 50 da equipe para o primeiro');
+ok(r[0]?.points === 60 && r[0]?.group_bonus === 50, 'foto em grupo: 60 + 50 da equipe para o primeiro');
 ok((await post('caio', 'group', 'http://x/g2.jpg', null)).error?.includes('@davi'), 'foto em grupo única por grupo no dia (mostra quem postou)');
 const gp = (await c.query(`select id from posts where type='group'`)).rows[0].id;
 await as('ana', `select admin_moderate($1,'cancel')`, [gp]);

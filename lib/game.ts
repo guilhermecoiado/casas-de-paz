@@ -72,15 +72,15 @@ export const ACTIONS: ActionInfo[] = [
   { type: 'dynamic', when: 'meeting', label: 'Dinâmica', short: 'Dinâmica', hint: 'Registre a dinâmica do encontro.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
   { type: 'fellowship', when: 'meeting', label: 'Comunhão', short: 'Comunhão', hint: 'Momento de comunhão com o grupo.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
   { type: 'relax', when: 'meeting', label: 'Relax', short: 'Relax', hint: 'Um momento leve e descontraído do encontro.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
-  /* dia a dia: até 3 por dia cada */
-  { type: 'evangelism', when: 'daily', label: 'Evangelizei / Convidei', short: 'Evangelismo', hint: 'Conte brevemente o que aconteceu. Não perde valor no 2º e 3º.', photo: 'none', text: 'required', textLabel: 'O que aconteceu?', placeholder: 'Ex.: Convidei meu colega de trabalho para sexta.', maxPerDay: 3 },
-  { type: 'individual', when: 'daily', label: 'Foto individual', short: 'Individual', hint: 'Sua foto do dia.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 3 },
-  { type: 'verse', when: 'daily', label: 'Versículo do dia', short: 'Versículo', hint: 'Compartilhe o versículo que falou com você.', photo: 'optional', text: 'required', textLabel: 'Versículo', placeholder: 'Ex.: “Tudo posso naquele que me fortalece” — Fp 4:13', maxPerDay: 3 },
-  { type: 'encourage', when: 'daily', label: 'Encorajamento para o encontro', short: 'Encorajamento', hint: 'Anime o grupo para a próxima Casa de Paz.', photo: 'optional', text: 'required', textLabel: 'Mensagem', placeholder: 'Ex.: Sexta tem Casa de Paz! Traga alguém com você 🙌', maxPerDay: 3 },
-  { type: 'devotional', when: 'daily', label: 'TSD (Devocional)', short: 'TSD', hint: 'O que Deus falou com você no seu tempo a sós.', photo: 'optional', text: 'required', textLabel: 'O que você aprendeu?', maxPerDay: 3 },
-  { type: 'prayer', when: 'daily', label: 'Orei pela Casa de Paz', short: 'Oração', hint: 'Registre que orou pelo encontro e pelos convidados.', photo: 'none', text: 'optional', textLabel: 'Por quem orou? (opcional)', maxPerDay: 3 },
-  { type: 'fasting', when: 'daily', label: 'Registro de jejum', short: 'Jejum', hint: 'Registre seu jejum pela Casa de Paz.', photo: 'none', text: 'required', textLabel: 'Como foi o jejum?', placeholder: 'Ex.: Jejum até as 12h', maxPerDay: 3 },
-  { type: 'testimony', when: 'daily', label: 'Testemunho', short: 'Testemunho', hint: 'Conte algo que Deus fez. Inspira quem ainda não conhece!', photo: 'optional', text: 'required', textLabel: 'O que Deus fez?', maxPerDay: 3 },
+  /* dia a dia: 1 vez por dia cada (máximo do dia = soma destas ações) */
+  { type: 'evangelism', when: 'daily', label: 'Evangelizei / Convidei', short: 'Evangelismo', hint: 'Conte brevemente o que aconteceu. É a ação que mais vale no dia a dia!', photo: 'none', text: 'required', textLabel: 'O que aconteceu?', placeholder: 'Ex.: Convidei meu colega de trabalho para sexta.', maxPerDay: 1 },
+  { type: 'individual', when: 'daily', label: 'Foto individual', short: 'Individual', hint: 'Sua foto do dia.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
+  { type: 'verse', when: 'daily', label: 'Versículo do dia', short: 'Versículo', hint: 'Compartilhe o versículo que falou com você.', photo: 'optional', text: 'required', textLabel: 'Versículo', placeholder: 'Ex.: “Tudo posso naquele que me fortalece” — Fp 4:13', maxPerDay: 1 },
+  { type: 'encourage', when: 'daily', label: 'Encorajamento para o encontro', short: 'Encorajamento', hint: 'Anime o grupo para a próxima Casa de Paz.', photo: 'optional', text: 'required', textLabel: 'Mensagem', placeholder: 'Ex.: Sexta tem Casa de Paz! Traga alguém com você 🙌', maxPerDay: 1 },
+  { type: 'devotional', when: 'daily', label: 'TSD (Devocional)', short: 'TSD', hint: 'O que Deus falou com você no seu tempo a sós.', photo: 'optional', text: 'required', textLabel: 'O que você aprendeu?', maxPerDay: 1 },
+  { type: 'prayer', when: 'daily', label: 'Orei pela Casa de Paz', short: 'Oração', hint: 'Registre que orou pelo encontro e pelos convidados.', photo: 'none', text: 'optional', textLabel: 'Por quem orou? (opcional)', maxPerDay: 1 },
+  { type: 'fasting', when: 'daily', label: 'Registro de jejum', short: 'Jejum', hint: 'Registre seu jejum pela Casa de Paz.', photo: 'none', text: 'required', textLabel: 'Como foi o jejum?', placeholder: 'Ex.: Jejum até as 12h', maxPerDay: 1 },
+  { type: 'testimony', when: 'daily', label: 'Testemunho', short: 'Testemunho', hint: 'Conte algo que Deus fez. Inspira quem ainda não conhece!', photo: 'optional', text: 'required', textLabel: 'O que Deus fez?', maxPerDay: 1 },
 ];
 
 export const TYPE_LABEL: Record<PostType, string> = {
@@ -121,16 +121,22 @@ export const POINT_LABELS: { key: keyof Group['points']; label: string; when: Ac
   { key: 'poll', label: 'Resposta de enquete', when: 'other' },
 ];
 
-/** Pontos do próximo post desta ação (considera convidados e a redução do 2º/3º post). */
-export function actionPoints(g: Group, type: ActionType, guests = 0, doneToday = 0) {
+/** Pontos desta ação (check-in considera os convidados). */
+export function actionPoints(g: Group, type: ActionType, guests = 0) {
   if (type === 'checkin') return (g.points.checkin ?? 0) * (1 + 2 * guests);
-  const base = g.points[type] ?? 0;
-  const info = ACTIONS.find((a) => a.type === type);
-  if (info?.when === 'daily' && g.diminishing && type !== 'evangelism') {
-    return doneToday === 0 ? base : doneToday === 1 ? Math.ceil(base * 0.5) : Math.ceil(base * 0.25);
-  }
-  return base;
+  return g.points[type] ?? 0;
 }
+
+/** Máximo do dia a dia (todas as ações diárias, 1x cada). */
+export const dailyMax = (g: Group) =>
+  ACTIONS.filter((a) => a.when === 'daily').reduce((sum, a) => sum + (g.points[a.type] ?? 0), 0);
+
+/** Bônus do dia do encontro (sem convidados). */
+export const meetingMax = (g: Group) =>
+  ACTIONS.filter((a) => a.when === 'meeting').reduce((sum, a) => sum + (g.points[a.type] ?? 0), 0);
+
+/** Limite semanal sugerido: 7 dias de dia a dia + bônus do encontro + ~2 enquetes. */
+export const suggestedWeeklyCap = (g: Group) => dailyMax(g) * 7 + meetingMax(g) + (g.points.poll ?? 0) * 2;
 
 export interface Availability {
   blocked: string | null; // motivo do bloqueio (null = liberado)
@@ -154,7 +160,7 @@ export function actionAvailability(g: Group, type: ActionType, today: string, my
   } else if (g.post_mode === 'selected' && !g.post_weekdays.includes(dow) && dow !== g.house_weekday) {
     return { blocked: 'Hoje não é dia de post', left, done };
   }
-  if (left === 0) return { blocked: info.maxPerDay > 1 ? 'Limite de hoje atingido' : 'Feito hoje ✓', left, done };
+  if (left === 0) return { blocked: 'done', left, done };
   return { blocked: null, left, done };
 }
 

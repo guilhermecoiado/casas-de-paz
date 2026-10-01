@@ -7,7 +7,8 @@ import {
   Smile, Sparkles, Sun, User, Users, UtensilsCrossed,
 } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
-import { ACTIONS, WEEKDAYS, actionAvailability, actionPoints, formatDate, weekdayOf, type ActionInfo } from '@/lib/game';
+import { ACTIONS, WEEKDAYS, actionAvailability, actionPoints, dailyMax, formatDate, weekdayOf, type ActionInfo } from '@/lib/game';
+import { ProgressBar } from '@/components/ui';
 import { compressImage } from '@/lib/image';
 import { ShareSheet } from '@/components/ShareSheet';
 import { errMsg, supabase, uploadPostImage } from '@/lib/supabase';
@@ -27,7 +28,7 @@ const MIN_TEXT: Partial<Record<ActionType, number>> = { evangelism: 10, encourag
 export default function Postar() {
   const router = useRouter();
   const toast = useToast();
-  const { group, posts, me, today, profiles, reload } = useGroup();
+  const { group, posts, me, today, profiles, reload, stats } = useGroup();
   const [action, setAction] = useState<ActionInfo | null>(null);
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [text, setText] = useState('');
@@ -39,6 +40,9 @@ export default function Postar() {
   const groupToday = useMemo(() => posts.filter((p) => p.local_date === today), [posts, today]);
   const isHouseDay = weekdayOf(today) === group.house_weekday;
   const groupPhotoBy = groupToday.find((p) => p.type === 'group' && p.status !== 'cancelled');
+  const dayMax = dailyMax(group);
+  const dayDone = myToday.filter((p) => p.status !== 'cancelled' && ACTIONS.some((a) => a.when === 'daily' && a.type === p.type)).reduce((s, p) => s + p.points, 0);
+  const weekDone = stats.byUser[me]?.weekPoints ?? 0;
   const back = () => (action ? setAction(null) : router.push(`/g/${group.id}`));
 
   const submit = async () => {
@@ -105,17 +109,29 @@ export default function Postar() {
 
       {!action ? (
         <div className="space-y-6 px-4 pb-8">
-          {(['meeting', 'daily'] as const).map((when) => {
+          <div className="card grid grid-cols-2 gap-4 p-4">
+            <div>
+              <p className="text-[11px] font-extrabold uppercase tracking-wider text-[#a8927a]">Hoje (dia a dia)</p>
+              <p className="font-display text-2xl font-extrabold leading-tight">{dayDone}<span className="text-sm text-[#a8927a]"> / {dayMax}</span></p>
+              <div className="mt-1.5"><ProgressBar value={dayDone} max={dayMax} height={8} color={dayDone >= dayMax ? 'bg-olive' : 'bg-amber'} /></div>
+            </div>
+            <div>
+              <p className="text-[11px] font-extrabold uppercase tracking-wider text-[#a8927a]">Semana</p>
+              <p className="font-display text-2xl font-extrabold leading-tight">{weekDone}<span className="text-sm text-[#a8927a]"> / {group.weekly_user_cap}</span></p>
+              <div className="mt-1.5"><ProgressBar value={weekDone} max={group.weekly_user_cap} height={8} /></div>
+            </div>
+          </div>
+          {(['daily', 'meeting'] as const).map((when) => {
             const list = ACTIONS.filter((a) => a.when === when);
             return (
               <section key={when}>
                 <div className="mb-2.5 flex items-end justify-between px-1">
                   <div>
-                    <h2 className="font-display text-lg font-bold">{when === 'meeting' ? 'No dia do encontro' : 'Durante a semana'}</h2>
+                    <h2 className="font-display text-lg font-bold">{when === 'meeting' ? 'Bônus do dia do encontro' : 'Dia a dia'}</h2>
                     <p className="text-xs font-bold text-[#a8927a]">
                       {when === 'meeting'
-                        ? isHouseDay ? 'Hoje é dia de Casa de Paz! 1 vez cada' : `Libera ${WEEKDAYS[group.house_weekday].toLowerCase()}`
-                        : group.diminishing ? 'Até 3x por dia · 2º e 3º valem menos' : 'Até 3x por dia cada'}
+                        ? isHouseDay ? 'Hoje é dia de Casa de Paz! Vale mais pontos' : `Libera ${WEEKDAYS[group.house_weekday].toLowerCase()} · vale mais pontos`
+                        : `1 vez por dia cada · máximo de ${dayMax} pts por dia`}
                     </p>
                   </div>
                 </div>
@@ -124,7 +140,7 @@ export default function Postar() {
                     const av = actionAvailability(group, a.type, today, myToday, groupToday);
                     const Icon = ICONS[a.type];
                     const featured = a.type === 'checkin' || a.type === 'evangelism';
-                    const pts = actionPoints(group, a.type, 0, av.done);
+                    const pts = actionPoints(group, a.type);
                     return (
                       <button
                         key={a.type}
@@ -146,9 +162,10 @@ export default function Postar() {
                           <p className="mt-1 text-[11px] font-bold text-[#8A6F57]">Postada por @{profiles[groupPhotoBy.user_id]?.username ?? '…'}</p>
                         )}
                         {a.when === 'daily' && !av.blocked && (
-                          <p className="mt-1 text-[11px] font-bold text-olive">Você pode postar mais {av.left}x hoje</p>
+                          <p className="mt-1 text-[11px] font-bold text-olive">Disponível hoje</p>
                         )}
-                        {av.blocked && !(a.when === 'meeting' && !isHouseDay) && (
+                        {av.blocked === 'done' && <p className="mt-1 text-[11px] font-bold text-olive">✓ Feito hoje</p>}
+                        {av.blocked && av.blocked !== 'done' && !(a.when === 'meeting' && !isHouseDay) && (
                           <p className="mt-1 text-[11px] font-bold text-[#8A6F57]">🔒 {av.blocked}</p>
                         )}
                         {a.when === 'meeting' && !isHouseDay && (
@@ -206,7 +223,7 @@ export default function Postar() {
           <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3">
             <span className="font-bold text-[#6b5643]">Você vai ganhar</span>
             <span className="font-display text-2xl font-extrabold text-terra">
-              +{actionPoints(group, action.type, guests, myToday.filter((p) => p.type === action.type && p.status !== 'cancelled').length)} pts
+              +{actionPoints(group, action.type, guests)} pts
             </span>
           </div>
 

@@ -59,19 +59,33 @@ npm run dev
 3. **Início:** tiles de todos os membros. Quem já postou hoje aparece com a foto do dia e ✓, quem não postou aparece em cinza, marcado como "falta".
 
 ### Pontuação padrão (o adm altera tudo no painel ⚙️)
-| Ação | Pontos | Regra |
-|---|---|---|
-| Check-in na Casa de Paz | 40 | Só no dia definido pelo adm, foto pela câmera, 1 por dia |
-| + cada convidado | +80 | O dobro do check-in por convidado (ex.: 2 convidados = 40 + 160 = 200) |
-| Evangelizar / convidar | 20 | Sem foto, com descrição breve, até 3 por dia |
-| Foto em grupo | 15 + 10 | 15 para quem postou e +10 de bônus só para a equipe |
-| Ajuda no lanche | 15 | Diz o que vai levar e tira foto |
-| Dinâmica / Comunhão | 12 | Com foto |
-| Foto individual | 10 | Com foto |
-| Relax | 8 | Com foto |
-| Resposta de enquete | 5 | Enquete do dia criada pelo adm |
+**Dia a dia: 1 vez por dia cada, no máximo 100 pts por dia**
 
-Cada tipo de foto vale uma vez por dia por pessoa. Todas as regras são validadas no servidor, então ninguém consegue burlar pelo navegador.
+| Ação | Pontos |
+|---|---|
+| Evangelizei / convidei (sem foto) | 25 |
+| TSD (devocional) | 15 |
+| Registro de jejum | 15 |
+| Versículo do dia | 10 |
+| Encorajamento para o encontro | 10 |
+| Orei pela Casa de Paz | 10 |
+| Testemunho | 10 |
+| Foto individual | 5 |
+
+**Bônus do dia do encontro: só no dia da Casa de Paz, 1 vez cada**
+
+| Ação | Pontos |
+|---|---|
+| Check-in (foto no local) | 100, e cada convidado vale o dobro (+200) |
+| Foto em grupo | 60, mais 50 de bônus para a equipe. Só uma por grupo no dia: quem postar primeiro leva |
+| Ajuda no lanche | 40 |
+| Dinâmica | 30 |
+| Comunhão | 30 |
+| Relax | 20 |
+
+Cada resposta de enquete vale 10 pts.
+
+**Conta da semana:** 100 × 7 dias = 700, mais ~280 do encontro e as enquetes, dá **≈ 1000 por semana**, ou seja, **4000 em 4 semanas**. O painel mostra o limite semanal sugerido e tem um botão para aplicá-lo quando os pontos forem alterados.
 
 ### Limites semanais (liberação gradual)
 - **Por pessoa** (padrão: 250 por semana) e **da equipe** (padrão: 2.000 por semana).

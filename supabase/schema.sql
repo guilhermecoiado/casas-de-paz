@@ -754,13 +754,13 @@ begin
     end if;
 
   elsif p_type in ('individual','verse','encourage','devotional','prayer','fasting','testimony','evangelism') then
-    /* ---------- ações do dia a dia: até 3 por dia de cada ---------- */
+    /* ---------- ações do dia a dia: 1 por dia de cada ---------- */
     if g.post_mode = 'selected' and not (v_dow = any(g.post_weekdays)) and v_dow <> g.house_weekday then
       raise exception 'Hoje não é dia de postagem neste grupo';
     end if;
     select count(*) into v_count from posts
      where group_id = p_group and user_id = auth.uid() and type = p_type and local_date = v_today and status not in ('cancelled','archived','removed');
-    if v_count >= 3 then raise exception 'Você já postou isso 3 vezes hoje. Volte amanhã!'; end if;
+    if v_count >= 1 then raise exception 'Você já fez isso hoje. Volte amanhã!'; end if;
     if p_type = 'individual' and p_photo_url is null then raise exception 'A foto individual precisa de uma foto'; end if;
     if p_type = 'evangelism' then p_photo_url := null; end if;
     if p_type in ('encourage','devotional','evangelism','testimony') and v_len < 10 then
@@ -770,10 +770,6 @@ begin
       raise exception 'Preencha o texto (mínimo 5 caracteres)';
     end if;
     v_base := coalesce((g.points->>p_type)::int, 0);
-    -- 2º e 3º post do dia valem menos (exceto evangelismo), se o adm deixar ligado
-    if g.diminishing and p_type <> 'evangelism' then
-      v_base := case v_count when 0 then v_base when 1 then ceil(v_base * 0.5) else ceil(v_base * 0.25) end;
-    end if;
   else
     raise exception 'Tipo de post inválido';
   end if;
@@ -883,3 +879,11 @@ begin
 end $$;
 revoke execute on function public.remove_post(uuid) from public, anon;
 grant execute on function public.remove_post(uuid) to authenticated;
+
+
+-- =====================================================================
+-- REGRAS v4: ações do dia a dia 1x por dia (máx. 100/dia = 700/semana)
+-- + bônus do dia do encontro (~280) + enquetes ≈ 1000/semana
+-- =====================================================================
+alter table public.groups alter column points set default
+  '{"checkin":100,"group":60,"group_bonus":50,"dynamic":30,"relax":20,"fellowship":30,"snack":40,"individual":5,"verse":10,"encourage":10,"devotional":15,"prayer":10,"fasting":15,"testimony":10,"evangelism":25,"poll":10}';

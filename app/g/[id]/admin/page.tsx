@@ -9,7 +9,7 @@ import { useToast } from '@/components/Providers';
 import { Avatar, PhotoPicker, Spinner } from '@/components/ui';
 import { AdminPush } from '@/components/AdminPush';
 import { MemberSheet } from '@/components/MemberSheet';
-import { POINT_LABELS, WEEKDAYS, WEEKDAYS_SHORT, formatDate, teamWeeklyCap, totalWeeks } from '@/lib/game';
+import { POINT_LABELS, WEEKDAYS, WEEKDAYS_SHORT, dailyMax, formatDate, meetingMax, suggestedWeeklyCap, teamWeeklyCap, totalWeeks } from '@/lib/game';
 import { compressImage } from '@/lib/image';
 import { errMsg, supabase, uploadImage } from '@/lib/supabase';
 import type { Group, PointsConfig } from '@/lib/types';
@@ -214,17 +214,19 @@ export default function Admin() {
         </Section>
 
         <Section title="Pontos por ação">
-          <div className="flex items-center justify-between gap-3 rounded-2xl bg-cream p-3">
-            <div>
-              <p className="text-sm font-extrabold">2º e 3º post do dia valem menos</p>
-              <p className="text-xs text-[#8A6F57]">1º = 100%, 2º = 50%, 3º = 25% (evangelismo não diminui)</p>
-            </div>
-            <Toggle on={form.diminishing} onChange={(v) => set('diminishing', v)} />
+          <div className="rounded-2xl bg-cream p-3 text-sm leading-relaxed text-[#6b5643]">
+            <p><b>Máximo do dia a dia:</b> {dailyMax(form)} pts (cada ação 1x por dia)</p>
+            <p><b>Semana:</b> {dailyMax(form)} × 7 = {dailyMax(form) * 7} + bônus do encontro {meetingMax(form)} + enquetes ≈ <b>{suggestedWeeklyCap(form)}</b></p>
+            {suggestedWeeklyCap(form) !== form.weekly_user_cap && (
+              <button className="chip mt-2 bg-ink !py-2 text-white" onClick={() => set('weekly_user_cap', suggestedWeeklyCap(form))}>
+                Usar {suggestedWeeklyCap(form)} como limite semanal por pessoa
+              </button>
+            )}
           </div>
-          {(['meeting', 'daily', 'other'] as const).map((w) => (
+          {(['daily', 'meeting', 'other'] as const).map((w) => (
             <div key={w} className="space-y-2">
               <p className="pt-2 text-xs font-extrabold uppercase tracking-wider text-[#a8927a]">
-                {w === 'meeting' ? 'Dia do encontro (1 vez)' : w === 'daily' ? 'Dia a dia (até 3x por dia)' : 'Outros'}
+                {w === 'meeting' ? 'Bônus do dia do encontro (1 vez)' : w === 'daily' ? 'Dia a dia (1 vez por dia)' : 'Outros'}
               </p>
               {POINT_LABELS.filter((x) => x.when === w).map(({ key, label }) => (
                 <div key={key} className="flex items-center justify-between gap-3">
