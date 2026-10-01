@@ -74,7 +74,7 @@ export function PostCard({ post }: { post: Post }) {
       <div className="space-y-2 p-3">
         {post.description && <p className={`whitespace-pre-wrap text-[15px] leading-snug ${cancelled ? 'line-through' : ''}`}>{post.description}</p>}
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`chip ${cancelled ? 'bg-sand text-[#8A6F57] line-through' : 'bg-amber/20 text-[#9a5b00]'}`}>+{post.points} pts</span>
+          <span className={`chip ${cancelled ? 'bg-sand text-[#8A6F57] line-through' : post.points < 0 ? 'bg-[#7a2618]/10 text-[#7a2618]' : 'bg-amber/20 text-[#9a5b00]'}`}>{post.points >= 0 ? '+' : ''}{post.points} pts</span>
           {post.group_bonus > 0 && <span className="chip bg-olive/15 text-olive"><Users size={12} /> +{post.group_bonus} equipe</span>}
           {post.guests > 0 && <span className="chip bg-olive/15 text-olive">{post.guests} convidado{post.guests > 1 ? 's' : ''}</span>}
           {post.capped && <span className="chip bg-sand text-[#8A6F57]">limite semanal</span>}
@@ -101,7 +101,7 @@ export function PostCard({ post }: { post: Post }) {
       </div>
 
       <Sheet open={menu} onClose={() => setMenu(false)} title="Contestar pontos">
-        <p className="mb-4 text-sm text-[#6b5643]">{author?.name} · {TYPE_LABEL[post.type]} · +{post.points} pts</p>
+        <p className="mb-4 text-sm text-[#6b5643]">{author?.name} · {TYPE_LABEL[post.type]} · {post.points >= 0 ? '+' : ''}{post.points} pts</p>
         <div className="space-y-2">
           {post.status !== 'voting' && !cancelled && (
             <button className="btn-soft w-full justify-start" onClick={() => moderate('vote')}><Gavel size={18} /> Enviar para votação do grupo</button>

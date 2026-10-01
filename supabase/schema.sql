@@ -570,3 +570,105 @@ grant execute on function public.create_group(text, text), public.join_group(tex
   public.save_push_subscription(text, text, text, text), public.delete_push_subscription(text),
   public.is_member(uuid), public.is_admin(uuid)
   to authenticated;
+
+-- =====================================================================
+-- CONTESTAÇÃO AMPLIADA: pontos de enquete vinculados + ajuste manual do adm
+-- =====================================================================
+
+-- novo tipo de lançamento: ajuste manual (positivo ou negativo) feito pelo adm
+alter table public.posts drop constraint if exists posts_type_check;
+alter table public.posts add constraint posts_type_check check (type in
+  ('individual','group','dynamic','relax','fellowship','snack','evangelism','checkin','poll','adjust'));
+
+-- resposta de enquete passa a apontar para a enquete
+alter table public.posts add column if not exists poll_id uuid references public.polls(id) on delete set null;
+create index if not exists posts_poll on public.posts (poll_id) where poll_id is not null;
+
+-- vincula respostas antigas à enquete pela pergunta
+update public.posts p set poll_id = pl.id
+  from public.polls pl
+ where p.type = 'poll' and p.poll_id is null and pl.group_id = p.group_id and pl.question = p.description;
+
+-- respostas de enquetes que já foram excluídas: cancela os pontos
+update public.posts set status = 'cancelled'
+ where type = 'poll' and poll_id is null and status <> 'cancelled';
+
+-- ao excluir uma enquete, cancela os pontos das respostas (o adm pode restaurar pelo extrato)
+create or replace function public.cancel_poll_points()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update posts set status = 'cancelled' where poll_id = old.id and status <> 'cancelled';
+  return old;
+end $$;
+revoke execute on function public.cancel_poll_points() from public, anon, authenticated;
+drop trigger if exists polls_cancel_points on public.polls;
+create trigger polls_cancel_points before delete on public.polls
+  for each row execute function public.cancel_poll_points();
+
+-- resposta de enquete grava o poll_id
+create or replace function public.answer_poll(p_poll uuid, p_option int)
+returns public.posts language plpgsql security definer set search_path = public as $$
+declare pl public.polls; g public.groups; v_today date; v_pts int; v_b int; v_base int; r public.posts;
+begin
+  select * into pl from polls where id = p_poll;
+  if pl.id is null or not is_member(pl.group_id) then raise exception 'Enquete não encontrada'; end if;
+  if p_option < 0 or p_option >= coalesce(array_length(pl.options, 1), 0) then raise exception 'Opção inválida'; end if;
+  select * into g from groups where id = pl.group_id;
+  v_today := (now() at time zone g.timezone)::date;
+  if pl.poll_date <> v_today then raise exception 'Esta enquete não está aberta hoje'; end if;
+  begin
+    insert into poll_answers (poll_id, group_id, user_id, option_index)
+    values (p_poll, pl.group_id, auth.uid(), p_option);
+  exception when unique_violation then
+    raise exception 'Você já respondeu esta enquete';
+  end;
+  v_base := case when v_today between g.start_date and g.end_date
+                 then coalesce((g.points->>'poll')::int, 0) else 0 end;
+  select a.o_points, a.o_bonus into v_pts, v_b from _award(g, auth.uid(), _week(g, v_today), v_base, 0) a;
+  insert into posts (group_id, user_id, type, description, poll_id, base_points, points, capped, local_date, week)
+  values (pl.group_id, auth.uid(), 'poll', pl.question, pl.id, v_base, v_pts, v_pts < v_base, v_today, _week(g, v_today))
+  returning * into r;
+  return r;
+end $$;
+revoke execute on function public.answer_poll(uuid, int) from public, anon;
+grant execute on function public.answer_poll(uuid, int) to authenticated;
+
+-- ajustes do adm não consomem nem liberam o limite semanal
+create or replace function public._award(
+  g public.groups, p_user uuid, p_week int, p_base int, p_bonus int,
+  out o_points int, out o_bonus int)
+language plpgsql security definer set search_path = public as $$
+declare u_used int; g_used int; u_left int; g_left int;
+begin
+  perform pg_advisory_xact_lock(hashtext(g.id::text));
+  select coalesce(sum(points), 0) into u_used
+    from posts where group_id = g.id and user_id = p_user and week = p_week and status <> 'cancelled' and type <> 'adjust';
+  select coalesce(sum(points + group_bonus), 0) into g_used
+    from posts where group_id = g.id and week = p_week and status <> 'cancelled' and type <> 'adjust';
+  u_left := greatest(g.weekly_user_cap - u_used, 0);
+  g_left := greatest(g.weekly_group_cap - g_used, 0);
+  o_points := greatest(least(p_base, u_left, g_left), 0);
+  o_bonus  := greatest(least(p_bonus, g_left - o_points), 0);
+end $$;
+revoke execute on function public._award(public.groups, uuid, int, int, int) from public, anon, authenticated;
+
+-- ajuste manual: adm soma ou retira pontos de um membro, com motivo
+create or replace function public.admin_adjust_points(p_group uuid, p_user uuid, p_points int, p_reason text)
+returns public.posts language plpgsql security definer set search_path = public as $$
+declare g public.groups; v_today date; r public.posts;
+begin
+  if not is_admin(p_group) then raise exception 'Apenas o administrador'; end if;
+  if not exists (select 1 from group_members where group_id = p_group and user_id = p_user) then
+    raise exception 'Membro não encontrado';
+  end if;
+  if coalesce(p_points, 0) = 0 or abs(p_points) > 1000 then raise exception 'Informe um valor entre -1000 e 1000 (diferente de zero)'; end if;
+  if length(trim(coalesce(p_reason, ''))) < 3 then raise exception 'Explique o motivo do ajuste'; end if;
+  select * into g from groups where id = p_group;
+  v_today := least(greatest((now() at time zone g.timezone)::date, g.start_date), g.end_date);
+  insert into posts (group_id, user_id, type, description, base_points, points, local_date, week)
+  values (p_group, p_user, 'adjust', left(trim(p_reason), 500), p_points, p_points, v_today, _week(g, v_today))
+  returning * into r;
+  return r;
+end $$;
+revoke execute on function public.admin_adjust_points(uuid, uuid, int, text) from public, anon;
+grant execute on function public.admin_adjust_points(uuid, uuid, int, text) to authenticated;

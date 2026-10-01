@@ -8,6 +8,7 @@ import { useGroup } from '@/lib/group-context';
 import { useToast } from '@/components/Providers';
 import { Avatar, PhotoPicker, Spinner } from '@/components/ui';
 import { AdminPush } from '@/components/AdminPush';
+import { MemberSheet } from '@/components/MemberSheet';
 import { POINT_LABELS, WEEKDAYS, WEEKDAYS_SHORT, formatDate, totalWeeks } from '@/lib/game';
 import { compressImage } from '@/lib/image';
 import { errMsg, supabase, uploadImage } from '@/lib/supabase';
@@ -24,6 +25,7 @@ export default function Admin() {
   const [pollDate, setPollDate] = useState(today);
   const [bg, setBg] = useState<Blob | null>(null);
   const [pw, setPw] = useState('');
+  const [ledger, setLedger] = useState<string | null>(null);
 
   if (!isAdmin) {
     return (
@@ -62,7 +64,7 @@ export default function Admin() {
   };
 
   const deletePoll = async (id: string) => {
-    if (!confirm('Excluir esta enquete?')) return;
+    if (!confirm('Excluir esta enquete? Os pontos de quem já respondeu serão cancelados.')) return;
     const { error } = await supabase.from('polls').delete().eq('id', id);
     if (error) return toast(errMsg(error), 'error');
     reload();
@@ -227,6 +229,7 @@ export default function Admin() {
         </Section>
 
         <Section title={`Membros (${members.length})`}>
+          <p className="text-xs text-[#8A6F57]">Toque em Extrato para ver todos os pontos de um membro (inclusive enquetes), contestar ou ajustar.</p>
           {members.map((m) => (
             <div key={m.user_id} className="flex items-center gap-3">
               <Avatar url={profiles[m.user_id]?.avatar_url} name={profiles[m.user_id]?.name} size={38} />
@@ -234,12 +237,15 @@ export default function Admin() {
                 <p className="truncate font-extrabold">{profiles[m.user_id]?.name}</p>
                 <p className="truncate text-xs text-[#a8927a]">@{profiles[m.user_id]?.username}</p>
               </div>
+              <button onClick={() => setLedger(m.user_id)} className="chip bg-sand !py-2 text-ink">Extrato</button>
               {m.user_id !== me && (
                 <button onClick={() => removeMember(m.user_id)} className="rounded-full bg-sand p-2 text-[#7a2618]" aria-label="Remover"><UserMinus size={16} /></button>
               )}
             </div>
           ))}
         </Section>
+
+        <MemberSheet userId={ledger} onClose={() => setLedger(null)} />
 
         <Section title="Senha do grupo">
           <div className="flex gap-2">

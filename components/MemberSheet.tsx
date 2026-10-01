@@ -3,9 +3,10 @@
 import { useGroup } from '@/lib/group-context';
 import { TYPE_LABEL } from '@/lib/game';
 import { Avatar, Sheet } from './ui';
+import { PointsLedger } from './PointsLedger';
 
 export function MemberSheet({ userId, onClose }: { userId: string | null; onClose: () => void }) {
-  const { profiles, stats, look, posts, group } = useGroup();
+  const { profiles, stats, look, posts, group, isAdmin } = useGroup();
   if (!userId) return null;
   const p = profiles[userId];
   const s = stats.byUser[userId];
@@ -44,6 +45,7 @@ export function MemberSheet({ userId, onClose }: { userId: string | null; onClos
           ))}
         </div>
       )}
+      {isAdmin && <PointsLedger userId={userId} />}
     </Sheet>
   );
 }

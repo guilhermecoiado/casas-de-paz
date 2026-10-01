@@ -77,6 +77,7 @@ export const TYPE_LABEL: Record<PostType, string> = {
   individual: 'Individual',
   relax: 'Relax',
   poll: 'Enquete',
+  adjust: 'Ajuste do adm',
 };
 
 export const POINT_LABELS: { key: keyof Group['points']; label: string }[] = [
@@ -159,7 +160,7 @@ export function computeStats(g: Group, members: Member[], posts: Post[], today: 
       s.guests += p.guests;
     }
     if (p.type === 'evangelism') s.evangelism += 1;
-    if (p.local_date === today && p.type !== 'poll') {
+    if (p.local_date === today && p.type !== 'poll' && p.type !== 'adjust') {
       s.postedToday = true;
       if (!s.todayPhoto && p.photo_url) s.todayPhoto = p.photo_url;
     }

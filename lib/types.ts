@@ -7,9 +7,10 @@ export type PostType =
   | 'snack'
   | 'evangelism'
   | 'checkin'
-  | 'poll';
+  | 'poll'
+  | 'adjust';
 
-export type ActionType = Exclude<PostType, 'poll'>;
+export type ActionType = Exclude<PostType, 'poll' | 'adjust'>;
 
 export interface Profile {
   id: string;
@@ -67,6 +68,7 @@ export interface Post {
   type: PostType;
   photo_url: string | null;
   description: string | null;
+  poll_id?: string | null;
   guests: number;
   base_points: number;
   points: number;
