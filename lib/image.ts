@@ -257,6 +257,8 @@ export interface HouseShareOptions {
   groupName: string;
   points: number;
   members: number;
+  checkins: number;
+  guests?: number;
   groupPhoto?: string | null; // última foto em grupo (pequena, estilo polaroid)
   photoDate?: string;
 }
@@ -337,9 +339,12 @@ export async function houseShareImage(svg: SVGSVGElement, o: HouseShareOptions):
   wrapLines(ctx, 'Construímos juntos!', textW).forEach((l, i) => ctx.fillText(l, tx, ty + i * 70));
   ctx.font = '800 34px Nunito, system-ui, sans-serif';
   ctx.fillStyle = terra;
-  ctx.fillText(`${o.points.toLocaleString('pt-BR')} pts · ${o.members} ${o.members === 1 ? 'membro' : 'membros'}`, tx, ty + 70);
-  ctx.font = '64px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
-  ctx.fillText('🏡🎉', tx + (o.groupPhoto ? 0 : 0), ty + 160);
+  ctx.fillText(`${o.points.toLocaleString('pt-BR')} pts · ${o.members} ${o.members === 1 ? 'membro' : 'membros'}`, tx, ty + 72);
+  ctx.fillStyle = title;
+  ctx.fillText(`📍 ${o.checkins.toLocaleString('pt-BR')} ${o.checkins === 1 ? 'check-in' : 'check-ins'}`, tx, ty + 124);
+  if (o.guests) {
+    ctx.fillText(`🙌 ${o.guests.toLocaleString('pt-BR')} ${o.guests === 1 ? 'convidado' : 'convidados'}`, tx, ty + 176);
+  }
   ctx.textAlign = 'left';
 
   // polaroid com a última foto em grupo, sobrepondo a casa
@@ -347,7 +352,7 @@ export async function houseShareImage(svg: SVGSVGElement, o: HouseShareOptions):
     try {
       const img = await loadImage(o.groupPhoto);
       const fw = 340, inner = 300, fh = inner + 88;
-      const cx = W - 70 - fw / 2, cy = py + ph + 70;
+      const cx = W - 70 - fw / 2, cy = py + ph + 50;
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate((5 * Math.PI) / 180);
@@ -375,7 +380,8 @@ export async function houseShareImage(svg: SVGSVGElement, o: HouseShareOptions):
   ctx.textAlign = 'center';
   ctx.font = 'italic 500 30px Fraunces, Georgia, serif';
   ctx.fillStyle = sub;
-  ctx.fillText('“Se o Senhor não edificar a casa...” — Salmos 127:1', W / 2, 1296);
+  ctx.fillText('“Se o Senhor não edificar a casa, em vão trabalham', W / 2, 1282);
+  ctx.fillText('os que a edificam.” — Salmos 127:1', W / 2, 1320);
   return canvasToBlob(c, 0.9);
 }
 

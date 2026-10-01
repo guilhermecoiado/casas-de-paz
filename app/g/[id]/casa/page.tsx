@@ -28,6 +28,8 @@ export default function Casa() {
     return pick ?? null;
   }, [posts]);
 
+  const checkins = useMemo(() => posts.filter((p) => p.type === 'checkin' && (p.status === 'ok' || p.status === 'voting')), [posts]);
+
   const openShare = async () => {
     const svg = houseRef.current?.querySelector('svg');
     if (!svg) return;
@@ -40,6 +42,8 @@ export default function Casa() {
         groupName: group.name,
         points: stats.groupPoints,
         members: members.length,
+        checkins: checkins.length,
+        guests: checkins.reduce((n, p) => n + (p.guests || 0), 0),
         groupPhoto: lastPhoto?.photo_url ?? null,
         photoDate: date,
       });

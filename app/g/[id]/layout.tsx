@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { Home, Images, Plus, Trophy, Heart } from 'lucide-react';
@@ -40,7 +40,11 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
 
 function BottomNav({ id }: { id: string }) {
   const path = usePathname();
+  const router = useRouter();
   const base = `/g/${id}`;
+  // destaca o item na hora do toque, sem esperar a troca de tela
+  const [pending, setPending] = useState<string | null>(null);
+  useEffect(() => setPending(null), [path]);
   const items = [
     { href: base, icon: Home, label: 'Início' },
     { href: `${base}/feed`, icon: Images, label: 'Feed' },
@@ -48,22 +52,32 @@ function BottomNav({ id }: { id: string }) {
     { href: `${base}/ranking`, icon: Trophy, label: 'Ranking' },
     { href: `${base}/casa`, icon: Heart, label: 'Casa' },
   ];
+  // deixa todas as telas do menu pré-carregadas (e renova ao voltar para o app)
+  useEffect(() => {
+    const warm = () => items.forEach((i) => router.prefetch(i.href));
+    warm();
+    const onVisible = () => { if (document.visibilityState === 'visible') warm(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const t = setInterval(warm, 4 * 60_000);
+    return () => { document.removeEventListener('visibilitychange', onVisible); clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base, router]);
   if (path?.endsWith('/postar') || path?.endsWith('/chat')) return null;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-sand bg-cream/95 backdrop-blur pb-safe">
       <div className="mx-auto flex max-w-md items-end justify-around px-2 pt-2">
         {items.map(({ href, icon: Icon, label, center }) => {
-          const active = path === href;
+          const active = (pending ?? path) === href;
           if (center)
             return (
-              <Link key={href} href={href} className="-mt-7 flex flex-col items-center" aria-label={label}>
+              <Link key={href} href={href} prefetch onClick={() => setPending(href)} className="-mt-7 flex flex-col items-center" aria-label={label}>
                 <span className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-terra text-white shadow-[0_6px_0_#9c3f2b] active:translate-y-1 active:shadow-[0_2px_0_#9c3f2b]">
                   <Icon size={30} strokeWidth={2.8} />
                 </span>
               </Link>
             );
           return (
-            <Link key={href} href={href} className={`flex min-w-[56px] flex-col items-center gap-0.5 pb-2 text-[11px] font-extrabold ${active ? 'text-terra' : 'text-[#a8927a]'}`}>
+            <Link key={href} href={href} prefetch onClick={() => setPending(href)} className={`flex min-w-[56px] flex-col items-center gap-0.5 pb-2 text-[11px] font-extrabold ${active ? 'text-terra' : 'text-[#a8927a]'}`}>
               <Icon size={24} strokeWidth={active ? 2.6 : 2} />
               {label}
             </Link>
