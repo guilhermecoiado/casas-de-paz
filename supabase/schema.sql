@@ -176,9 +176,9 @@ begin
   -- serializa pontuações do mesmo grupo (evita estourar o limite com posts simultâneos)
   perform pg_advisory_xact_lock(hashtext(g.id::text));
   select coalesce(sum(points), 0) into u_used
-    from posts where group_id = g.id and user_id = p_user and week = p_week and status <> 'cancelled';
+    from posts where group_id = g.id and user_id = p_user and week = p_week and status not in ('cancelled','archived','removed');
   select coalesce(sum(points + group_bonus), 0) into g_used
-    from posts where group_id = g.id and week = p_week and status <> 'cancelled';
+    from posts where group_id = g.id and week = p_week and status not in ('cancelled','archived','removed');
   u_left := greatest(g.weekly_user_cap - u_used, 0);
   g_left := greatest(g.weekly_group_cap - g_used, 0);
   o_points := greatest(least(p_base, u_left, g_left), 0);
@@ -269,7 +269,7 @@ begin
     if p_photo_url is null then raise exception 'O check-in precisa de uma foto'; end if;
     select count(*) into v_count from posts
      where group_id = p_group and user_id = auth.uid() and type = 'checkin'
-       and local_date = v_today and status <> 'cancelled';
+       and local_date = v_today and status not in ('cancelled','archived','removed');
     if v_count > 0 then raise exception 'Você já fez check-in hoje'; end if;
     p_guests := least(greatest(coalesce(p_guests, 0), 0), 20);
     -- check-in + (2x check-in por convidado)
@@ -284,7 +284,7 @@ begin
       end if;
       select count(*) into v_count from posts
        where group_id = p_group and user_id = auth.uid() and type = 'evangelism'
-         and local_date = v_today and status <> 'cancelled';
+         and local_date = v_today and status not in ('cancelled','archived','removed');
       if v_count >= 3 then raise exception 'Limite de 3 registros de evangelismo por dia'; end if;
       p_photo_url := null;
     else
@@ -294,7 +294,7 @@ begin
       end if;
       select count(*) into v_count from posts
        where group_id = p_group and user_id = auth.uid() and type = p_type
-         and local_date = v_today and status <> 'cancelled';
+         and local_date = v_today and status not in ('cancelled','archived','removed');
       if v_count > 0 then raise exception 'Você já registrou essa ação hoje'; end if;
     end if;
     v_base := coalesce((g.points->>p_type)::int, 0);
@@ -591,13 +591,13 @@ update public.posts p set poll_id = pl.id
 
 -- respostas de enquetes que já foram excluídas: cancela os pontos
 update public.posts set status = 'cancelled'
- where type = 'poll' and poll_id is null and status <> 'cancelled';
+ where type = 'poll' and poll_id is null and status not in ('cancelled','archived','removed');
 
 -- ao excluir uma enquete, cancela os pontos das respostas (o adm pode restaurar pelo extrato)
 create or replace function public.cancel_poll_points()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  update posts set status = 'cancelled' where poll_id = old.id and status <> 'cancelled';
+  update posts set status = 'cancelled' where poll_id = old.id and status not in ('cancelled','archived','removed');
   return old;
 end $$;
 revoke execute on function public.cancel_poll_points() from public, anon, authenticated;
@@ -642,9 +642,9 @@ declare u_used int; g_used int; u_left int; g_left int;
 begin
   perform pg_advisory_xact_lock(hashtext(g.id::text));
   select coalesce(sum(points), 0) into u_used
-    from posts where group_id = g.id and user_id = p_user and week = p_week and status <> 'cancelled' and type <> 'adjust';
+    from posts where group_id = g.id and user_id = p_user and week = p_week and status not in ('cancelled','archived','removed') and type <> 'adjust';
   select coalesce(sum(points + group_bonus), 0) into g_used
-    from posts where group_id = g.id and week = p_week and status <> 'cancelled' and type <> 'adjust';
+    from posts where group_id = g.id and week = p_week and status not in ('cancelled','archived','removed') and type <> 'adjust';
   u_left := greatest(g.weekly_user_cap - u_used, 0);
   g_left := greatest(g.weekly_group_cap - g_used, 0);
   o_points := greatest(least(p_base, u_left, g_left), 0);
@@ -672,3 +672,214 @@ begin
 end $$;
 revoke execute on function public.admin_adjust_points(uuid, uuid, int, text) from public, anon;
 grant execute on function public.admin_adjust_points(uuid, uuid, int, text) to authenticated;
+
+-- =====================================================================
+-- REGRAS v2: dia do encontro × ações diárias, meta de 1000/semana,
+-- total da equipe proporcional aos membros, temporada sem fim automático
+-- =====================================================================
+
+alter table public.posts drop constraint if exists posts_type_check;
+alter table public.posts add constraint posts_type_check check (type in
+  ('individual','group','dynamic','relax','fellowship','snack','evangelism','checkin','poll','adjust',
+   'verse','encourage','devotional','prayer','fasting','testimony'));
+
+-- configurações novas do grupo
+alter table public.groups add column if not exists group_cap_auto boolean not null default true;
+alter table public.groups add column if not exists group_cap_factor numeric not null default 0.6
+  check (group_cap_factor > 0 and group_cap_factor <= 1);
+alter table public.groups add column if not exists diminishing boolean not null default true;
+alter table public.groups alter column weekly_user_cap set default 1000;
+alter table public.groups alter column points set default
+  '{"checkin":100,"group":50,"group_bonus":50,"dynamic":30,"relax":20,"fellowship":30,"snack":40,"individual":10,"verse":10,"encourage":15,"devotional":20,"prayer":10,"fasting":25,"testimony":20,"evangelism":30,"poll":10}';
+
+-- semana sem teto: depois do período, a contagem continua (semana 5, 6...)
+create or replace function public._week(g public.groups, d date)
+returns int language sql stable set search_path = public as $$
+  select greatest((d - g.start_date) / 7 + 1, 1);
+$$;
+
+-- limite individual por semana; o limite da equipe só controla o avanço da casa (calculado no app)
+create or replace function public._award(
+  g public.groups, p_user uuid, p_week int, p_base int, p_bonus int,
+  out o_points int, out o_bonus int)
+language plpgsql security definer set search_path = public as $$
+declare u_used int;
+begin
+  perform pg_advisory_xact_lock(hashtext(g.id::text || p_user::text));
+  select coalesce(sum(points), 0) into u_used
+    from posts where group_id = g.id and user_id = p_user and week = p_week and status not in ('cancelled','archived','removed') and type <> 'adjust';
+  o_points := greatest(least(p_base, g.weekly_user_cap - u_used), 0);
+  o_bonus  := greatest(p_bonus, 0);
+end $$;
+revoke execute on function public._award(public.groups, uuid, int, int, int) from public, anon, authenticated;
+
+create or replace function public.submit_post(
+  p_group uuid, p_type text, p_photo_url text default null,
+  p_description text default null, p_guests int default 0)
+returns public.posts language plpgsql security definer set search_path = public as $$
+declare
+  g public.groups; v_today date; v_dow int; v_week int;
+  v_base int; v_bonus int := 0; v_count int; v_pts int; v_b int; v_len int; v_who text; r public.posts;
+begin
+  if not is_member(p_group) then raise exception 'Você não faz parte deste grupo'; end if;
+  select * into g from groups where id = p_group;
+  v_today := (now() at time zone g.timezone)::date;
+  if v_today < g.start_date then raise exception 'A Casa de Paz ainda não começou'; end if;
+  v_dow := extract(dow from v_today)::int;
+  p_description := nullif(trim(coalesce(p_description, '')), '');
+  v_len := coalesce(length(p_description), 0);
+  p_guests := 0 + case when p_type = 'checkin' then least(greatest(coalesce(p_guests, 0), 0), 20) else 0 end;
+
+  -- serializa por grupo (foto em grupo única e contagem diária consistente)
+  perform pg_advisory_xact_lock(hashtext(p_group::text));
+
+  if p_type in ('checkin','group','dynamic','relax','fellowship','snack') then
+    /* ---------- só no dia do encontro, 1 por pessoa ---------- */
+    if v_dow <> g.house_weekday then raise exception 'Esta ação só pode ser postada no dia do encontro'; end if;
+    if p_photo_url is null then raise exception 'Esta ação precisa de uma foto'; end if;
+    if p_type = 'snack' and v_len < 2 then raise exception 'Conte o que você vai levar para o lanche'; end if;
+    select count(*) into v_count from posts
+     where group_id = p_group and user_id = auth.uid() and type = p_type and local_date = v_today and status not in ('cancelled','archived','removed');
+    if v_count > 0 then raise exception 'Você já registrou essa ação hoje'; end if;
+    if p_type = 'group' then
+      select pr.username into v_who from posts po join profiles pr on pr.id = po.user_id
+       where po.group_id = p_group and po.type = 'group' and po.local_date = v_today and po.status not in ('cancelled','archived','removed') limit 1;
+      if v_who is not null then raise exception 'A foto em grupo de hoje já foi postada por @%', v_who; end if;
+      v_bonus := coalesce((g.points->>'group_bonus')::int, 0);
+    end if;
+    if p_type = 'checkin' then
+      v_base := coalesce((g.points->>'checkin')::int, 0) * (1 + 2 * p_guests);
+    else
+      v_base := coalesce((g.points->>p_type)::int, 0);
+    end if;
+
+  elsif p_type in ('individual','verse','encourage','devotional','prayer','fasting','testimony','evangelism') then
+    /* ---------- ações do dia a dia: até 3 por dia de cada ---------- */
+    if g.post_mode = 'selected' and not (v_dow = any(g.post_weekdays)) and v_dow <> g.house_weekday then
+      raise exception 'Hoje não é dia de postagem neste grupo';
+    end if;
+    select count(*) into v_count from posts
+     where group_id = p_group and user_id = auth.uid() and type = p_type and local_date = v_today and status not in ('cancelled','archived','removed');
+    if v_count >= 3 then raise exception 'Você já postou isso 3 vezes hoje. Volte amanhã!'; end if;
+    if p_type = 'individual' and p_photo_url is null then raise exception 'A foto individual precisa de uma foto'; end if;
+    if p_type = 'evangelism' then p_photo_url := null; end if;
+    if p_type in ('encourage','devotional','evangelism','testimony') and v_len < 10 then
+      raise exception 'Escreva um pouco mais (mínimo 10 caracteres)';
+    end if;
+    if p_type in ('verse','fasting') and v_len < 5 then
+      raise exception 'Preencha o texto (mínimo 5 caracteres)';
+    end if;
+    v_base := coalesce((g.points->>p_type)::int, 0);
+    -- 2º e 3º post do dia valem menos (exceto evangelismo), se o adm deixar ligado
+    if g.diminishing and p_type <> 'evangelism' then
+      v_base := case v_count when 0 then v_base when 1 then ceil(v_base * 0.5) else ceil(v_base * 0.25) end;
+    end if;
+  else
+    raise exception 'Tipo de post inválido';
+  end if;
+
+  v_week := _week(g, v_today);
+  select a.o_points, a.o_bonus into v_pts, v_b from _award(g, auth.uid(), v_week, v_base, v_bonus) a;
+
+  insert into posts (group_id, user_id, type, photo_url, description, guests,
+                     base_points, points, group_bonus, capped, local_date, week)
+  values (p_group, auth.uid(), p_type, p_photo_url, p_description, p_guests,
+          v_base, v_pts, v_b, v_pts < v_base, v_today, v_week)
+  returning * into r;
+  return r;
+end $$;
+revoke execute on function public.submit_post(uuid, text, text, text, int) from public, anon;
+grant execute on function public.submit_post(uuid, text, text, text, int) to authenticated;
+
+-- enquete: vale pontos a partir do início (sem data final)
+create or replace function public.answer_poll(p_poll uuid, p_option int)
+returns public.posts language plpgsql security definer set search_path = public as $$
+declare pl public.polls; g public.groups; v_today date; v_pts int; v_b int; v_base int; r public.posts;
+begin
+  select * into pl from polls where id = p_poll;
+  if pl.id is null or not is_member(pl.group_id) then raise exception 'Enquete não encontrada'; end if;
+  if p_option < 0 or p_option >= coalesce(array_length(pl.options, 1), 0) then raise exception 'Opção inválida'; end if;
+  select * into g from groups where id = pl.group_id;
+  v_today := (now() at time zone g.timezone)::date;
+  if pl.poll_date <> v_today then raise exception 'Esta enquete não está aberta hoje'; end if;
+  begin
+    insert into poll_answers (poll_id, group_id, user_id, option_index)
+    values (p_poll, pl.group_id, auth.uid(), p_option);
+  exception when unique_violation then
+    raise exception 'Você já respondeu esta enquete';
+  end;
+  v_base := case when v_today >= g.start_date then coalesce((g.points->>'poll')::int, 0) else 0 end;
+  select a.o_points, a.o_bonus into v_pts, v_b from _award(g, auth.uid(), _week(g, v_today), v_base, 0) a;
+  insert into posts (group_id, user_id, type, description, poll_id, base_points, points, capped, local_date, week)
+  values (pl.group_id, auth.uid(), 'poll', pl.question, pl.id, v_base, v_pts, v_pts < v_base, v_today, _week(g, v_today))
+  returning * into r;
+  return r;
+end $$;
+revoke execute on function public.answer_poll(uuid, int) from public, anon;
+grant execute on function public.answer_poll(uuid, int) to authenticated;
+
+create or replace function public.admin_adjust_points(p_group uuid, p_user uuid, p_points int, p_reason text)
+returns public.posts language plpgsql security definer set search_path = public as $$
+declare g public.groups; v_today date; r public.posts;
+begin
+  if not is_admin(p_group) then raise exception 'Apenas o administrador'; end if;
+  if not exists (select 1 from group_members where group_id = p_group and user_id = p_user) then
+    raise exception 'Membro não encontrado';
+  end if;
+  if coalesce(p_points, 0) = 0 or abs(p_points) > 4000 then raise exception 'Informe um valor entre -4000 e 4000 (diferente de zero)'; end if;
+  if length(trim(coalesce(p_reason, ''))) < 3 then raise exception 'Explique o motivo do ajuste'; end if;
+  select * into g from groups where id = p_group;
+  v_today := greatest((now() at time zone g.timezone)::date, g.start_date);
+  insert into posts (group_id, user_id, type, description, base_points, points, local_date, week)
+  values (p_group, p_user, 'adjust', left(trim(p_reason), 500), p_points, p_points, v_today, _week(g, v_today))
+  returning * into r;
+  return r;
+end $$;
+revoke execute on function public.admin_adjust_points(uuid, uuid, int, text) from public, anon;
+grant execute on function public.admin_adjust_points(uuid, uuid, int, text) to authenticated;
+
+-- zerar a temporada (só o adm): ARQUIVA pontos e enquetes (nada é apagado; dá para recuperar), limpa cosméticos e recomeça hoje
+alter table public.posts drop constraint if exists posts_status_check;
+alter table public.posts add constraint posts_status_check check (status in ('ok','voting','cancelled','archived','removed'));
+alter table public.polls add column if not exists archived boolean not null default false;
+
+create or replace function public.admin_reset_group(p_group uuid, p_confirm text)
+returns void language plpgsql security definer set search_path = public as $$
+declare g public.groups; v_today date;
+begin
+  if not is_admin(p_group) then raise exception 'Apenas o administrador'; end if;
+  select * into g from groups where id = p_group;
+  if lower(trim(coalesce(p_confirm, ''))) <> lower(g.name) then raise exception 'Digite o nome do grupo para confirmar'; end if;
+  v_today := (now() at time zone g.timezone)::date;
+  update posts set status = 'archived' where group_id = p_group and status <> 'archived';
+  update polls set archived = true where group_id = p_group and not archived;
+  update group_members set title = null, avatar_frame = null, tile_frame = null, tile_color = null, tile_anim = null
+   where group_id = p_group;
+  update groups set start_date = v_today, end_date = v_today + 27 where id = p_group;
+end $$;
+revoke execute on function public.admin_reset_group(uuid, text) from public, anon;
+grant execute on function public.admin_reset_group(uuid, text) to authenticated;
+
+
+-- =====================================================================
+-- REMOVER POST: o autor remove o próprio post; o adm remove o de qualquer membro.
+-- O post some (status "removed", fica guardado), os pontos saem e a vaga do dia libera.
+-- =====================================================================
+create or replace function public.remove_post(p_post uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare p public.posts;
+begin
+  select * into p from posts where id = p_post;
+  if p.id is null or not is_member(p.group_id) then raise exception 'Post não encontrado'; end if;
+  if p.status in ('removed', 'archived') then return; end if;
+  if is_admin(p.group_id) then
+    null; -- adm remove qualquer registro
+  elsif p.user_id = auth.uid() then
+    if p.type = 'adjust' then raise exception 'Ajustes do adm só podem ser removidos pelo adm'; end if;
+  else
+    raise exception 'Você só pode remover os seus próprios posts';
+  end if;
+  update posts set status = 'removed' where id = p_post;
+end $$;
+revoke execute on function public.remove_post(uuid) from public, anon;
+grant execute on function public.remove_post(uuid) to authenticated;

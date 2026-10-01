@@ -11,7 +11,7 @@ import { GROUP_UNLOCKS, groupThreshold } from '@/lib/game';
 import type { Message } from '@/lib/types';
 
 export default function Chat() {
-  const { group, me, profiles, look, unlocked, stats } = useGroup();
+  const { group, me, profiles, look, unlocked, stats, maxGrp } = useGroup();
   const toast = useToast();
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [text, setText] = useState('');
@@ -54,7 +54,7 @@ export default function Chat() {
   );
 
   if (!open) {
-    const need = groupThreshold(group, GROUP_UNLOCKS.find((u) => u.id === 'chat')!);
+    const need = groupThreshold(maxGrp, GROUP_UNLOCKS.find((u) => u.id === 'chat')!);
     return (
       <div className="min-h-[100dvh]">
         {header}

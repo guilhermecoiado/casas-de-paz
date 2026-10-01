@@ -20,11 +20,15 @@ export const weekdayOf = (d: string) => new Date(toUTC(d)).getUTCDay();
 export const addDays = (d: string, n: number) => new Date(toUTC(d) + n * 86400000).toISOString().slice(0, 10);
 
 export const totalWeeks = (g: Group) => Math.max(Math.ceil((daysBetween(g.start_date, g.end_date) + 1) / 7), 1);
-export const weekOf = (g: Group, d: string) =>
-  Math.min(Math.max(Math.floor(daysBetween(g.start_date, d) / 7) + 1, 1), totalWeeks(g));
+/** Semana do período (depois do fim continua contando: semana 5, 6...). */
+export const weekOf = (g: Group, d: string) => Math.max(Math.floor(daysBetween(g.start_date, d) / 7) + 1, 1);
 
 export const maxIndividual = (g: Group) => g.weekly_user_cap * totalWeeks(g);
-export const maxGroup = (g: Group) => g.weekly_group_cap * totalWeeks(g);
+
+/** Quanto a equipe pode somar por semana para a casa: automático (membros × limite × %) ou manual. */
+export const teamWeeklyCap = (g: Group, members: number) =>
+  g.group_cap_auto ? Math.max(1, Math.round(g.weekly_user_cap * Math.max(members, 1) * Number(g.group_cap_factor || 0.6))) : g.weekly_group_cap;
+export const maxGroup = (g: Group, members: number) => teamWeeklyCap(g, members) * totalWeeks(g);
 
 export const WEEKDAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 export const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -45,26 +49,38 @@ export function timeAgo(iso: string) {
 /*  Ações que valem ponto                                              */
 /* ------------------------------------------------------------------ */
 
+export type ActionWhen = 'meeting' | 'daily';
+
 export interface ActionInfo {
   type: ActionType;
+  when: ActionWhen;
   label: string;
   short: string;
   hint: string;
-  photo: boolean;
+  photo: 'required' | 'optional' | 'none';
   text: 'none' | 'optional' | 'required';
   textLabel?: string;
+  placeholder?: string;
   maxPerDay: number;
 }
 
 export const ACTIONS: ActionInfo[] = [
-  { type: 'checkin', label: 'Check-in na Casa de Paz', short: 'Check-in', hint: 'Só no dia da Casa de Paz. Foto obrigatória. Cada convidado vale o dobro!', photo: true, text: 'optional', textLabel: 'Como foi? (opcional)', maxPerDay: 1 },
-  { type: 'evangelism', label: 'Evangelizei / Convidei', short: 'Evangelismo', hint: 'Sem foto. Conte brevemente o que aconteceu.', photo: false, text: 'required', textLabel: 'O que aconteceu?', maxPerDay: 3 },
-  { type: 'group', label: 'Foto em grupo', short: 'Em grupo', hint: 'Vale pontos para você e um bônus extra para a equipe.', photo: true, text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
-  { type: 'snack', label: 'Ajuda no lanche', short: 'Lanche', hint: 'Confirme o que vai levar e tire uma foto.', photo: true, text: 'required', textLabel: 'O que você vai levar?', maxPerDay: 1 },
-  { type: 'dynamic', label: 'Dinâmica', short: 'Dinâmica', hint: 'Registre a dinâmica do encontro.', photo: true, text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
-  { type: 'fellowship', label: 'Comunhão', short: 'Comunhão', hint: 'Momento de comunhão com o grupo.', photo: true, text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
-  { type: 'individual', label: 'Foto individual', short: 'Individual', hint: 'Sua foto do dia.', photo: true, text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
-  { type: 'relax', label: 'Relax', short: 'Relax', hint: 'Um momento leve e descontraído.', photo: true, text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
+  /* dia do encontro: 1 vez cada */
+  { type: 'checkin', when: 'meeting', label: 'Check-in na Casa de Paz', short: 'Check-in', hint: 'Foto no local. Cada convidado vale o dobro do check-in!', photo: 'required', text: 'optional', textLabel: 'Como foi? (opcional)', maxPerDay: 1 },
+  { type: 'group', when: 'meeting', label: 'Foto em grupo', short: 'Em grupo', hint: 'Só 1 por grupo no dia: quem postar primeiro leva os pontos e o bônus da equipe.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
+  { type: 'snack', when: 'meeting', label: 'Ajuda no lanche', short: 'Lanche', hint: 'Conte o que levou e tire uma foto.', photo: 'required', text: 'required', textLabel: 'O que você levou?', placeholder: 'Ex.: Bolo de cenoura', maxPerDay: 1 },
+  { type: 'dynamic', when: 'meeting', label: 'Dinâmica', short: 'Dinâmica', hint: 'Registre a dinâmica do encontro.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
+  { type: 'fellowship', when: 'meeting', label: 'Comunhão', short: 'Comunhão', hint: 'Momento de comunhão com o grupo.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
+  { type: 'relax', when: 'meeting', label: 'Relax', short: 'Relax', hint: 'Um momento leve e descontraído do encontro.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
+  /* dia a dia: até 3 por dia cada */
+  { type: 'evangelism', when: 'daily', label: 'Evangelizei / Convidei', short: 'Evangelismo', hint: 'Conte brevemente o que aconteceu. Não perde valor no 2º e 3º.', photo: 'none', text: 'required', textLabel: 'O que aconteceu?', placeholder: 'Ex.: Convidei meu colega de trabalho para sexta.', maxPerDay: 3 },
+  { type: 'individual', when: 'daily', label: 'Foto individual', short: 'Individual', hint: 'Sua foto do dia.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 3 },
+  { type: 'verse', when: 'daily', label: 'Versículo do dia', short: 'Versículo', hint: 'Compartilhe o versículo que falou com você.', photo: 'optional', text: 'required', textLabel: 'Versículo', placeholder: 'Ex.: “Tudo posso naquele que me fortalece” — Fp 4:13', maxPerDay: 3 },
+  { type: 'encourage', when: 'daily', label: 'Encorajamento para o encontro', short: 'Encorajamento', hint: 'Anime o grupo para a próxima Casa de Paz.', photo: 'optional', text: 'required', textLabel: 'Mensagem', placeholder: 'Ex.: Sexta tem Casa de Paz! Traga alguém com você 🙌', maxPerDay: 3 },
+  { type: 'devotional', when: 'daily', label: 'TSD (Devocional)', short: 'TSD', hint: 'O que Deus falou com você no seu tempo a sós.', photo: 'optional', text: 'required', textLabel: 'O que você aprendeu?', maxPerDay: 3 },
+  { type: 'prayer', when: 'daily', label: 'Orei pela Casa de Paz', short: 'Oração', hint: 'Registre que orou pelo encontro e pelos convidados.', photo: 'none', text: 'optional', textLabel: 'Por quem orou? (opcional)', maxPerDay: 3 },
+  { type: 'fasting', when: 'daily', label: 'Registro de jejum', short: 'Jejum', hint: 'Registre seu jejum pela Casa de Paz.', photo: 'none', text: 'required', textLabel: 'Como foi o jejum?', placeholder: 'Ex.: Jejum até as 12h', maxPerDay: 3 },
+  { type: 'testimony', when: 'daily', label: 'Testemunho', short: 'Testemunho', hint: 'Conte algo que Deus fez. Inspira quem ainda não conhece!', photo: 'optional', text: 'required', textLabel: 'O que Deus fez?', maxPerDay: 3 },
 ];
 
 export const TYPE_LABEL: Record<PostType, string> = {
@@ -76,42 +92,70 @@ export const TYPE_LABEL: Record<PostType, string> = {
   fellowship: 'Comunhão',
   individual: 'Individual',
   relax: 'Relax',
+  verse: 'Versículo',
+  encourage: 'Encorajamento',
+  devotional: 'TSD',
+  prayer: 'Oração',
+  fasting: 'Jejum',
+  testimony: 'Testemunho',
   poll: 'Enquete',
   adjust: 'Ajuste do adm',
 };
 
-export const POINT_LABELS: { key: keyof Group['points']; label: string }[] = [
-  { key: 'checkin', label: 'Check-in (convidado = 2× por pessoa)' },
-  { key: 'evangelism', label: 'Evangelizar / convidar' },
-  { key: 'group', label: 'Foto em grupo (individual)' },
-  { key: 'group_bonus', label: 'Foto em grupo (bônus da equipe)' },
-  { key: 'snack', label: 'Ajuda no lanche' },
-  { key: 'dynamic', label: 'Dinâmica' },
-  { key: 'fellowship', label: 'Comunhão' },
-  { key: 'individual', label: 'Foto individual' },
-  { key: 'relax', label: 'Relax' },
-  { key: 'poll', label: 'Resposta de enquete' },
+export const POINT_LABELS: { key: keyof Group['points']; label: string; when: ActionWhen | 'other' }[] = [
+  { key: 'checkin', label: 'Check-in (convidado = 2× por pessoa)', when: 'meeting' },
+  { key: 'group', label: 'Foto em grupo (quem postar primeiro)', when: 'meeting' },
+  { key: 'group_bonus', label: 'Foto em grupo (bônus da equipe)', when: 'meeting' },
+  { key: 'snack', label: 'Ajuda no lanche', when: 'meeting' },
+  { key: 'dynamic', label: 'Dinâmica', when: 'meeting' },
+  { key: 'fellowship', label: 'Comunhão', when: 'meeting' },
+  { key: 'relax', label: 'Relax', when: 'meeting' },
+  { key: 'evangelism', label: 'Evangelizar / convidar', when: 'daily' },
+  { key: 'individual', label: 'Foto individual', when: 'daily' },
+  { key: 'verse', label: 'Versículo do dia', when: 'daily' },
+  { key: 'encourage', label: 'Encorajamento', when: 'daily' },
+  { key: 'devotional', label: 'TSD (devocional)', when: 'daily' },
+  { key: 'prayer', label: 'Orei pela Casa de Paz', when: 'daily' },
+  { key: 'fasting', label: 'Registro de jejum', when: 'daily' },
+  { key: 'testimony', label: 'Testemunho', when: 'daily' },
+  { key: 'poll', label: 'Resposta de enquete', when: 'other' },
 ];
 
-export function actionPoints(g: Group, type: ActionType, guests = 0) {
-  if (type === 'checkin') return g.points.checkin * (1 + 2 * guests);
-  return g.points[type] ?? 0;
+/** Pontos do próximo post desta ação (considera convidados e a redução do 2º/3º post). */
+export function actionPoints(g: Group, type: ActionType, guests = 0, doneToday = 0) {
+  if (type === 'checkin') return (g.points.checkin ?? 0) * (1 + 2 * guests);
+  const base = g.points[type] ?? 0;
+  const info = ACTIONS.find((a) => a.type === type);
+  if (info?.when === 'daily' && g.diminishing && type !== 'evangelism') {
+    return doneToday === 0 ? base : doneToday === 1 ? Math.ceil(base * 0.5) : Math.ceil(base * 0.25);
+  }
+  return base;
+}
+
+export interface Availability {
+  blocked: string | null; // motivo do bloqueio (null = liberado)
+  left: number;           // quantas vezes ainda pode postar hoje
+  done: number;
 }
 
 /** Verifica no cliente se a ação está liberada hoje (o servidor revalida tudo). */
-export function actionAvailability(g: Group, type: ActionType, today: string, myTodayPosts: Post[]): string | null {
-  if (today < g.start_date) return `Começa em ${formatDate(g.start_date)}`;
-  if (today > g.end_date) return 'Período encerrado';
-  const dow = weekdayOf(today);
-  if (type === 'checkin') {
-    if (dow !== g.house_weekday) return `Só ${WEEKDAYS[g.house_weekday].toLowerCase()}`;
-  } else if (g.post_mode === 'selected' && !g.post_weekdays.includes(dow) && dow !== g.house_weekday) {
-    return 'Hoje não é dia de post';
-  }
+export function actionAvailability(g: Group, type: ActionType, today: string, myTodayPosts: Post[], groupTodayPosts: Post[] = []): Availability {
+  const info = ACTIONS.find((a) => a.type === type)!;
   const done = myTodayPosts.filter((p) => p.type === type && p.status !== 'cancelled').length;
-  const max = ACTIONS.find((a) => a.type === type)?.maxPerDay ?? 1;
-  if (done >= max) return max > 1 ? `Limite de ${max}/dia` : 'Feito hoje ✓';
-  return null;
+  const left = Math.max(info.maxPerDay - done, 0);
+  if (today < g.start_date) return { blocked: `Começa em ${formatDate(g.start_date)}`, left, done };
+  const dow = weekdayOf(today);
+  if (info.when === 'meeting') {
+    if (dow !== g.house_weekday) return { blocked: `Só no dia do encontro (${WEEKDAYS[g.house_weekday].toLowerCase()})`, left, done };
+    if (type === 'group') {
+      const first = groupTodayPosts.find((p) => p.type === 'group' && p.status !== 'cancelled');
+      if (first && !done) return { blocked: 'Já postada hoje', left: 0, done };
+    }
+  } else if (g.post_mode === 'selected' && !g.post_weekdays.includes(dow) && dow !== g.house_weekday) {
+    return { blocked: 'Hoje não é dia de post', left, done };
+  }
+  if (left === 0) return { blocked: info.maxPerDay > 1 ? 'Limite de hoje atingido' : 'Feito hoje ✓', left, done };
+  return { blocked: null, left, done };
 }
 
 /* ------------------------------------------------------------------ */
@@ -132,6 +176,7 @@ export interface UserStats {
   polls: number;       // enquetes respondidas
   snacks: number;      // ajudas no lanche
   groupPhotos: number; // fotos em grupo
+  reachedAt: string;   // quando chegou na pontuação atual (desempate: quem chegou primeiro)
 }
 
 export interface Stats {
@@ -139,19 +184,20 @@ export interface Stats {
   groupPoints: number;
   groupWeekPoints: number;
   week: number;
+  teamWeekCap: number;
 }
 
 const emptyStats = (): UserStats => ({
   points: 0, weekPoints: 0, checkins: 0, guests: 0, evangelism: 0, posts: 0, postedToday: false, todayPhoto: null, pending: 0,
-  days: 0, polls: 0, snacks: 0, groupPhotos: 0,
+  days: 0, polls: 0, snacks: 0, groupPhotos: 0, reachedAt: '',
 });
 
 export function computeStats(g: Group, members: Member[], posts: Post[], today: string): Stats {
   const week = weekOf(g, today);
+  const teamWeekCap = teamWeeklyCap(g, members.length);
   const byUser: Record<string, UserStats> = {};
   members.forEach((m) => (byUser[m.user_id] = emptyStats()));
-  let groupPoints = 0;
-  let groupWeekPoints = 0;
+  const teamByWeek = new Map<number, number>();
   const dayKeys = new Set<string>();
   // posts vêm do mais novo para o mais antigo
   for (const p of posts) {
@@ -159,6 +205,7 @@ export function computeStats(g: Group, members: Member[], posts: Post[], today: 
     const s = (byUser[p.user_id] ||= emptyStats());
     s.points += p.points;
     s.posts += 1;
+    if (!s.reachedAt && p.points !== 0) s.reachedAt = p.created_at;
     if (p.status === 'voting') s.pending += p.points;
     if (p.week === week) s.weekPoints += p.points;
     if (p.type === 'checkin') {
@@ -177,10 +224,23 @@ export function computeStats(g: Group, members: Member[], posts: Post[], today: 
       s.postedToday = true;
       if (!s.todayPhoto && p.photo_url) s.todayPhoto = p.photo_url;
     }
-    groupPoints += p.points + p.group_bonus;
-    if (p.week === week) groupWeekPoints += p.points + p.group_bonus;
+    teamByWeek.set(p.week, (teamByWeek.get(p.week) ?? 0) + p.points + p.group_bonus);
   }
-  return { byUser, groupPoints, groupWeekPoints, week };
+  // a casa avança no máximo o limite semanal da equipe por semana (liberação gradual)
+  let groupPoints = 0;
+  teamByWeek.forEach((v) => (groupPoints += Math.max(0, Math.min(v, teamWeekCap))));
+  const groupWeekPoints = Math.max(0, Math.min(teamByWeek.get(week) ?? 0, teamWeekCap));
+  return { byUser, groupPoints, groupWeekPoints, week, teamWeekCap };
+}
+
+/** Ordena para ranking. Empate: mais fiel (dias postando) → chegou primeiro → mais desbloqueios. */
+export function rankCompare(a: { v: number; s?: UserStats; unlocks: number }, b: { v: number; s?: UserStats; unlocks: number }) {
+  if (b.v !== a.v) return b.v - a.v;
+  const da = a.s?.days ?? 0, db = b.s?.days ?? 0;
+  if (db !== da) return db - da;
+  const ra = a.s?.reachedAt || '9999', rb = b.s?.reachedAt || '9999';
+  if (ra !== rb) return ra < rb ? -1 : 1;
+  return b.unlocks - a.unlocks;
 }
 
 /* ------------------------------------------------------------------ */
@@ -216,16 +276,29 @@ export const GROUP_UNLOCKS: GroupUnlock[] = [
   { id: 'complete', name: 'Casa completa!', desc: 'Missão cumprida. Casa de Paz construída!', pct: 100, part: 'complete' },
 ];
 
-export const groupThreshold = (g: Group, u: GroupUnlock) => Math.ceil((maxGroup(g) * u.pct) / 100);
+export const groupThreshold = (maxGrp: number, u: GroupUnlock) => Math.ceil((maxGrp * u.pct) / 100);
 
-export function groupUnlocked(g: Group, groupPoints: number) {
+export function groupUnlocked(maxGrp: number, groupPoints: number) {
   const set = new Set<string>();
   GROUP_UNLOCKS.forEach((u) => {
-    if (groupPoints >= groupThreshold(g, u)) set.add(u.id);
+    if (groupPoints >= groupThreshold(maxGrp, u)) set.add(u.id);
   });
   return set;
 }
 
-export function nextGroupUnlock(g: Group, groupPoints: number) {
-  return GROUP_UNLOCKS.find((u) => groupPoints < groupThreshold(g, u)) ?? null;
+export function nextGroupUnlock(maxGrp: number, groupPoints: number) {
+  return GROUP_UNLOCKS.find((u) => groupPoints < groupThreshold(maxGrp, u)) ?? null;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Molduras por semana                                                */
+/* ------------------------------------------------------------------ */
+
+/** Semana 1 libera no cadastro; as demais, com o check-in do membro naquela semana. */
+export function unlockedFrameWeeks(userId: string, posts: Post[]) {
+  const set = new Set<number>([1]);
+  posts.forEach((p) => {
+    if (p.user_id === userId && p.type === 'checkin' && (p.status === 'ok' || p.status === 'voting')) set.add(p.week);
+  });
+  return set;
 }

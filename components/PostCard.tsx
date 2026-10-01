@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Ban, Gavel, MoreHorizontal, RotateCcw, Share2, ThumbsDown, ThumbsUp, Users } from 'lucide-react';
+import { Ban, Gavel, MoreHorizontal, RotateCcw, Share2, ThumbsDown, ThumbsUp, Trash2, Users } from 'lucide-react';
+import { useRemovePost } from './useRemovePost';
 import { useGroup } from '@/lib/group-context';
 import { TYPE_LABEL, formatDate, timeAgo } from '@/lib/game';
 import { ShareSheet } from './ShareSheet';
@@ -15,6 +16,7 @@ export function PostCard({ post }: { post: Post }) {
   const toast = useToast();
   const [menu, setMenu] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const { canRemove, remove, removing } = useRemovePost();
   const author = profiles[post.user_id];
   const l = look(post.user_id);
   const myVote = votes.find((v) => v.post_id === post.id && v.user_id === me);
@@ -44,8 +46,8 @@ export function PostCard({ post }: { post: Post }) {
           <p className="truncate text-xs font-bold text-[#a8927a]">{l.title} · {timeAgo(post.created_at)}</p>
         </div>
         <span className="chip bg-terra/10 text-terra">{TYPE_LABEL[post.type]}</span>
-        {isAdmin && (
-          <button onClick={() => setMenu(true)} className="rounded-full p-1.5 text-[#8A6F57]" aria-label="Contestar pontos"><MoreHorizontal size={20} /></button>
+        {(isAdmin || canRemove(post)) && (
+          <button onClick={() => setMenu(true)} className="rounded-full p-1.5 text-[#8A6F57]" aria-label="Opções do post"><MoreHorizontal size={20} /></button>
         )}
       </div>
 
@@ -85,9 +87,19 @@ export function PostCard({ post }: { post: Post }) {
         )}
       </div>
 
-      <Sheet open={menu} onClose={() => setMenu(false)} title="Contestar pontos">
+      <Sheet open={menu} onClose={() => setMenu(false)} title={isAdmin ? 'Opções do post' : 'Meu post'}>
         <p className="mb-4 text-sm text-[#6b5643]">{author?.name} · {TYPE_LABEL[post.type]} · {post.points >= 0 ? '+' : ''}{post.points} pts</p>
         <div className="space-y-2">
+          {canRemove(post) && (
+            <button
+              className="btn-soft w-full justify-start"
+              disabled={removing === post.id}
+              onClick={async () => { if (await remove(post)) setMenu(false); }}
+            >
+              <Trash2 size={18} /> {post.user_id === me ? 'Remover meu post' : 'Remover post do membro'}
+            </button>
+          )}
+          {isAdmin && <>
           {post.status !== 'voting' && !cancelled && (
             <button className="btn-soft w-full justify-start" onClick={() => moderate('vote')}><Gavel size={18} /> Enviar para votação do grupo</button>
           )}
@@ -100,10 +112,11 @@ export function PostCard({ post }: { post: Post }) {
           {cancelled && (
             <button className="btn-soft w-full justify-start" onClick={() => moderate('restore')}><RotateCcw size={18} /> Restaurar pontos</button>
           )}
+          </>}
         </div>
       </Sheet>
       {post.photo_url && (
-        <ShareSheet open={sharing} onClose={() => setSharing(false)} source={post.photo_url} label={TYPE_LABEL[post.type]} dateLabel={formatDate(post.local_date, { day: '2-digit', month: 'long' })} />
+        <ShareSheet open={sharing} onClose={() => setSharing(false)} source={post.photo_url} week={post.week} label={TYPE_LABEL[post.type]} dateLabel={formatDate(post.local_date, { day: '2-digit', month: 'long' })} />
       )}
     </article>
   );

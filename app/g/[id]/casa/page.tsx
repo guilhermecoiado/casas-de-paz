@@ -37,7 +37,7 @@ export default function Casa() {
         </div>
         <div className="mt-3"><ProgressBar value={stats.groupPoints} max={maxGrp} height={18} /></div>
         <p className="mt-2 text-xs font-bold text-[#a8927a]">
-          Meta: {maxGrp.toLocaleString('pt-BR')} pts · até {group.weekly_group_cap}/semana em {totalWeeks(group)} semanas
+          Meta: {maxGrp.toLocaleString('pt-BR')} pts · até {stats.teamWeekCap.toLocaleString('pt-BR')}/semana em {totalWeeks(group)} semanas
         </p>
         {complete && (
           <button className="btn-primary mt-4 w-full" onClick={() => setParty((p) => p + 1)}><PartyPopper size={18} /> Comemorar de novo</button>
@@ -47,7 +47,7 @@ export default function Casa() {
       <ol className="relative mx-4 mt-6 space-y-3 border-l-2 border-dashed border-[#e2cfb6] pl-5">
         {GROUP_UNLOCKS.map((u) => {
           const ok = unlocked.has(u.id);
-          const need = groupThreshold(group, u);
+          const need = groupThreshold(maxGrp, u);
           return (
             <li key={u.id} className="relative">
               <span className={`absolute -left-[33px] top-3 flex h-6 w-6 items-center justify-center rounded-full ${ok ? 'bg-olive text-white' : 'bg-sand text-[#a8927a]'}`}>

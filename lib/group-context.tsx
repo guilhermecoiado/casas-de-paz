@@ -85,9 +85,9 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
     const [g, m, p, v, pl, a] = await Promise.all([
       supabase.from('groups').select('*').eq('id', groupId).maybeSingle(),
       supabase.from('group_members').select('*').eq('group_id', groupId),
-      supabase.from('posts').select('*').eq('group_id', groupId).order('created_at', { ascending: false }).limit(5000),
+      supabase.from('posts').select('*').eq('group_id', groupId).not('status', 'in', '(archived,removed)').order('created_at', { ascending: false }).limit(5000),
       supabase.from('post_votes').select('*').eq('group_id', groupId),
-      supabase.from('polls').select('*').eq('group_id', groupId).order('created_at', { ascending: false }),
+      supabase.from('polls').select('*').eq('group_id', groupId).eq('archived', false).order('created_at', { ascending: false }),
       supabase.from('poll_answers').select('*').eq('group_id', groupId),
     ]);
     if (!g.data) return onMissing();
@@ -105,12 +105,18 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
     const f = `group_id=eq.${groupId}`;
     const ch = supabase
       .channel(`group-${groupId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts', filter: f }, (pl) =>
-        setPosts((l) => applyChange(l, pl, (r) => r.id, true)))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts', filter: f }, (pl) => {
+        const st = (pl.new as Post | undefined)?.status;
+        // removidos e arquivados (temporada zerada) saem da tela na hora
+        if (st === 'removed' || st === 'archived') setPosts((l) => l.filter((x) => x.id !== (pl.new as Post).id));
+        else setPosts((l) => applyChange(l, pl, (r) => r.id, true));
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'post_votes', filter: f }, (pl) =>
         setVotes((l) => applyChange(l, pl, (r) => `${r.post_id}:${r.user_id}`)))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'polls', filter: f }, (pl) =>
-        setPolls((l) => applyChange(l, pl, (r) => r.id, true)))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'polls', filter: f }, (pl) => {
+        if ((pl.new as Poll | undefined)?.archived) setPolls((l) => l.filter((x) => x.id !== (pl.new as Poll).id));
+        else setPolls((l) => applyChange(l, pl, (r) => r.id, true));
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_answers', filter: f }, (pl) =>
         setAnswers((l) => applyChange(l, pl, (r) => `${r.poll_id}:${r.user_id}`)))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: f }, (pl) => {
@@ -146,12 +152,12 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
     const memberMap = new Map(members.map((m) => [m.user_id, m]));
     return {
       group, members, profiles, posts, votes, polls, answers, today, stats,
-      unlocked: groupUnlocked(group, stats.groupPoints),
+      unlocked: groupUnlocked(maxGroup(group, members.length), stats.groupPoints),
       isAdmin: group.admin_id === userId,
       me: userId,
       myPoints: stats.byUser[userId]?.points ?? 0,
       maxInd: maxIndividual(group),
-      maxGrp: maxGroup(group),
+      maxGrp: maxGroup(group, members.length),
       look: (uid: string) => equipped(group, memberMap.get(uid), stats.byUser[uid] ?? emptyProgress()),
       progress: (uid: string) => stats.byUser[uid] ?? emptyProgress(),
       reload, reloadProfiles,

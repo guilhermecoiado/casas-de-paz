@@ -8,7 +8,13 @@ export type PostType =
   | 'evangelism'
   | 'checkin'
   | 'poll'
-  | 'adjust';
+  | 'adjust'
+  | 'verse'
+  | 'encourage'
+  | 'devotional'
+  | 'prayer'
+  | 'fasting'
+  | 'testimony';
 
 export type ActionType = Exclude<PostType, 'poll' | 'adjust'>;
 
@@ -21,15 +27,23 @@ export interface Profile {
 }
 
 export interface PointsConfig {
-  individual: number;
+  // dia do encontro
+  checkin: number;
   group: number;
   group_bonus: number;
   dynamic: number;
   relax: number;
   fellowship: number;
   snack: number;
+  // dia a dia (até 3x por dia)
+  individual: number;
+  verse: number;
+  encourage: number;
+  devotional: number;
+  prayer: number;
+  fasting: number;
+  testimony: number;
   evangelism: number;
-  checkin: number;
   poll: number;
 }
 
@@ -48,6 +62,9 @@ export interface Group {
   background_url: string | null;
   timezone: string;
   reminder_enabled: boolean;
+  group_cap_auto: boolean;
+  group_cap_factor: number;
+  diminishing: boolean;
 }
 
 export interface Member {
@@ -76,7 +93,7 @@ export interface Post {
   capped: boolean;
   local_date: string;
   week: number;
-  status: 'ok' | 'voting' | 'cancelled';
+  status: 'ok' | 'voting' | 'cancelled' | 'archived' | 'removed';
   created_at: string;
 }
 
@@ -94,6 +111,7 @@ export interface Poll {
   options: string[];
   poll_date: string;
   created_at: string;
+  archived?: boolean;
 }
 
 export interface PollAnswer {

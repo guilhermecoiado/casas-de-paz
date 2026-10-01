@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Camera, Coffee, Heart, Megaphone, MapPin, Minus, Plus, Share2, Smile, Sparkles, User, Users,
+  ArrowLeft, BookOpen, Camera, Coffee, Flame, HandHeart, Heart, Megaphone, MapPin, MessageCircleHeart, Minus, Plus,
+  Smile, Sparkles, Sun, User, Users, UtensilsCrossed,
 } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
-import { ACTIONS, actionAvailability, actionPoints, formatDate, type ActionInfo } from '@/lib/game';
+import { ACTIONS, WEEKDAYS, actionAvailability, actionPoints, formatDate, weekdayOf, type ActionInfo } from '@/lib/game';
 import { compressImage } from '@/lib/image';
 import { ShareSheet } from '@/components/ShareSheet';
-import { errMsg, supabase, uploadImage } from '@/lib/supabase';
+import { errMsg, supabase, uploadPostImage } from '@/lib/supabase';
 import { PhotoPicker, Spinner } from '@/components/ui';
 import { useToast } from '@/components/Providers';
 import { Confetti } from '@/components/Confetti';
@@ -17,7 +18,11 @@ import type { ActionType, Post } from '@/lib/types';
 
 const ICONS: Record<ActionType, React.ElementType> = {
   checkin: MapPin, evangelism: Megaphone, group: Users, snack: Coffee, dynamic: Sparkles, fellowship: Heart, individual: User, relax: Smile,
+  verse: BookOpen, encourage: MessageCircleHeart, devotional: Sun, prayer: HandHeart, fasting: UtensilsCrossed, testimony: Flame,
 };
+
+/** mínimo de caracteres exigido por tipo (o servidor confere de novo) */
+const MIN_TEXT: Partial<Record<ActionType, number>> = { evangelism: 10, encourage: 10, devotional: 10, testimony: 10, verse: 5, fasting: 5, snack: 2 };
 
 export default function Postar() {
   const router = useRouter();
@@ -31,20 +36,24 @@ export default function Postar() {
   const [done, setDone] = useState<{ post: Post; photo: Blob | null; label: string } | null>(null);
 
   const myToday = useMemo(() => posts.filter((p) => p.user_id === me && p.local_date === today), [posts, me, today]);
+  const groupToday = useMemo(() => posts.filter((p) => p.local_date === today), [posts, today]);
+  const isHouseDay = weekdayOf(today) === group.house_weekday;
+  const groupPhotoBy = groupToday.find((p) => p.type === 'group' && p.status !== 'cancelled');
   const back = () => (action ? setAction(null) : router.push(`/g/${group.id}`));
 
   const submit = async () => {
     if (!action) return;
-    if (action.photo && !photo) return toast('Adicione a foto', 'error');
-    if (action.text === 'required' && text.trim().length < (action.type === 'evangelism' ? 10 : 2))
-      return toast(action.type === 'evangelism' ? 'Conte um pouco mais (mín. 10 caracteres)' : 'Preencha a descrição', 'error');
+    if (action.photo === 'required' && !photo) return toast('Adicione a foto', 'error');
+    const min = MIN_TEXT[action.type] ?? 0;
+    if (text.trim().length < min) return toast(`Escreva um pouco mais (mínimo ${min} caracteres)`, 'error');
     setBusy(true);
     try {
       let photoUrl: string | null = null;
       let small: Blob | null = null;
       if (photo) {
         small = await compressImage(photo);
-        photoUrl = await uploadImage(me, small);
+        const thumb = await compressImage(photo, 480, 0.72);
+        photoUrl = await uploadPostImage(me, small, thumb);
       }
       const { data, error } = await supabase.rpc('submit_post', {
         p_group: group.id, p_type: action.type, p_photo_url: photoUrl, p_description: text.trim() || null, p_guests: guests,
@@ -77,7 +86,7 @@ export default function Postar() {
         </div>
         {done.photo && (
           <div className="mx-auto mt-6 max-w-[360px] anim-rise">
-            <ShareSheet inline open onClose={() => {}} source={done.photo} label={done.label} dateLabel={formatDate(today, { day: '2-digit', month: 'long' })} />
+            <ShareSheet inline open onClose={() => {}} source={done.photo} week={done.post.week} label={done.label} dateLabel={formatDate(today, { day: '2-digit', month: 'long' })} />
           </div>
         )}
         <button className="btn-soft mx-auto mt-3 flex w-full max-w-[320px]" onClick={() => router.push(`/g/${group.id}`)}>
@@ -95,30 +104,61 @@ export default function Postar() {
       </header>
 
       {!action ? (
-        <div className="grid grid-cols-2 gap-3 px-4 pb-8">
-          {ACTIONS.map((a, i) => {
-            const blocked = actionAvailability(group, a.type, today, myToday);
-            const Icon = ICONS[a.type];
-            const featured = a.type === 'checkin' || a.type === 'evangelism';
+        <div className="space-y-6 px-4 pb-8">
+          {(['meeting', 'daily'] as const).map((when) => {
+            const list = ACTIONS.filter((a) => a.when === when);
             return (
-              <button
-                key={a.type}
-                disabled={!!blocked}
-                onClick={() => { setAction(a); setPhoto(null); setText(''); setGuests(0); }}
-                className={`card relative flex flex-col items-start p-4 text-left transition active:scale-[0.97] disabled:opacity-55 anim-rise ${featured ? 'col-span-2 bg-gradient-to-br from-white to-amber/15' : ''}`}
-                style={{ animationDelay: `${i * 40}ms` }}
-              >
-                <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${featured ? 'bg-terra text-white' : 'bg-terra/10 text-terra'}`}>
-                  <Icon size={22} />
-                </span>
-                <p className="mt-3 font-extrabold leading-tight">{a.label}</p>
-                {featured && <p className="mt-1 text-sm text-[#6b5643]">{a.hint}</p>}
-                <p className="mt-2 text-sm font-black text-terra">
-                  {a.type === 'checkin' ? `${group.points.checkin} pts + ${group.points.checkin * 2}/convidado` : `+${group.points[a.type]} pts`}
-                  {a.type === 'group' && <span className="font-bold text-olive"> +{group.points.group_bonus} equipe</span>}
-                </p>
-                {blocked && <span className="absolute right-3 top-3 chip bg-sand text-[#8A6F57]">{blocked}</span>}
-              </button>
+              <section key={when}>
+                <div className="mb-2.5 flex items-end justify-between px-1">
+                  <div>
+                    <h2 className="font-display text-lg font-bold">{when === 'meeting' ? 'No dia do encontro' : 'Durante a semana'}</h2>
+                    <p className="text-xs font-bold text-[#a8927a]">
+                      {when === 'meeting'
+                        ? isHouseDay ? 'Hoje é dia de Casa de Paz! 1 vez cada' : `Libera ${WEEKDAYS[group.house_weekday].toLowerCase()}`
+                        : group.diminishing ? 'Até 3x por dia · 2º e 3º valem menos' : 'Até 3x por dia cada'}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {list.map((a, i) => {
+                    const av = actionAvailability(group, a.type, today, myToday, groupToday);
+                    const Icon = ICONS[a.type];
+                    const featured = a.type === 'checkin' || a.type === 'evangelism';
+                    const pts = actionPoints(group, a.type, 0, av.done);
+                    return (
+                      <button
+                        key={a.type}
+                        disabled={!!av.blocked}
+                        onClick={() => { setAction(a); setPhoto(null); setText(''); setGuests(0); }}
+                        className={`card relative flex flex-col items-start p-4 text-left transition active:scale-[0.97] disabled:opacity-55 anim-rise ${featured ? 'col-span-2 bg-gradient-to-br from-white to-amber/15' : ''}`}
+                        style={{ animationDelay: `${i * 35}ms` }}
+                      >
+                        <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${featured ? 'bg-terra text-white' : 'bg-terra/10 text-terra'}`}>
+                          <Icon size={22} />
+                        </span>
+                        <p className="mt-3 font-extrabold leading-tight">{a.label}</p>
+                        {featured && <p className="mt-1 text-sm text-[#6b5643]">{a.hint}</p>}
+                        <p className="mt-2 text-sm font-black text-terra">
+                          {a.type === 'checkin' ? `${group.points.checkin} pts + ${group.points.checkin * 2}/convidado` : `+${pts} pts`}
+                          {a.type === 'group' && <span className="font-bold text-olive"> +{group.points.group_bonus} equipe</span>}
+                        </p>
+                        {a.type === 'group' && groupPhotoBy && (
+                          <p className="mt-1 text-[11px] font-bold text-[#8A6F57]">Postada por @{profiles[groupPhotoBy.user_id]?.username ?? '…'}</p>
+                        )}
+                        {a.when === 'daily' && !av.blocked && (
+                          <p className="mt-1 text-[11px] font-bold text-olive">Você pode postar mais {av.left}x hoje</p>
+                        )}
+                        {av.blocked && !(a.when === 'meeting' && !isHouseDay) && (
+                          <p className="mt-1 text-[11px] font-bold text-[#8A6F57]">🔒 {av.blocked}</p>
+                        )}
+                        {a.when === 'meeting' && !isHouseDay && (
+                          <p className="mt-1 text-[11px] font-bold text-[#8A6F57]">🔒 Libera {WEEKDAYS[group.house_weekday].toLowerCase()}</p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             );
           })}
         </div>
@@ -126,12 +166,12 @@ export default function Postar() {
         <div className="space-y-5 px-4 pb-10 anim-rise">
           <p className="rounded-2xl bg-sand/70 px-4 py-3 text-sm font-bold text-[#6b5643]">{action.hint}</p>
 
-          {action.photo && (
+          {action.photo !== 'none' && (
             <PhotoPicker
               value={photo}
               onChange={setPhoto}
               cameraOnly={action.type === 'checkin'}
-              label={action.type === 'checkin' ? 'Tire uma foto agora no local' : 'Foto do momento'}
+              label={action.type === 'checkin' ? 'Tire uma foto agora no local' : action.photo === 'optional' ? 'Foto (opcional)' : 'Foto do momento'}
             />
           )}
 
@@ -158,18 +198,20 @@ export default function Postar() {
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 maxLength={500}
-                placeholder={action.type === 'evangelism' ? 'Ex.: Convidei meu colega de trabalho para a Casa de Paz de sexta.' : action.type === 'snack' ? 'Ex.: Bolo de cenoura' : ''}
+                placeholder={action.placeholder ?? ''}
               />
             </div>
           )}
 
           <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3">
             <span className="font-bold text-[#6b5643]">Você vai ganhar</span>
-            <span className="font-display text-2xl font-extrabold text-terra">+{actionPoints(group, action.type, guests)} pts</span>
+            <span className="font-display text-2xl font-extrabold text-terra">
+              +{actionPoints(group, action.type, guests, myToday.filter((p) => p.type === action.type && p.status !== 'cancelled').length)} pts
+            </span>
           </div>
 
           <button className="btn-primary w-full" onClick={submit} disabled={busy}>
-            {busy ? <Spinner /> : <>{action.photo ? <Camera size={18} /> : null} Registrar</>}
+            {busy ? <Spinner /> : <>{action.photo === 'required' ? <Camera size={18} /> : null} Registrar</>}
           </button>
         </div>
       )}

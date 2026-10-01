@@ -5,7 +5,8 @@ import { Crown } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { Avatar } from '@/components/ui';
 import { MemberSheet } from '@/components/MemberSheet';
-import type { UserStats } from '@/lib/game';
+import { rankCompare, type UserStats } from '@/lib/game';
+import { REWARDS, isUnlocked } from '@/lib/rewards';
 
 const METRICS: { id: keyof UserStats; label: string; unit: string }[] = [
   { id: 'points', label: 'Pontos', unit: 'pts' },
@@ -16,7 +17,7 @@ const METRICS: { id: keyof UserStats; label: string; unit: string }[] = [
 ];
 
 export default function Ranking() {
-  const { members, profiles, stats, look, me } = useGroup();
+  const { members, profiles, stats, look, me, group, progress } = useGroup();
   const [metric, setMetric] = useState<keyof UserStats>('points');
   const [sel, setSel] = useState<string | null>(null);
   const m = METRICS.find((x) => x.id === metric)!;
@@ -24,9 +25,20 @@ export default function Ranking() {
   const rows = useMemo(
     () =>
       members
-        .map((mm) => ({ id: mm.user_id, v: Number(stats.byUser[mm.user_id]?.[metric] ?? 0), pts: stats.byUser[mm.user_id]?.points ?? 0 }))
-        .sort((a, b) => b.v - a.v || b.pts - a.pts),
-    [members, stats, metric],
+        .map((mm) => {
+          const s = stats.byUser[mm.user_id];
+          const p = progress(mm.user_id);
+          return {
+            id: mm.user_id,
+            v: Number(s?.[metric] ?? 0),
+            pts: s?.points ?? 0,
+            s,
+            unlocks: REWARDS.filter((r) => !r.free && isUnlocked(group, r, p)).length,
+          };
+        })
+        // empate na métrica → mais pontos → mais fiel (dias postando) → chegou primeiro → mais desbloqueios
+        .sort((a, b) => (b.v !== a.v ? b.v - a.v : b.pts !== a.pts ? b.pts - a.pts : rankCompare({ ...a, v: 0 }, { ...b, v: 0 }))),
+    [members, stats, metric, group, progress],
   );
   const podium = [rows[1], rows[0], rows[2]];
   const heights = ['h-20', 'h-28', 'h-16'];
@@ -81,6 +93,9 @@ export default function Ranking() {
           </button>
         ))}
       </div>
+      <p className="mx-6 mt-3 text-center text-[11px] leading-snug text-[#a8927a]">
+        Em caso de empate: vence quem foi mais fiel (mais dias postando), depois quem chegou primeiro à pontuação, depois quem desbloqueou mais itens.
+      </p>
       <MemberSheet userId={sel} onClose={() => setSel(null)} />
     </div>
   );

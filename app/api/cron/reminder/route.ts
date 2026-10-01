@@ -29,7 +29,8 @@ export async function GET(req: Request) {
   for (const g of groups ?? []) {
     const today = todayIn(g.timezone);
     if (!g.reminder_enabled) { report.push({ group: g.name, status: 'desativado' }); continue; }
-    if (today < g.start_date || today > g.end_date) { report.push({ group: g.name, status: 'fora do período' }); continue; }
+    // a temporada continua depois do último dia (só zera quando o adm mandar)
+    if (today < g.start_date) { report.push({ group: g.name, status: 'ainda não começou' }); continue; }
     if (weekdayOf(today) !== g.house_weekday) { report.push({ group: g.name, status: 'não é dia de encontro' }); continue; }
 
     const title = `Casa de Paz · ${g.name}`;

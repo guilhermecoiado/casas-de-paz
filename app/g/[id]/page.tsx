@@ -18,7 +18,7 @@ export default function GroupHome() {
   const [sel, setSel] = useState<string | null>(null);
 
   const parts = useMemo(() => new Set(GROUP_UNLOCKS.filter((u) => unlocked.has(u.id)).map((u) => u.part ?? u.id)), [unlocked]);
-  const next = nextGroupUnlock(group, stats.groupPoints);
+  const next = nextGroupUnlock(maxGrp, stats.groupPoints);
   const todayPolls = polls.filter((p) => p.poll_date === today);
   const postedCount = members.filter((m) => stats.byUser[m.user_id]?.postedToday).length;
   const sorted = [...members].sort((a, b) => {
@@ -70,9 +70,7 @@ export default function GroupHome() {
             <CalendarDays size={15} />
             {before
               ? `Começa ${formatDate(group.start_date)}`
-              : after
-                ? 'Período encerrado'
-                : `Semana ${stats.week} de ${totalWeeks(group)} · ${isHouseDay ? 'Hoje é dia de Casa de Paz! 🏠' : `Casa de Paz às ${WEEKDAYS[group.house_weekday].toLowerCase()}s`}`}
+              : `${after ? `Semana ${stats.week} (extra)` : `Semana ${stats.week} de ${totalWeeks(group)}`} · ${isHouseDay ? 'Hoje é dia de Casa de Paz! 🏠' : `Casa de Paz às ${WEEKDAYS[group.house_weekday].toLowerCase()}s`}`}
           </p>
         </div>
       </header>
@@ -90,7 +88,7 @@ export default function GroupHome() {
               </p>
               {next ? (
                 <p className="mt-1 text-sm font-bold leading-snug text-[#6b5643]">
-                  Próximo: <span className="text-terra">{next.name}</span> em {Math.max(0, groupThreshold(group, next) - stats.groupPoints)} pts
+                  Próximo: <span className="text-terra">{next.name}</span> em {Math.max(0, groupThreshold(maxGrp, next) - stats.groupPoints)} pts
                 </p>
               ) : (
                 <p className="mt-1 text-sm font-extrabold text-olive">Casa completa! 🎉</p>
@@ -100,7 +98,7 @@ export default function GroupHome() {
           <div className="px-4 pb-4">
             <ProgressBar value={stats.groupPoints} max={maxGrp} height={16} />
             <div className="mt-2 flex justify-between text-[11px] font-bold text-[#a8927a]">
-              <span>Equipe na semana: {stats.groupWeekPoints}/{group.weekly_group_cap}</span>
+              <span>Equipe na semana: {stats.groupWeekPoints}/{stats.teamWeekCap}</span>
               <span>Você na semana: {myWeek}/{group.weekly_user_cap}</span>
             </div>
           </div>

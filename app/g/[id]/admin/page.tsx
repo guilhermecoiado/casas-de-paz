@@ -9,7 +9,7 @@ import { useToast } from '@/components/Providers';
 import { Avatar, PhotoPicker, Spinner } from '@/components/ui';
 import { AdminPush } from '@/components/AdminPush';
 import { MemberSheet } from '@/components/MemberSheet';
-import { POINT_LABELS, WEEKDAYS, WEEKDAYS_SHORT, formatDate, totalWeeks } from '@/lib/game';
+import { POINT_LABELS, WEEKDAYS, WEEKDAYS_SHORT, formatDate, teamWeeklyCap, totalWeeks } from '@/lib/game';
 import { compressImage } from '@/lib/image';
 import { errMsg, supabase, uploadImage } from '@/lib/supabase';
 import type { Group, PointsConfig } from '@/lib/types';
@@ -26,6 +26,8 @@ export default function Admin() {
   const [bg, setBg] = useState<Blob | null>(null);
   const [pw, setPw] = useState('');
   const [ledger, setLedger] = useState<string | null>(null);
+  const [resetName, setResetName] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   if (!isAdmin) {
     return (
@@ -39,6 +41,18 @@ export default function Admin() {
   const set = <K extends keyof Group>(k: K, v: Group[K]) => setForm((f) => ({ ...f, [k]: v }));
   const setPoint = (k: keyof PointsConfig, v: number) => setForm((f) => ({ ...f, points: { ...f.points, [k]: v } }));
   const weeks = totalWeeks(form);
+  const teamCap = teamWeeklyCap(form, members.length);
+
+  const resetSeason = async () => {
+    if (!confirm('Zerar TODA a pontuação do grupo? Pontos, enquetes e itens equipados serão apagados e a temporada recomeça hoje. Não dá para desfazer.')) return;
+    setResetting(true);
+    const { error } = await supabase.rpc('admin_reset_group', { p_group: group.id, p_confirm: resetName });
+    setResetting(false);
+    if (error) return toast(errMsg(error), 'error');
+    setResetName('');
+    toast('Temporada zerada. Começa hoje!');
+    reload();
+  };
 
   const save = async () => {
     if (form.end_date < form.start_date) return toast('A data final precisa ser depois da inicial', 'error');
@@ -47,6 +61,7 @@ export default function Admin() {
       start_date: form.start_date, end_date: form.end_date, house_weekday: form.house_weekday,
       post_mode: form.post_mode, post_weekdays: form.post_weekdays,
       weekly_user_cap: form.weekly_user_cap, weekly_group_cap: form.weekly_group_cap, points: form.points,
+      group_cap_auto: form.group_cap_auto, group_cap_factor: form.group_cap_factor, diminishing: form.diminishing,
     }).eq('id', group.id);
     setSaving(false);
     if (error) return toast(errMsg(error), 'error');
@@ -158,25 +173,65 @@ export default function Admin() {
               })}
             </div>
           )}
-          <p className="text-xs text-[#8A6F57]">O check-in sempre fica liberado no dia da Casa de Paz.</p>
+          <p className="text-xs text-[#8A6F57]">Vale para as ações do dia a dia. As ações do encontro (check-in, foto em grupo, dinâmica, lanche, comunhão e relax) só liberam no dia da Casa de Paz.</p>
         </Section>
 
         <Section title="Limite de pontos por semana">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Por pessoa"><NumberInput value={form.weekly_user_cap} onChange={(v) => set('weekly_user_cap', Math.max(1, v))} /></Field>
-            <Field label="Equipe toda"><NumberInput value={form.weekly_group_cap} onChange={(v) => set('weekly_group_cap', Math.max(1, v))} /></Field>
+          <Field label="Por pessoa (meta semanal de cada membro)">
+            <NumberInput value={form.weekly_user_cap} onChange={(v) => set('weekly_user_cap', Math.max(1, v))} />
+          </Field>
+          <div className="rounded-2xl bg-cream p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-extrabold">Total da equipe automático</p>
+                <p className="text-xs text-[#8A6F57]">Acompanha o número de membros ({members.length})</p>
+              </div>
+              <Toggle on={form.group_cap_auto} onChange={(v) => set('group_cap_auto', v)} />
+            </div>
+            {form.group_cap_auto ? (
+              <div className="mt-3">
+                <label className="label">Meta da equipe: % do máximo de todos os membros</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range" min={30} max={100} step={5} className="flex-1 accent-[#C8553D]"
+                    value={Math.round(Number(form.group_cap_factor) * 100)}
+                    onChange={(e) => set('group_cap_factor', Number(e.target.value) / 100)}
+                  />
+                  <span className="w-12 text-right font-display text-lg font-extrabold">{Math.round(Number(form.group_cap_factor) * 100)}%</span>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3">
+                <Field label="Equipe toda (fixo por semana)"><NumberInput value={form.weekly_group_cap} onChange={(v) => set('weekly_group_cap', Math.max(1, v))} /></Field>
+              </div>
+            )}
           </div>
           <p className="text-xs leading-relaxed text-[#8A6F57]">
-            Máximo no período: <b>{(form.weekly_user_cap * weeks).toLocaleString('pt-BR')} pts por pessoa</b> (libera todos os prêmios individuais) e{' '}
-            <b>{(form.weekly_group_cap * weeks).toLocaleString('pt-BR')} pts da equipe</b> (completa a casa).
+            Por semana: <b>{form.weekly_user_cap.toLocaleString('pt-BR')} pts por pessoa</b> e <b>{teamCap.toLocaleString('pt-BR')} pts da equipe</b>.<br />
+            No período ({weeks} semanas): <b>{(form.weekly_user_cap * weeks).toLocaleString('pt-BR')}</b> por pessoa (libera toda a evolução) e{' '}
+            <b>{(teamCap * weeks).toLocaleString('pt-BR')}</b> da equipe (completa a casa). O limite da equipe só controla o avanço da casa; não trava os pontos de ninguém.
           </p>
         </Section>
 
         <Section title="Pontos por ação">
-          {POINT_LABELS.map(({ key, label }) => (
-            <div key={key} className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-[#6b5643]">{label}</span>
-              <div className="w-24"><NumberInput value={form.points[key]} onChange={(v) => setPoint(key, Math.max(0, v))} /></div>
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-cream p-3">
+            <div>
+              <p className="text-sm font-extrabold">2º e 3º post do dia valem menos</p>
+              <p className="text-xs text-[#8A6F57]">1º = 100%, 2º = 50%, 3º = 25% (evangelismo não diminui)</p>
+            </div>
+            <Toggle on={form.diminishing} onChange={(v) => set('diminishing', v)} />
+          </div>
+          {(['meeting', 'daily', 'other'] as const).map((w) => (
+            <div key={w} className="space-y-2">
+              <p className="pt-2 text-xs font-extrabold uppercase tracking-wider text-[#a8927a]">
+                {w === 'meeting' ? 'Dia do encontro (1 vez)' : w === 'daily' ? 'Dia a dia (até 3x por dia)' : 'Outros'}
+              </p>
+              {POINT_LABELS.filter((x) => x.when === w).map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-bold text-[#6b5643]">{label}</span>
+                  <div className="w-24"><NumberInput value={form.points[key] ?? 0} onChange={(v) => setPoint(key, Math.max(0, v))} /></div>
+                </div>
+              ))}
             </div>
           ))}
         </Section>
@@ -253,6 +308,18 @@ export default function Admin() {
             <button className="btn-soft shrink-0" onClick={changePw} disabled={pw.length < 4}>Alterar</button>
           </div>
         </Section>
+
+        <section className="space-y-3 rounded-3xl border-2 border-[#7a2618]/30 bg-[#7a2618]/5 p-4">
+          <h2 className="font-display text-lg font-bold text-[#7a2618]">Zerar temporada</h2>
+          <p className="text-sm leading-snug text-[#6b5643]">
+            A pontuação nunca zera sozinha: depois do último dia, tudo continua contando. Para começar do zero, digite o nome do grupo
+            (<b>{group.name}</b>) e confirme. Apaga pontos, enquetes e itens equipados; mantém membros, chat e configurações.
+          </p>
+          <input className="input" value={resetName} onChange={(e) => setResetName(e.target.value)} placeholder="Nome do grupo" />
+          <button className="btn w-full bg-[#7a2618] text-white" onClick={resetSeason} disabled={resetting || resetName.trim().toLowerCase() !== group.name.toLowerCase()}>
+            {resetting ? <Spinner /> : 'Zerar e recomeçar hoje'}
+          </button>
+        </section>
       </div>
     </div>
   );
@@ -281,5 +348,13 @@ function NumberInput({ value, onChange }: { value: number; onChange: (v: number)
       value={Number.isFinite(value) ? value : 0}
       onChange={(e) => onChange(parseInt(e.target.value || '0', 10))}
     />
+  );
+}
+
+function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button role="switch" aria-checked={on} onClick={() => onChange(!on)} className={`relative h-7 w-12 shrink-0 rounded-full transition ${on ? 'bg-olive' : 'bg-[#d9c8b2]'}`}>
+      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? 'left-6' : 'left-1'}`} />
+    </button>
   );
 }

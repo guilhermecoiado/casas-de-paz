@@ -33,8 +33,8 @@ export function errMsg(e: unknown): string {
 }
 
 /** Envia uma imagem para o bucket "media" na pasta do usuário e devolve a URL pública. */
-export async function uploadImage(userId: string, blob: Blob, prefix = 'post'): Promise<string> {
-  const path = `${userId}/${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+export async function uploadImage(userId: string, blob: Blob, prefix = 'post', fixedPath?: string): Promise<string> {
+  const path = fixedPath ?? `${userId}/${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
   const { error } = await supabase.storage.from('media').upload(path, blob, {
     contentType: 'image/jpeg',
     cacheControl: '31536000',
@@ -43,3 +43,14 @@ export async function uploadImage(userId: string, blob: Blob, prefix = 'post'): 
   if (error) throw error;
   return supabase.storage.from('media').getPublicUrl(path).data.publicUrl;
 }
+
+/** Foto do post + miniatura leve (tiles). A miniatura fica no mesmo caminho com sufixo "-t". */
+export async function uploadPostImage(userId: string, full: Blob, thumb: Blob): Promise<string> {
+  const base = `${userId}/post-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const url = await uploadImage(userId, full, 'post', `${base}.jpg`);
+  await uploadImage(userId, thumb, 'post', `${base}-t.jpg`).catch(() => {}); // sem miniatura, o tile usa a foto cheia
+  return url;
+}
+
+/** URL da miniatura de um post (fotos antigas sem miniatura caem na foto cheia via onError). */
+export const thumbOf = (url: string) => url.replace(/\.jpg$/, '-t.jpg');

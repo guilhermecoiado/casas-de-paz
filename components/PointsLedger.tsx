@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Ban, ChevronDown, Gavel, Minus, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Ban, ChevronDown, Gavel, Minus, Plus, RotateCcw, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { useRemovePost } from './useRemovePost';
 import { useGroup } from '@/lib/group-context';
 import { TYPE_LABEL, formatDate } from '@/lib/game';
 import { errMsg, supabase } from '@/lib/supabase';
@@ -15,6 +16,8 @@ const STATUS: Record<Post['status'], { label: string; cls: string }> = {
   ok: { label: '', cls: '' },
   voting: { label: 'em votação', cls: 'bg-amber/20 text-[#9a5b00]' },
   cancelled: { label: 'cancelado', cls: 'bg-[#7a2618] text-white' },
+  archived: { label: 'arquivado', cls: 'bg-sand text-[#8A6F57]' },
+  removed: { label: 'removido', cls: 'bg-sand text-[#8A6F57]' },
 };
 
 const sign = (n: number) => `${n > 0 ? '+' : ''}${n}`;
@@ -30,6 +33,7 @@ export function PointsLedger({ userId }: { userId: string }) {
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [limit, setLimit] = useState(15);
+  const { remove } = useRemovePost();
 
   const entries = useMemo(() => posts.filter((p) => p.user_id === userId), [posts, userId]);
   const valid = entries.filter((p) => p.status !== 'cancelled').reduce((a, p) => a + p.points, 0);
@@ -78,7 +82,7 @@ export function PointsLedger({ userId }: { userId: string }) {
               <button onClick={() => setDir(-1)} className={`w-12 ${dir === -1 ? 'bg-[#7a2618] text-white' : 'bg-white text-[#8A6F57]'}`} aria-label="Retirar pontos"><Minus size={18} /></button>
               <button onClick={() => setDir(1)} className={`w-12 ${dir === 1 ? 'bg-olive text-white' : 'bg-white text-[#8A6F57]'}`} aria-label="Dar pontos"><Plus size={18} /></button>
             </div>
-            <input className="input min-w-0 flex-1 text-center font-extrabold" type="number" inputMode="numeric" min={1} max={1000} placeholder="pontos" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <input className="input min-w-0 flex-1 text-center font-extrabold" type="number" inputMode="numeric" min={1} max={4000} placeholder="pontos" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
           <input className="input" maxLength={200} placeholder="Motivo (aparece no extrato)" value={reason} onChange={(e) => setReason(e.target.value)} />
           <button className="btn-primary w-full" onClick={adjust} disabled={busy === 'adjust'}>
@@ -127,6 +131,7 @@ export function PointsLedger({ userId }: { userId: string }) {
                   {p.status === 'cancelled' && (
                     <button className="chip bg-olive !py-2 text-white" onClick={() => act(p, 'restore')}><RotateCcw size={13} /> Restaurar pontos</button>
                   )}
+                  <button className="chip bg-white !py-2 text-[#7a2618] ring-1 ring-[#7a2618]/30" onClick={async () => { if (await remove(p)) setOpen(null); }}><Trash2 size={13} /> Remover</button>
                 </div>
               )}
             </div>

@@ -2,6 +2,7 @@
 
 import { Check, Crown } from 'lucide-react';
 import { Avatar } from './ui';
+import { thumbOf } from '@/lib/supabase';
 import { TileFx, TileOrnaments } from './Cosmetics';
 import type { Profile } from '@/lib/types';
 import type { UserStats } from '@/lib/game';
@@ -42,7 +43,13 @@ export function MemberTile({
       {posted && photo ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photo} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+          <img
+            src={thumbOf(photo)}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+            onError={(e) => { if (e.currentTarget.src !== photo) e.currentTarget.src = photo; }}
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
         </>
       ) : null}

@@ -23,14 +23,15 @@ const canvasToBlob = (c: HTMLCanvasElement, q = 0.86) =>
   new Promise<Blob>((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('Falha ao gerar imagem'))), 'image/jpeg', q));
 
 /** Reduz a foto para no máximo `max` px no maior lado (fotos de celular chegam com 12MP). */
-export async function compressImage(file: Blob, max = 1440): Promise<Blob> {
+/** Reduz a foto (padrão 1080px, ótimo para Instagram e leve para o plano gratuito). */
+export async function compressImage(file: Blob, max = 1080, quality = 0.82): Promise<Blob> {
   const img = await fileToImage(file);
   const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
   const c = document.createElement('canvas');
   c.width = Math.round(img.naturalWidth * scale);
   c.height = Math.round(img.naturalHeight * scale);
   c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
-  return canvasToBlob(c);
+  return canvasToBlob(c, quality);
 }
 
 /** Recorte quadrado central para o avatar. */
@@ -86,7 +87,30 @@ export interface FrameOptions {
   username: string;
   dateLabel: string;
   phrase?: string | null;
+  week?: number; // moldura da semana (1, 2, 3, 4...)
 }
+
+/** Tema visual da moldura de cada semana (segue os caminhos da evolução). */
+export interface FrameTheme {
+  name: string;
+  bgTop: string;
+  bgBottom: string;
+  accent: string;   // borda da foto e selo da semana
+  title: string;    // cor do título
+  sub: string;      // cor dos textos secundários
+  icon: string;     // cor da casinha
+  orn: string[];    // ornamentos (emoji) nos cantos
+  verse: string;
+}
+
+export const FRAME_THEMES: FrameTheme[] = [
+  { name: 'Semeadura', bgTop: '#FBF6EE', bgBottom: '#EFE0C6', accent: '#7FA650', title: '#2B2118', sub: '#8A6F57', icon: '#C8553D', orn: ['🌱', '🌾'], verse: '“Paz seja nesta casa.” — Lucas 10:5' },
+  { name: 'Pesca', bgTop: '#F1F8FD', bgBottom: '#CFE6F5', accent: '#2F8FD0', title: '#16324A', sub: '#4E6E88', icon: '#2F8FD0', orn: ['🐟', '🌊'], verse: '“Farei de vocês pescadores de gente.” — Mt 4:19' },
+  { name: 'Fogo', bgTop: '#FFF6EC', bgBottom: '#FFD9B8', accent: '#E8562E', title: '#3A1A10', sub: '#94573E', icon: '#E8562E', orn: ['🔥', '🕊️'], verse: '“Recebereis poder...” — Atos 1:8' },
+  { name: 'Reino', bgTop: '#F8F3FD', bgBottom: '#E3D2F4', accent: '#C9A227', title: '#2E1A47', sub: '#6E5590', icon: '#7B3FA0', orn: ['👑', '✨'], verse: '“Buscai primeiro o Reino de Deus.” — Mt 6:33' },
+];
+
+export const frameTheme = (week = 1) => FRAME_THEMES[(Math.max(week, 1) - 1) % FRAME_THEMES.length];
 
 /** Quebra o texto em linhas que cabem na largura. */
 function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
@@ -150,22 +174,35 @@ export async function frameImage(source: Blob | string, o: FrameOptions): Promis
   c.height = H;
   const ctx = c.getContext('2d')!;
 
-  // fundo creme com leve textura
+  const week = Math.max(o.week ?? 1, 1);
+  const t = frameTheme(week);
+
+  // fundo do tema da semana
   const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#FBF6EE');
-  bg.addColorStop(1, '#F3E6D2');
+  bg.addColorStop(0, t.bgTop);
+  bg.addColorStop(1, t.bgBottom);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
   // faixa superior
-  drawHouseIcon(ctx, 60, 52, 84, '#C8553D');
-  ctx.fillStyle = '#2B2118';
+  drawHouseIcon(ctx, 60, 52, 84, t.icon);
+  ctx.fillStyle = t.title;
   ctx.textBaseline = 'alphabetic';
   ctx.font = '700 64px Fraunces, Georgia, serif';
   ctx.fillText('Casa de Paz', 164, 112);
   ctx.font = '600 30px Nunito, system-ui, sans-serif';
-  ctx.fillStyle = '#8A6F57';
+  ctx.fillStyle = t.sub;
   ctx.fillText(o.groupName.toUpperCase(), 166, 152);
+
+  // selo "SEMANA N" no canto superior direito
+  const wl = `SEMANA ${week}`;
+  ctx.font = '900 30px Nunito, system-ui, sans-serif';
+  const ww = ctx.measureText(wl).width;
+  ctx.fillStyle = t.accent;
+  roundRect(ctx, W - 60 - ww - 44, 66, ww + 44, 62, 31);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(wl, W - 60 - ww - 22, 108);
 
   // foto
   const px = 54, py = 186, pw = W - 108, ph = 960;
@@ -178,10 +215,17 @@ export async function frameImage(source: Blob | string, o: FrameOptions): Promis
   if (ir > fr) { sw = sh * fr; sx = (img.naturalWidth - sw) / 2; } else { sh = sw / fr; sy = (img.naturalHeight - sh) / 2; }
   ctx.drawImage(img, sx, sy, sw, sh, px, py, pw, ph);
   ctx.restore();
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = '#F2A541';
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = t.accent;
   roundRect(ctx, px, py, pw, ph, 40);
   ctx.stroke();
+
+  // ornamentos da semana nos cantos de baixo da foto
+  ctx.font = '64px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t.orn[0], px + 10, py + ph + 18);
+  ctx.fillText(t.orn[1], px + pw - 10, py + ph + 18);
+  ctx.textAlign = 'left';
 
   if (o.phrase) drawPhrase(ctx, o.phrase, px, py, pw, ph);
 
@@ -195,17 +239,17 @@ export async function frameImage(source: Blob | string, o: FrameOptions): Promis
   ctx.fillText(o.label.toUpperCase(), px + 52, py + 69);
 
   // rodapé
-  ctx.fillStyle = '#2B2118';
+  ctx.fillStyle = t.title;
   ctx.font = '700 36px Nunito, system-ui, sans-serif';
-  ctx.fillText(`@${o.username}`, 60, 1222);
+  ctx.fillText(`@${o.username}`, 100, 1222);
   ctx.textAlign = 'right';
   ctx.font = '600 32px Nunito, system-ui, sans-serif';
-  ctx.fillStyle = '#8A6F57';
-  ctx.fillText(o.dateLabel, W - 60, 1222);
+  ctx.fillStyle = t.sub;
+  ctx.fillText(o.dateLabel, W - 100, 1222);
   ctx.textAlign = 'center';
   ctx.font = 'italic 500 30px Fraunces, Georgia, serif';
-  ctx.fillStyle = '#C8553D';
-  ctx.fillText('“Paz seja nesta casa.” — Lucas 10:5', W / 2, 1296);
+  ctx.fillStyle = t.sub;
+  ctx.fillText(t.verse, W / 2, 1296);
   return canvasToBlob(c, 0.9);
 }
 
