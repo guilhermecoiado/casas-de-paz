@@ -17,7 +17,7 @@ export interface TileLook {
 }
 
 export function MemberTile({
-  profile, stats, look, alive, isAdmin, onClick, forcePosted,
+  profile, stats, look, alive, isAdmin, onClick, forcePosted, compact,
 }: {
   profile?: Profile;
   stats?: UserStats;
@@ -26,6 +26,7 @@ export function MemberTile({
   isAdmin: boolean;
   onClick?: () => void;
   forcePosted?: boolean; // prévia no perfil: mostra o tile "aceso"
+  compact?: boolean;     // miniatura (prévia no perfil)
 }) {
   const posted = forcePosted || !!stats?.postedToday;
   const photo = forcePosted ? null : stats?.todayPhoto;
@@ -51,12 +52,12 @@ export function MemberTile({
       <div className="relative z-[1] flex flex-1 flex-col items-center justify-center p-2">
         {!(posted && photo) && (
           <div className={posted ? '' : 'opacity-45 grayscale'}>
-            <Avatar url={profile?.avatar_url} name={profile?.name} size={58} frame={look.avatarFrame} />
+            <Avatar url={profile?.avatar_url} name={profile?.name} size={compact ? 42 : 58} frame={look.avatarFrame} />
           </div>
         )}
       </div>
 
-      <div className={`relative z-[1] px-2.5 pb-2.5 ${posted && photo ? 'text-white' : ''}`}>
+      <div className={`relative z-[1] ${compact ? 'px-2 pb-2 [&_p]:!text-[10px]' : 'px-2.5 pb-2.5'} ${posted && photo ? 'text-white' : ''}`}>
         <p className="flex items-center gap-1 truncate text-[13px] font-extrabold leading-tight">
           {isAdmin && <Crown size={12} className="shrink-0 text-amber" />}
           <span className="truncate">{profile?.name?.split(' ')[0] ?? '…'}</span>
@@ -69,7 +70,7 @@ export function MemberTile({
       {look.tileFrame && <div className={`pointer-events-none absolute inset-0 z-[2] rounded-[22px] ${look.tileFrame}`} />}
       <TileOrnaments frame={look.tileFrame} />
 
-      <div className="absolute right-2 top-2 z-[3]">
+      <div className={`absolute right-2 top-2 z-[3] ${compact ? 'origin-top-right scale-75' : ''}`}>
         {posted ? (
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-olive text-white shadow"><Check size={14} strokeWidth={3} /></span>
         ) : (

@@ -9,7 +9,7 @@ import { useAuth, useToast } from '@/components/Providers';
 import { Avatar, PhotoPicker, ProgressBar, Sheet, Spinner } from '@/components/ui';
 import { MemberTile } from '@/components/Tile';
 import { PushToggle } from '@/components/PushToggle';
-import { KIND_LABEL, fieldOf, kitItems, nextPathReward, rewardThreshold, type PathInfo, type Reward } from '@/lib/rewards';
+import { KIND_LABEL, fieldOf, rewardById, kitItems, nextPathReward, rewardThreshold, type PathInfo, type Reward } from '@/lib/rewards';
 import { Collection, EvolutionLine, Phrases } from '@/components/Evolution';
 import { errMsg, supabase, uploadImage } from '@/lib/supabase';
 import { squareAvatar } from '@/lib/image';
@@ -86,34 +86,56 @@ export default function Eu() {
         </div>
       </header>
 
-      <section className="mx-4 mt-4 flex gap-4">
-        <div className="w-[118px] shrink-0">
-          <MemberTile profile={prof} stats={stats.byUser[me]} look={l} alive={unlocked.has("tile_anim")} isAdmin={isAdmin} forcePosted />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <Avatar url={prof?.avatar_url} name={prof?.name} size={44} frame={l.avatarFrame} />
-            <button onClick={() => { setName(prof?.name ?? ''); setBio(prof?.bio ?? ''); setPhoto(null); setEdit(true); }} className="chip bg-sand text-[#6b5643]">
-              <Pencil size={12} /> Editar
-            </button>
+      {/* cabeçalho estilo perfil: uma foto só, com a moldura equipada */}
+      <section className="mx-4 mt-4">
+        <div className="flex items-center gap-4">
+          <Avatar url={prof?.avatar_url} name={prof?.name} size={84} frame={l.avatarFrame} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-display text-2xl font-extrabold leading-tight">{prof?.name}</p>
+            <p className="truncate text-sm font-bold text-[#a8927a]">@{prof?.username}</p>
+            <span className="chip mt-1.5 bg-amber/20 text-[#9a5b00]">{rewardById(l.titleId)?.icon} {l.title}{isAdmin ? ' · Adm' : ''}</span>
           </div>
-          <p className="mt-2 truncate font-extrabold">{prof?.name}</p>
-          <p className="truncate text-sm font-bold text-[#a8927a]">@{prof?.username}</p>
-          {prof?.bio && <p className="mt-1 line-clamp-3 text-sm text-[#6b5643]">{prof.bio}</p>}
         </div>
+        {prof?.bio && <p className="mt-3 text-[15px] leading-snug text-[#6b5643]">{prof.bio}</p>}
+
+        <div className="mt-4 grid grid-cols-3 divide-x divide-sand rounded-2xl bg-white py-3 text-center">
+          {[
+            ['check-ins', stats.byUser[me]?.checkins ?? 0],
+            ['convidados', stats.byUser[me]?.guests ?? 0],
+            ['evangelismos', stats.byUser[me]?.evangelism ?? 0],
+          ].map(([k, v]) => (
+            <div key={k as string}>
+              <p className="font-display text-xl font-extrabold leading-none">{v}</p>
+              <p className="mt-1 text-[11px] font-bold text-[#a8927a]">{k}</p>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={() => { setName(prof?.name ?? ''); setBio(prof?.bio ?? ''); setPhoto(null); setEdit(true); }}
+          className="btn-soft mt-3 w-full !min-h-[42px] !text-sm"
+        >
+          <Pencil size={15} /> Editar perfil
+        </button>
       </section>
 
-      <section className="card mx-4 mt-4 p-4">
-        <div className="flex items-end justify-between">
-          <p className="font-display text-3xl font-extrabold">{myPoints} <span className="text-base text-[#a8927a]">/ {maxInd} pts</span></p>
-          {(stats.byUser[me]?.pending ?? 0) > 0 && <span className="chip bg-amber/20 text-[#9a5b00]">{stats.byUser[me]!.pending} em votação</span>}
+      {/* evolução + prévia de como o grupo vê o seu tile */}
+      <section className="card mx-4 mt-4 flex gap-4 p-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-extrabold uppercase tracking-wider text-[#a8927a]">Sua evolução</p>
+          <p className="font-display text-3xl font-extrabold leading-tight">{myPoints} <span className="text-base text-[#a8927a]">/ {maxInd}</span></p>
+          <div className="mt-2"><ProgressBar value={myPoints} max={maxInd} color="bg-amber" /></div>
+          {(stats.byUser[me]?.pending ?? 0) > 0 && <span className="chip mt-2 bg-amber/20 text-[#9a5b00]">{stats.byUser[me]!.pending} pts em votação</span>}
+          <p className="mt-2 text-[13px] font-bold leading-snug text-[#6b5643]">
+            {nextReward
+              ? <>Próximo: <span className="text-terra">{nextReward.icon} {nextReward.name}</span> em {rewardThreshold(group, nextReward) - myPoints} pts</>
+              : 'Linha da evolução completa! 👑'}
+          </p>
         </div>
-        <div className="mt-2"><ProgressBar value={myPoints} max={maxInd} color="bg-amber" /></div>
-        <p className="mt-2 text-sm font-bold text-[#6b5643]">
-          {nextReward
-            ? <>Próximo na evolução: <span className="text-terra">{nextReward.icon} {nextReward.name}</span> ({KIND_LABEL[nextReward.kind].toLowerCase()}) em {rewardThreshold(group, nextReward) - myPoints} pts</>
-            : 'Linha da evolução completa! 👑'}
-        </p>
+        <div className="w-[92px] shrink-0">
+          <MemberTile profile={prof} stats={stats.byUser[me]} look={l} alive={unlocked.has('tile_anim')} isAdmin={false} forcePosted compact />
+          <p className="mt-1.5 text-center text-[10px] font-bold leading-tight text-[#a8927a]">como o grupo vê</p>
+        </div>
       </section>
 
       <div className="mx-4 mt-4"><PushToggle /></div>
