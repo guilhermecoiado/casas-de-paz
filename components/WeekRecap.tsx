@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Share2, Sparkles, X } from 'lucide-react';
+import { Share2, Sparkles, Star, X } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { daysBetween, formatDate } from '@/lib/game';
 import { weekSummary } from '@/lib/recap';
@@ -84,7 +84,7 @@ export function WeekRecap({ houseRef }: { houseRef: React.RefObject<HTMLElement>
             {s.top.map((t) => <span key={t.id} className="rounded-full ring-2 ring-[#3d2a1c]"><Avatar url={profiles[t.id]?.avatar_url} name={profiles[t.id]?.name} size={36} frame={look(t.id).avatarFrame} /></span>)}
           </div>
           <p className="min-w-0 flex-1 text-sm font-bold leading-snug">
-            ⭐ Destaque: <b>{s.top.map((t) => starName(t.id)).join(' e ')}</b> com {s.top[0].points} pts
+            <Star size={14} className="-mt-0.5 mr-1 inline text-amber" fill="currentColor" />Destaque: <b>{s.top.map((t) => starName(t.id)).join(' e ')}</b> com {s.top[0].points} pts
             {s.topGuests && <><br /><span className="text-white/75">🙌 Mais convidados: {starName(s.topGuests.id)} ({s.topGuests.guests})</span></>}
           </p>
         </div>

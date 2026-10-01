@@ -277,6 +277,21 @@ async function svgToImage(svg: SVGSVGElement, w: number): Promise<HTMLImageEleme
   return fileToImage(blob);
 }
 
+/** Estrela de 5 pontas (ícone, sem emoji). */
+function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const rr = i % 2 === 0 ? r : r * 0.45;
+    ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
+}
+
 /** Imagem da casa completa: casinha montada, moldura do grupo e a última foto em grupo. 1080×1350. */
 export async function houseShareImage(svg: SVGSVGElement, o: HouseShareOptions): Promise<Blob> {
   if (typeof document !== 'undefined' && document.fonts) {
@@ -475,7 +490,10 @@ export async function recapShareImage(o: RecapShareOptions): Promise<Blob> {
   if (o.star) {
     ctx.font = '800 36px Nunito, system-ui, sans-serif';
     ctx.fillStyle = t.title;
-    ctx.fillText(`⭐ Destaque: ${o.star}`, W / 2, y);
+    const label = `Destaque: ${o.star}`;
+    const tw = ctx.measureText(label).width;
+    drawStar(ctx, W / 2 - tw / 2 - 30, y - 13, 20, t.accent);
+    ctx.fillText(label, W / 2 + 18, y);
     y += 40;
   }
 

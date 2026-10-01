@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Crown } from 'lucide-react';
+import { ChartNoAxesColumn, Crown, Star } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { Avatar } from '@/components/ui';
 import { MemberSheet } from '@/components/MemberSheet';
@@ -53,8 +53,10 @@ export default function Ranking() {
         <h1 className="font-display text-[26px] font-extrabold">Ranking</h1>
         <p className="text-sm font-bold text-[#8A6F57]">Atualiza em tempo real</p>
         <div className="mt-3 grid grid-cols-2 rounded-2xl bg-sand p-1">
-          {([['rank', 'Classificação'], ['highlights', '⭐ Destaques da semana']] as const).map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} className={`rounded-xl py-2 text-sm font-extrabold transition ${tab === id ? 'bg-white text-ink shadow-sm' : 'text-[#8A6F57]'}`}>{label}</button>
+          {([['rank', 'Classificação', ChartNoAxesColumn], ['highlights', 'Destaques da semana', Star]] as const).map(([id, label, Icon]) => (
+            <button key={id} onClick={() => setTab(id)} className={`flex items-center justify-center gap-1.5 rounded-xl py-2 text-sm font-extrabold transition ${tab === id ? 'bg-white text-ink shadow-sm' : 'text-[#8A6F57]'}`}>
+              <Icon size={16} strokeWidth={2.6} className={tab === id ? 'text-terra' : ''} fill={id === 'highlights' && tab === id ? 'currentColor' : 'none'} /> {label}
+            </button>
           ))}
         </div>
         {tab === 'rank' && (
