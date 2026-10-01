@@ -1,0 +1,153 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cream: #fbf6ee;
+  --sand: #f1e7d8;
+  --ink: #2b2118;
+  --terra: #c8553d;
+  --amber: #f2a541;
+  --olive: #3e6b48;
+  --muted: #8a6f57;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html,
+body {
+  background: var(--cream);
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+body {
+  font-family: Nunito, system-ui, -apple-system, sans-serif;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+/* evita zoom automático do iOS ao focar inputs */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+.font-display {
+  font-family: Fraunces, Georgia, serif;
+  font-optical-sizing: auto;
+}
+
+.pt-safe { padding-top: max(var(--safe-top), 0.75rem); }
+.pb-safe { padding-bottom: var(--safe-bottom); }
+.pb-nav { padding-bottom: calc(96px + var(--safe-bottom)); }
+
+@layer components {
+  .btn {
+    @apply inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl px-5 font-extrabold transition active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100;
+  }
+  .btn-primary { @apply btn bg-terra text-white shadow-[0_6px_0_#9c3f2b]; }
+  .btn-primary:active { box-shadow: 0 2px 0 #9c3f2b; transform: translateY(4px); }
+  .btn-soft { @apply btn bg-sand text-ink; }
+  .btn-ghost { @apply btn bg-transparent text-ink; }
+  .input {
+    @apply w-full rounded-2xl border-2 border-sand bg-white px-4 py-3 text-ink outline-none transition placeholder:text-[#b9a690] focus:border-amber;
+  }
+  .label { @apply mb-1.5 block text-sm font-bold text-[#6b5643]; }
+  .card { @apply rounded-3xl bg-white shadow-[0_2px_0_rgba(43,33,24,0.06),0_8px_24px_-12px_rgba(43,33,24,0.18)]; }
+  .chip { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-extrabold; }
+}
+
+/* ---------- Molduras de avatar ---------- */
+.af-ring { position: relative; border-radius: 9999px; padding: 3px; background: var(--sand); }
+.af-bronze { background: linear-gradient(135deg, #e3a36b, #8d5524, #e3a36b); }
+.af-silver { background: linear-gradient(135deg, #f4f4f4, #9aa3ad, #f4f4f4, #7d8790); }
+.af-gold { background: linear-gradient(135deg, #ffe08a, #d4a017, #fff3c4, #b8860b); }
+.af-light {
+  background: conic-gradient(from 0deg, #ffd56b, #ff8e72, #c58cff, #7fd3ff, #ffd56b);
+  animation: spin 4s linear infinite;
+}
+.af-light > * { animation: spin 4s linear infinite reverse; }
+
+/* ---------- Cores do tile ---------- */
+.tc-default { background: #ffffff; }
+.tc-amber { background: linear-gradient(160deg, #fff4dc, #ffd98f); }
+.tc-olive { background: linear-gradient(160deg, #e6f0e4, #a9c9a4); }
+.tc-terra { background: linear-gradient(160deg, #fde5dc, #eea08a); }
+.tc-sky { background: linear-gradient(160deg, #e3f2ff, #9fcff5); }
+.tc-lilac { background: linear-gradient(160deg, #f1e7ff, #c6a8f0); }
+.tc-gold { background: linear-gradient(135deg, #fff1b8, #f3c64a, #fff6d1, #d9a520); background-size: 200% 200%; animation: goldShift 5s ease infinite; }
+
+/* ---------- Molduras do tile ---------- */
+.tf-dashed { outline: 3px dashed var(--terra); outline-offset: -6px; }
+.tf-double { box-shadow: inset 0 0 0 3px var(--amber), inset 0 0 0 7px #fff, inset 0 0 0 10px var(--amber) !important; }
+.tf-glow { box-shadow: 0 0 0 3px #ffd56b, 0 0 22px 4px rgba(255, 196, 77, 0.75) !important; }
+
+/* ---------- Animações do tile ---------- */
+.ta-pulse { animation: pulse 2.2s ease-in-out infinite; }
+.ta-float { animation: float 3s ease-in-out infinite; }
+.ta-shine { position: relative; overflow: hidden; }
+.ta-shine::after {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background: linear-gradient(110deg, transparent 40%, rgba(255, 255, 255, 0.75) 50%, transparent 60%);
+  animation: shine 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.ta-sparkle { position: relative; }
+.ta-sparkle::before,
+.ta-sparkle::after {
+  content: '✦';
+  position: absolute;
+  color: #f2a541;
+  font-size: 14px;
+  animation: twinkle 1.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 5;
+}
+.ta-sparkle::before { top: 6px; right: 8px; }
+.ta-sparkle::after { bottom: 34px; left: 8px; animation-delay: 0.9s; }
+
+/* animação geral liberada pela equipe */
+.tile-alive { animation: breathe 4s ease-in-out infinite; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes shine { 0% { transform: translateX(-60%); } 60%, 100% { transform: translateX(60%); } }
+@keyframes twinkle { 0%, 100% { opacity: 0; transform: scale(0.4) rotate(0); } 50% { opacity: 1; transform: scale(1.2) rotate(90deg); } }
+@keyframes breathe { 0%, 100% { filter: saturate(1); } 50% { filter: saturate(1.25) brightness(1.03); } }
+@keyframes goldShift { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@keyframes popIn { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes rise { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes smoke { 0% { transform: translateY(0) scale(0.6); opacity: 0.7; } 100% { transform: translateY(-28px) scale(1.4); opacity: 0; } }
+@keyframes glow { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes barShine { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@keyframes drawStroke { from { stroke-dashoffset: 400; } to { stroke-dashoffset: 0; } }
+
+.anim-pop { animation: popIn 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
+.anim-rise { animation: rise 0.45s ease-out both; }
+.anim-sheet { animation: sheetUp 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.anim-fade { animation: fadeIn 0.25s ease-out both; }
+.house-smoke { animation: smoke 2.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.house-glow { animation: glow 2.4s ease-in-out infinite; }
+.bar-shine { animation: barShine 2.4s ease-in-out infinite; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
+}
