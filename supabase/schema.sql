@@ -541,3 +541,32 @@ begin
 end $$;
 revoke execute on function public.claim_reminder(uuid, date, text, text) from public, anon, authenticated;
 grant execute on function public.claim_reminder(uuid, date, text, text) to service_role;
+
+-- =====================================================================
+-- PERMISSÕES: funções só para usuários logados (exceto checagem de @usuário)
+-- =====================================================================
+alter function public._weeks(public.groups) set search_path = public;
+alter function public._week(public.groups, date) set search_path = public;
+
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+revoke execute on function public.is_member(uuid) from anon;
+revoke execute on function public.is_admin(uuid) from anon;
+revoke execute on function public.create_group(text, text) from public, anon;
+revoke execute on function public.join_group(text, text) from public, anon;
+revoke execute on function public.admin_set_password(uuid, text) from public, anon;
+revoke execute on function public.admin_remove_member(uuid, uuid) from public, anon;
+revoke execute on function public.set_cosmetics(uuid, text, text, text, text, text) from public, anon;
+revoke execute on function public.submit_post(uuid, text, text, text, int) from public, anon;
+revoke execute on function public.answer_poll(uuid, int) from public, anon;
+revoke execute on function public.admin_moderate(uuid, text) from public, anon;
+revoke execute on function public.vote_post(uuid, boolean) from public, anon;
+revoke execute on function public.save_push_subscription(text, text, text, text) from public, anon;
+revoke execute on function public.delete_push_subscription(text) from public, anon;
+
+grant execute on function public.create_group(text, text), public.join_group(text, text),
+  public.admin_set_password(uuid, text), public.admin_remove_member(uuid, uuid),
+  public.set_cosmetics(uuid, text, text, text, text, text), public.submit_post(uuid, text, text, text, int),
+  public.answer_poll(uuid, int), public.admin_moderate(uuid, text), public.vote_post(uuid, boolean),
+  public.save_push_subscription(text, text, text, text), public.delete_push_subscription(text),
+  public.is_member(uuid), public.is_admin(uuid)
+  to authenticated;
