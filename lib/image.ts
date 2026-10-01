@@ -330,7 +330,7 @@ export async function houseShareImage(svg: SVGSVGElement, o: HouseShareOptions):
   ctx.stroke();
 
   // texto da conquista (lado esquerdo, abaixo da casa)
-  const ty = py + ph + 92;
+  const ty = py + ph + 80;
   const textW = o.groupPhoto ? 540 : W - 200;
   ctx.textAlign = o.groupPhoto ? 'left' : 'center';
   const tx = o.groupPhoto ? 90 : W / 2;
@@ -339,11 +339,11 @@ export async function houseShareImage(svg: SVGSVGElement, o: HouseShareOptions):
   wrapLines(ctx, 'Construímos juntos!', textW).forEach((l, i) => ctx.fillText(l, tx, ty + i * 70));
   ctx.font = '800 34px Nunito, system-ui, sans-serif';
   ctx.fillStyle = terra;
-  ctx.fillText(`${o.points.toLocaleString('pt-BR')} pts · ${o.members} ${o.members === 1 ? 'membro' : 'membros'}`, tx, ty + 72);
+  ctx.fillText(`${o.points.toLocaleString('pt-BR')} pts · ${o.members} ${o.members === 1 ? 'membro' : 'membros'}`, tx, ty + 62);
   ctx.fillStyle = title;
-  ctx.fillText(`📍 ${o.checkins.toLocaleString('pt-BR')} ${o.checkins === 1 ? 'check-in' : 'check-ins'}`, tx, ty + 124);
+  ctx.fillText(`📍 ${o.checkins.toLocaleString('pt-BR')} ${o.checkins === 1 ? 'check-in' : 'check-ins'}`, tx, ty + 112);
   if (o.guests) {
-    ctx.fillText(`🙌 ${o.guests.toLocaleString('pt-BR')} ${o.guests === 1 ? 'convidado' : 'convidados'}`, tx, ty + 176);
+    ctx.fillText(`🙌 ${o.guests.toLocaleString('pt-BR')} ${o.guests === 1 ? 'convidado' : 'convidados'}`, tx, ty + 162);
   }
   ctx.textAlign = 'left';
 
@@ -380,8 +380,8 @@ export async function houseShareImage(svg: SVGSVGElement, o: HouseShareOptions):
   ctx.textAlign = 'center';
   ctx.font = 'italic 500 30px Fraunces, Georgia, serif';
   ctx.fillStyle = sub;
-  ctx.fillText('“Se o Senhor não edificar a casa, em vão trabalham', W / 2, 1282);
-  ctx.fillText('os que a edificam.” — Salmos 127:1', W / 2, 1320);
+  ctx.fillText('“Se o Senhor não edificar a casa, em vão trabalham', W / 2, 1288);
+  ctx.fillText('os que a edificam.” — Salmos 127:1', W / 2, 1326);
   return canvasToBlob(c, 0.9);
 }
 
