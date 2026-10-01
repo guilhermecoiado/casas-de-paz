@@ -62,6 +62,9 @@ export interface Group {
   background_url: string | null;
   timezone: string;
   reminder_enabled: boolean;
+  digest_enabled: boolean;
+  digest_hours: number;
+  last_digest_at: string | null;
   group_cap_auto: boolean;
   group_cap_factor: number;
   diminishing: boolean;

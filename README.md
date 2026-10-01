@@ -40,6 +40,7 @@ O app abre em tela cheia, com ícone próprio e tela de abertura.
 - **iPhone:** só funciona com o app **instalado na Tela de Início** (iOS 16.4 ou mais novo) e aberto por lá. O app avisa isso sozinho.
 - **Lembrete automático:** no dia da Casa de Paz, às **8h (horário de Brasília)**, todos recebem *"Você tem encontro marcado hoje na casa de paz, esperamos vocês!"*. Ele vai no máximo 1 vez por dia por grupo, só dentro do período configurado. O adm liga e desliga o lembrete no painel ⚙️ → Notificações.
 - **Avisos manuais:** no painel ⚙️ → Notificações, o adm escreve o título e a mensagem (ou usa um modelo pronto) e envia para o grupo todo. O limite é 10 por dia. O histórico mostra quantos aparelhos receberam.
+- **Resumo de posts:** de hora em hora o app confere o que foi postado e manda, no máximo a cada N horas (o adm escolhe 1, 2, 3, 4 ou 6h no painel ⚙️ → Notificações), algo como *"Ana, Beto e mais 3 postaram — venha conferir!"*. Cada pessoa só vê os nomes dos outros, e nada é enviado entre 22h e 8h ou se ninguém postou.
 - **Mudar o horário do lembrete:** edite `vercel.json` (`"0 11 * * *"` = 11h UTC = 8h em Brasília) e faça um novo deploy. No plano gratuito da Vercel, o agendamento roda 1 vez por dia e pode atrasar até 1 hora.
 
 ### Rodar localmente
@@ -128,7 +129,7 @@ Nenhum desses itens é necessário para completar a linha da evolução.
 - versículos que a equipe inteira ganha conforme a casa avança
 
 ### Desbloqueios da equipe (a casinha)
-A moldura Casa de Paz já vem liberada desde o início. Depois, conforme a equipe pontua: fundação → **chat** → paredes → **tiles animados** → porta → janelas → **foto de fundo no início** → telhado → chaminé → jardim → luzes → cerca → **casa completa**, com animação de conquista e confete. A barra e a casa atualizam em tempo real para todos.
+A moldura Casa de Paz já vem liberada desde o início. Depois, conforme a equipe pontua: fundação → **chat** → paredes → **tiles animados** → porta → janelas → **foto de fundo no início** → telhado → chaminé → jardim → luzes → cerca → **casa completa**, com animação de conquista e confete. A barra e a casa atualizam em tempo real para todos. Com a casa completa, aparece o botão **Compartilhar**, que gera uma imagem da casinha montada com a moldura do grupo e uma polaroid da última foto em grupo.
 
 ### Moldura e Instagram
 Depois de cada post com foto, o app gera a imagem com a moldura "Casa de Paz" em formato 4:5 e abre o menu de compartilhamento do celular, onde aparece o Instagram (Stories ou Feed). Qualquer foto do Feed também pode ser compartilhada com moldura pelo botão **Moldura**.

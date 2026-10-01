@@ -44,24 +44,28 @@ interface SubRow { endpoint: string; user_id: string; p256dh: string; auth: stri
 
 /** Envia para todos os aparelhos inscritos dos membros do grupo. Remove inscrições expiradas. */
 export async function sendToGroup(db: SupabaseClient, groupId: string, payload: PushPayload) {
-  setup();
-  const { data: members, error: e1 } = await db.from('group_members').select('user_id').eq('group_id', groupId);
-  if (e1) throw e1;
-  const ids = (members ?? []).map((m) => m.user_id as string);
-  if (!ids.length) return { recipients: 0, devices: 0, delivered: 0 };
+  const { data: members, error } = await db.from('group_members').select('user_id').eq('group_id', groupId);
+  if (error) throw error;
+  return sendToUsers(db, (members ?? []).map((m) => m.user_id as string), () => payload);
+}
 
-  const { data: subs, error: e2 } = await db.from('push_subscriptions').select('endpoint,user_id,p256dh,auth').in('user_id', ids);
-  if (e2) throw e2;
+/** Envia uma mensagem (que pode ser diferente para cada pessoa) aos aparelhos dos usuários. */
+export async function sendToUsers(db: SupabaseClient, ids: string[], payloadFor: (userId: string) => PushPayload | null) {
+  setup();
+  if (!ids.length) return { recipients: 0, devices: 0, delivered: 0 };
+  const { data: subs, error } = await db.from('push_subscriptions').select('endpoint,user_id,p256dh,auth').in('user_id', ids);
+  if (error) throw error;
   const rows = (subs ?? []) as SubRow[];
-  const body = JSON.stringify(payload);
   const gone: string[] = [];
   const delivered = new Set<string>();
   let ok = 0;
 
   await Promise.all(
     rows.map(async (s) => {
+      const payload = payloadFor(s.user_id);
+      if (!payload) return;
       try {
-        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body, {
+        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), {
           TTL: 60 * 60 * 12,
           urgency: 'high',
           topic: payload.tag?.slice(0, 32).replace(/[^A-Za-z0-9_-]/g, ''),

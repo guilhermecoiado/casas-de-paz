@@ -887,3 +887,10 @@ grant execute on function public.remove_post(uuid) to authenticated;
 -- =====================================================================
 alter table public.groups alter column points set default
   '{"checkin":100,"group":60,"group_bonus":50,"dynamic":30,"relax":20,"fellowship":30,"snack":40,"individual":5,"verse":10,"encourage":10,"devotional":15,"prayer":10,"fasting":15,"testimony":10,"evangelism":25,"poll":10}';
+
+-- =====================================================================
+-- RESUMO DE POSTS POR PUSH ("Fulano, Ciclano e mais 3 postaram")
+-- =====================================================================
+alter table public.groups add column if not exists digest_enabled boolean not null default true;
+alter table public.groups add column if not exists digest_hours int not null default 3;
+alter table public.groups add column if not exists last_digest_at timestamptz;

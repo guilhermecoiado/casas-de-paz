@@ -253,6 +253,132 @@ export async function frameImage(source: Blob | string, o: FrameOptions): Promis
   return canvasToBlob(c, 0.9);
 }
 
+export interface HouseShareOptions {
+  groupName: string;
+  points: number;
+  members: number;
+  groupPhoto?: string | null; // última foto em grupo (pequena, estilo polaroid)
+  photoDate?: string;
+}
+
+/** Converte o SVG da casinha (já montada na tela) em imagem. */
+async function svgToImage(svg: SVGSVGElement, w: number): Promise<HTMLImageElement> {
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  const vb = svg.viewBox.baseVal;
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('width', String(w));
+  clone.setAttribute('height', String(Math.round((w * vb.height) / vb.width)));
+  clone.removeAttribute('class');
+  // sem as animações da tela: tudo no estado final
+  clone.querySelectorAll('[class]').forEach((el) => el.removeAttribute('class'));
+  const xml = new XMLSerializer().serializeToString(clone);
+  const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
+  return fileToImage(blob);
+}
+
+/** Imagem da casa completa: casinha montada, moldura do grupo e a última foto em grupo. 1080×1350. */
+export async function houseShareImage(svg: SVGSVGElement, o: HouseShareOptions): Promise<Blob> {
+  if (typeof document !== 'undefined' && document.fonts) {
+    await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1200))]);
+  }
+  const W = 1080, H = 1350;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext('2d')!;
+  const gold = '#C9A227', title = '#2B2118', sub = '#8A6F57', terra = '#C8553D';
+
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#FFF6E4');
+  bg.addColorStop(1, '#F3DDB4');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // cabeçalho igual ao das molduras
+  drawHouseIcon(ctx, 60, 52, 84, terra);
+  ctx.fillStyle = title;
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = '700 64px Fraunces, Georgia, serif';
+  ctx.fillText('Casa de Paz', 164, 112);
+  ctx.font = '600 30px Nunito, system-ui, sans-serif';
+  ctx.fillStyle = sub;
+  ctx.fillText(o.groupName.toUpperCase(), 166, 152);
+
+  const badge = 'CASA COMPLETA';
+  ctx.font = '900 28px Nunito, system-ui, sans-serif';
+  const bw = ctx.measureText(badge).width;
+  ctx.fillStyle = gold;
+  roundRect(ctx, W - 60 - bw - 44, 66, bw + 44, 62, 31);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(badge, W - 60 - bw - 22, 107);
+
+  // casinha
+  const px = 54, py = 186, pw = W - 108;
+  const house = await svgToImage(svg, pw * 2);
+  const ph = Math.round((pw * house.naturalHeight) / house.naturalWidth);
+  ctx.save();
+  roundRect(ctx, px, py, pw, ph, 40);
+  ctx.clip();
+  ctx.drawImage(house, px, py, pw, ph);
+  ctx.restore();
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = gold;
+  roundRect(ctx, px, py, pw, ph, 40);
+  ctx.stroke();
+
+  // texto da conquista (lado esquerdo, abaixo da casa)
+  const ty = py + ph + 92;
+  const textW = o.groupPhoto ? 540 : W - 200;
+  ctx.textAlign = o.groupPhoto ? 'left' : 'center';
+  const tx = o.groupPhoto ? 90 : W / 2;
+  ctx.fillStyle = title;
+  ctx.font = 'italic 700 58px Fraunces, Georgia, serif';
+  wrapLines(ctx, 'Construímos juntos!', textW).forEach((l, i) => ctx.fillText(l, tx, ty + i * 70));
+  ctx.font = '800 34px Nunito, system-ui, sans-serif';
+  ctx.fillStyle = terra;
+  ctx.fillText(`${o.points.toLocaleString('pt-BR')} pts · ${o.members} ${o.members === 1 ? 'membro' : 'membros'}`, tx, ty + 70);
+  ctx.font = '64px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+  ctx.fillText('🏡🎉', tx + (o.groupPhoto ? 0 : 0), ty + 160);
+  ctx.textAlign = 'left';
+
+  // polaroid com a última foto em grupo, sobrepondo a casa
+  if (o.groupPhoto) {
+    try {
+      const img = await loadImage(o.groupPhoto);
+      const fw = 340, inner = 300, fh = inner + 88;
+      const cx = W - 70 - fw / 2, cy = py + ph + 70;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate((5 * Math.PI) / 180);
+      ctx.shadowColor = 'rgba(43,33,24,0.35)';
+      ctx.shadowBlur = 30;
+      ctx.shadowOffsetY = 10;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(-fw / 2, -fh / 2, fw, fh);
+      ctx.shadowColor = 'transparent';
+      const s = Math.min(img.naturalWidth, img.naturalHeight);
+      ctx.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, -inner / 2, -fh / 2 + 20, inner, inner);
+      ctx.fillStyle = sub;
+      ctx.textAlign = 'center';
+      ctx.font = 'italic 600 28px Fraunces, Georgia, serif';
+      ctx.fillText(o.photoDate ? `nós · ${o.photoDate}` : 'nós', 0, fh / 2 - 26);
+      // fita adesiva
+      ctx.fillStyle = 'rgba(201,162,39,0.55)';
+      ctx.fillRect(-60, -fh / 2 - 18, 120, 38);
+      ctx.restore();
+    } catch {
+      /* sem a foto, a imagem segue só com a casa */
+    }
+  }
+
+  ctx.textAlign = 'center';
+  ctx.font = 'italic 500 30px Fraunces, Georgia, serif';
+  ctx.fillStyle = sub;
+  ctx.fillText('“Se o Senhor não edificar a casa...” — Salmos 127:1', W / 2, 1296);
+  return canvasToBlob(c, 0.9);
+}
+
 /** Compartilha usando o menu nativo (Instagram aparece nele); cai para download se não houver suporte. */
 export async function shareImage(blob: Blob, filename = 'casa-de-paz.jpg') {
   const file = new File([blob], filename, { type: 'image/jpeg' });

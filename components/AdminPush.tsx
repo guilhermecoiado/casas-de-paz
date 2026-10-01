@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { BellRing, CalendarClock, Send } from 'lucide-react';
+import { BellRing, CalendarClock, MessagesSquare, Send } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { WEEKDAYS, timeAgo } from '@/lib/game';
 import { errMsg, supabase } from '@/lib/supabase';
@@ -27,6 +27,12 @@ export function AdminPush() {
 
   const toggleReminder = async () => {
     const { error } = await supabase.from('groups').update({ reminder_enabled: !group.reminder_enabled }).eq('id', group.id);
+    if (error) return toast(errMsg(error), 'error');
+    reload();
+  };
+
+  const setDigest = async (patch: { digest_enabled?: boolean; digest_hours?: number }) => {
+    const { error } = await supabase.from('groups').update(patch).eq('id', group.id);
     if (error) return toast(errMsg(error), 'error');
     reload();
   };
@@ -75,6 +81,41 @@ export function AdminPush() {
         >
           <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${group.reminder_enabled ? 'left-6' : 'left-1'}`} />
         </button>
+      </div>
+
+      <div className="rounded-2xl bg-cream p-3">
+        <div className="flex items-start gap-3">
+          <MessagesSquare size={20} className="mt-0.5 shrink-0 text-terra" />
+          <div className="min-w-0 flex-1">
+            <p className="font-extrabold leading-tight">Resumo de posts</p>
+            <p className="text-sm leading-snug text-[#8A6F57]">
+              “Ana, Beto e mais 3 postaram — venha conferir!” · no máximo 1 a cada {group.digest_hours}h, das 8h às 22h
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={group.digest_enabled}
+            aria-label="Resumo de posts"
+            onClick={() => setDigest({ digest_enabled: !group.digest_enabled })}
+            className={`relative h-7 w-12 shrink-0 rounded-full transition ${group.digest_enabled ? 'bg-olive' : 'bg-[#d9c8b2]'}`}
+          >
+            <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${group.digest_enabled ? 'left-6' : 'left-1'}`} />
+          </button>
+        </div>
+        {group.digest_enabled && (
+          <div className="mt-3 flex items-center gap-2 pl-8">
+            <span className="text-xs font-extrabold text-[#8A6F57]">A cada</span>
+            {[1, 2, 3, 4, 6].map((h) => (
+              <button
+                key={h}
+                onClick={() => setDigest({ digest_hours: h })}
+                className={`chip !px-3 !py-1.5 ${group.digest_hours === h ? 'bg-terra text-white' : 'bg-white text-[#6b5643]'}`}
+              >
+                {h}h
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <p className="pt-1 text-sm font-extrabold text-[#6b5643]">Enviar aviso agora</p>
