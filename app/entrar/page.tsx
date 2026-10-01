@@ -56,6 +56,7 @@ export default function Entrar() {
           <button className="btn-primary w-full" disabled={busy}>{busy ? <Spinner /> : 'Entrar'}</button>
         </form>
         <Link href="/cadastro" className="btn-soft mt-3 w-full">Criar minha conta</Link>
+        <p className="mt-4 text-center text-xs font-bold leading-snug text-[#a8927a]">Esqueceu a senha? Peça ao administrador do seu grupo: ele cria uma senha nova para você.</p>
       </div>
       <InstallHint />
     </main>

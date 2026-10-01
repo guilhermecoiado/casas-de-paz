@@ -2,6 +2,7 @@
 import 'server-only';
 import webpush from 'web-push';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { AppNotification } from './types';
 
 export const REMINDER_BODY = 'Você tem encontro marcado hoje na casa de paz, esperamos vocês!';
 
@@ -85,7 +86,7 @@ export async function sendToUsers(db: SupabaseClient, ids: string[], payloadFor:
 export interface NotificationRow {
   user_id: string;
   group_id: string;
-  kind: 'comment' | 'digest' | 'reminder' | 'manual';
+  kind: AppNotification['kind'];
   title: string;
   body: string;
   url: string;

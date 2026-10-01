@@ -381,6 +381,128 @@ export async function houseShareImage(svg: SVGSVGElement, o: HouseShareOptions):
   return canvasToBlob(c, 0.9);
 }
 
+export interface RecapShareOptions {
+  groupName: string;
+  week: number;
+  dates: string;
+  teamPoints: number;
+  checkins: number;
+  guests: number;
+  posters: number;
+  members: number;
+  star?: string | null;     // "Ana · 980 pts"
+  houseSvg?: SVGSVGElement | null;
+}
+
+/** Card do fechamento da semana (1080×1350), no tema da moldura daquela semana. */
+export async function recapShareImage(o: RecapShareOptions): Promise<Blob> {
+  if (typeof document !== 'undefined' && document.fonts) {
+    await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1200))]);
+  }
+  const W = 1080, H = 1350;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext('2d')!;
+  const t = frameTheme(o.week);
+
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, t.bgTop);
+  bg.addColorStop(1, t.bgBottom);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // cabeçalho
+  drawHouseIcon(ctx, 60, 52, 84, t.icon);
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = t.title;
+  ctx.font = '700 64px Fraunces, Georgia, serif';
+  ctx.fillText('Casa de Paz', 164, 112);
+  ctx.font = '600 30px Nunito, system-ui, sans-serif';
+  ctx.fillStyle = t.sub;
+  ctx.fillText(o.groupName.toUpperCase(), 166, 152);
+  const wl = `SEMANA ${o.week}`;
+  ctx.font = '900 30px Nunito, system-ui, sans-serif';
+  const ww = ctx.measureText(wl).width;
+  ctx.fillStyle = t.accent;
+  roundRect(ctx, W - 60 - ww - 44, 66, ww + 44, 62, 31);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(wl, W - 60 - ww - 22, 108);
+
+  // título
+  ctx.textAlign = 'center';
+  ctx.fillStyle = t.title;
+  ctx.font = 'italic 700 78px Fraunces, Georgia, serif';
+  ctx.fillText(`Semana ${o.week} fechada!`, W / 2, 278);
+  ctx.font = '700 32px Nunito, system-ui, sans-serif';
+  ctx.fillStyle = t.sub;
+  ctx.fillText(o.dates, W / 2, 326);
+
+  // pontos da equipe
+  ctx.fillStyle = 'rgba(255,255,255,0.78)';
+  roundRect(ctx, 60, 366, W - 120, 210, 40);
+  ctx.fill();
+  ctx.fillStyle = t.accent;
+  ctx.font = '900 112px Fraunces, Georgia, serif';
+  ctx.fillText(o.teamPoints.toLocaleString('pt-BR'), W / 2, 486);
+  ctx.fillStyle = t.sub;
+  ctx.font = '800 32px Nunito, system-ui, sans-serif';
+  ctx.fillText('pontos para a nossa casa', W / 2, 540);
+
+  // números da semana
+  const stats: [string, string][] = [
+    [String(o.checkins), o.checkins === 1 ? 'check-in' : 'check-ins'],
+    [String(o.guests), o.guests === 1 ? 'convidado' : 'convidados'],
+    [`${o.posters}/${o.members}`, 'postaram'],
+  ];
+  const bw = (W - 120 - 40) / 3;
+  stats.forEach(([v, l], i) => {
+    const x = 60 + i * (bw + 20);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    roundRect(ctx, x, 606, bw, 170, 32);
+    ctx.fill();
+    ctx.fillStyle = t.title;
+    ctx.font = '900 70px Fraunces, Georgia, serif';
+    ctx.fillText(v, x + bw / 2, 700);
+    ctx.fillStyle = t.sub;
+    ctx.font = '800 28px Nunito, system-ui, sans-serif';
+    ctx.fillText(l, x + bw / 2, 748);
+  });
+
+  // destaque
+  let y = 836;
+  if (o.star) {
+    ctx.font = '800 36px Nunito, system-ui, sans-serif';
+    ctx.fillStyle = t.title;
+    ctx.fillText(`⭐ Destaque: ${o.star}`, W / 2, y);
+    y += 40;
+  }
+
+  // casinha no estado atual
+  if (o.houseSvg) {
+    try {
+      const house = await svgToImage(o.houseSvg, 880);
+      const hw = 470, hh = Math.round((hw * house.naturalHeight) / house.naturalWidth);
+      const hx = (W - hw) / 2, hy = Math.max(y + 10, 1250 - hh - 20);
+      ctx.save();
+      roundRect(ctx, hx, hy, hw, hh, 32);
+      ctx.clip();
+      ctx.drawImage(house, hx, hy, hw, hh);
+      ctx.restore();
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = t.accent;
+      roundRect(ctx, hx, hy, hw, hh, 32);
+      ctx.stroke();
+    } catch { /* segue sem a casa */ }
+  }
+
+  ctx.font = 'italic 500 30px Fraunces, Georgia, serif';
+  ctx.fillStyle = t.sub;
+  ctx.fillText(t.verse, W / 2, 1300);
+  return canvasToBlob(c, 0.9);
+}
+
 /** Compartilha usando o menu nativo (Instagram aparece nele); cai para download se não houver suporte. */
 export async function shareImage(blob: Blob, filename = 'casa-de-paz.jpg') {
   const file = new File([blob], filename, { type: 'image/jpeg' });

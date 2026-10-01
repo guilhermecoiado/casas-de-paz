@@ -42,6 +42,8 @@ O app abre em tela cheia, com ícone próprio e tela de abertura.
 - **Avisos manuais:** no painel ⚙️ → Notificações, o adm escreve o título e a mensagem (ou usa um modelo pronto) e envia para o grupo todo. O limite é 10 por dia. O histórico mostra quantos aparelhos receberam.
 - **Resumo de posts:** de hora em hora o app confere o que foi postado e manda, no máximo a cada N horas (o adm escolhe 1, 2, 3, 4 ou 6h no painel ⚙️ → Notificações), algo como *"Ana, Beto e mais 3 postaram — venha conferir!"*. Cada pessoa só vê os nomes dos outros, e nada é enviado entre 22h e 8h ou se ninguém postou.
 - **Central de notificações:** o sino no topo do início mostra quantas notificações estão pendentes (o número também aparece no ícone do app, quando o celular permite). Lá ficam os comentários nos seus posts, os resumos do feed, o lembrete do encontro e os avisos do adm. Tocar abre, e o X ou "Limpar todas" apaga. Abrir pelo push também tira a notificação das pendentes.
+- **Lembrete das 20h:** só vai para quem ainda não postou no dia, e lembra a sequência 🔥 quando ela existe. Pode ser desligado no painel.
+- **Esqueceu a senha:** no painel ⚙️ → Membros, a chave 🔑 cria uma senha nova e já monta a mensagem para enviar à pessoa.
 - **Mudar o horário do lembrete:** edite `vercel.json` (`"0 11 * * *"` = 11h UTC = 8h em Brasília) e faça um novo deploy. No plano gratuito da Vercel, o agendamento roda 1 vez por dia e pode atrasar até 1 hora.
 
 ### Rodar localmente
@@ -134,6 +136,16 @@ A moldura Casa de Paz já vem liberada desde o início. Depois, conforme a equip
 
 ### Moldura e Instagram
 Depois de cada post com foto, o app gera a imagem com a moldura "Casa de Paz" em formato 4:5 e abre o menu de compartilhamento do celular, onde aparece o Instagram (Stories ou Feed). Qualquer foto do Feed também pode ser compartilhada com moldura pelo botão **Moldura**.
+
+### Sequência de dias 🔥
+O número no tile mostra quantos dias seguidos a pessoa está postando, e o fogo cresce com a sequência (3, 7 e 14 dias mudam o visual). Se a pessoa ainda não postou hoje, o fogo fica cinza até ela postar. **Intensivo:** 7 dias seguidos liberam o título *Intensivo* e a animação exclusiva *Fogo do Intensivo*. Com 14 dias vem a *Moldura Brasa Viva*, com 21 a *Cor Brasa* e com 28 o título *Fogo que Não se Apaga*.
+
+### Fechamento da semana, destaques, convidados e oração
+- **Fechamento:** no 1º dia de cada semana, às 8h20, chega um push com o resumo da semana anterior, e o início mostra um card com uma imagem compartilhável.
+- **Ranking → Destaques da semana:** mais pontos, quem mais cresceu, mais convidados, maior sequência, mais constante e mais encorajador.
+- **Convidados:** no check-in dá para anotar o nome de cada convidado. A lista fica em Início → Convidados e pode ser enviada ou copiada.
+- **Mural de oração:** pedidos com "🙏 Orar". Quem pediu é avisado e pode marcar como respondido.
+- **Como funciona:** guia completo, aberto no primeiro acesso e disponível no início e no perfil.
 
 ### Reações e comentários
 No feed, cada post tem reações rápidas (🙏 ❤️ 🔥 🙌 😂) e comentários com atalhos de emoji. Não valem pontos. Cada pessoa apaga os próprios comentários, e o adm apaga qualquer um. O dono do post recebe o aviso na central e no próximo resumo de push.

@@ -65,6 +65,10 @@ export interface Group {
   digest_enabled: boolean;
   digest_hours: number;
   last_digest_at: string | null;
+  nudge_enabled: boolean;
+  last_nudge_date: string | null;
+  recap_enabled: boolean;
+  last_recap_week: number | null;
   group_cap_auto: boolean;
   group_cap_factor: number;
   diminishing: boolean;
@@ -90,6 +94,7 @@ export interface Post {
   description: string | null;
   poll_id?: string | null;
   guests: number;
+  guest_names?: string[];
   base_points: number;
   points: number;
   group_bonus: number;
@@ -168,12 +173,28 @@ export interface AppNotification {
   id: number;
   user_id: string;
   group_id: string;
-  kind: 'comment' | 'digest' | 'reminder' | 'manual';
+  kind: 'comment' | 'digest' | 'reminder' | 'manual' | 'nudge' | 'recap' | 'prayer';
   title: string;
   body: string;
   url: string;
   actor_id: string | null;
   post_id: string | null;
   read_at: string | null;
+  created_at: string;
+}
+
+export interface PrayerRequest {
+  id: number;
+  group_id: string;
+  user_id: string;
+  body: string;
+  answered_at: string | null;
+  created_at: string;
+}
+
+export interface PrayerAmen {
+  request_id: number;
+  group_id: string;
+  user_id: string;
   created_at: string;
 }

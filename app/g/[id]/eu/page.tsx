@@ -3,12 +3,13 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftRight, LogOut, Pencil, Settings } from 'lucide-react';
+import { ArrowLeftRight, CircleHelp, LogOut, Pencil, Settings } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { useAuth, useToast } from '@/components/Providers';
 import { Avatar, PhotoPicker, ProgressBar, Sheet, Spinner } from '@/components/ui';
 import { MemberTile } from '@/components/Tile';
 import { PushToggle } from '@/components/PushToggle';
+import { StreakCard } from '@/components/StreakCard';
 import { KIND_LABEL, fieldOf, rewardById, kitItems, nextPathReward, rewardThreshold, type PathInfo, type Reward } from '@/lib/rewards';
 import { Collection, EvolutionLine, Phrases } from '@/components/Evolution';
 import { errMsg, supabase, uploadImage } from '@/lib/supabase';
@@ -119,6 +120,8 @@ export default function Eu() {
         </button>
       </section>
 
+      <div className="mx-4 mt-4"><StreakCard /></div>
+
       {/* evolução + prévia de como o grupo vê o seu tile */}
       <section className="card mx-4 mt-4 flex gap-4 p-4">
         <div className="min-w-0 flex-1">
@@ -139,6 +142,9 @@ export default function Eu() {
       </section>
 
       <div className="mx-4 mt-4"><PushToggle /></div>
+      <Link href={`/g/${group.id}/como-funciona`} className="mx-4 mt-3 flex items-center gap-3 rounded-2xl bg-white p-3 font-extrabold shadow-sm">
+        <CircleHelp size={20} className="text-terra" /> Como funciona a gincana
+      </Link>
 
       <EvolutionLine member={member} titleId={l.titleId} kit={l.kit} onEquip={equip} onEquipKit={equipKit} saving={saving} />
       <Collection member={member} titleId={l.titleId} kit={l.kit} onEquip={equip} onEquipKit={equipKit} saving={saving} />

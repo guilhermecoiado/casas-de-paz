@@ -64,7 +64,7 @@ export function PostCard({ post, openComments = false, highlight = false }: { po
         <div className="flex flex-wrap items-center gap-2">
           <span className={`chip ${cancelled ? 'bg-sand text-[#8A6F57] line-through' : post.points < 0 ? 'bg-[#7a2618]/10 text-[#7a2618]' : 'bg-amber/20 text-[#9a5b00]'}`}>{post.points >= 0 ? '+' : ''}{post.points} pts</span>
           {post.group_bonus > 0 && <span className="chip bg-olive/15 text-olive"><Users size={12} /> +{post.group_bonus} equipe</span>}
-          {post.guests > 0 && <span className="chip bg-olive/15 text-olive">{post.guests} convidado{post.guests > 1 ? 's' : ''}</span>}
+          {post.guests > 0 && <span className="chip max-w-full bg-olive/15 text-olive"><span className="truncate">{post.guests} convidado{post.guests > 1 ? 's' : ''}{post.guest_names?.length ? `: ${post.guest_names.join(', ')}` : ''}</span></span>}
           {post.capped && <span className="chip bg-sand text-[#8A6F57]">limite semanal</span>}
           {cancelled && <span className="chip bg-[#7a2618] text-white">cancelado</span>}
           {post.photo_url && !cancelled && (

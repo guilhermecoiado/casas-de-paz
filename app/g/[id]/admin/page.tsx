@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Gavel, ImagePlus, Plus, Trash2, UserMinus, X } from 'lucide-react';
+import { ArrowLeft, Gavel, ImagePlus, KeyRound, Plus, Trash2, UserMinus, X } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { useToast } from '@/components/Providers';
 import { Avatar, PhotoPicker, Spinner } from '@/components/ui';
 import { AdminPush } from '@/components/AdminPush';
 import { MemberSheet } from '@/components/MemberSheet';
+import { ResetPasswordSheet } from '@/components/ResetPasswordSheet';
 import { POINT_LABELS, WEEKDAYS, WEEKDAYS_SHORT, dailyMax, formatDate, meetingMax, suggestedWeeklyCap, teamWeeklyCap, totalWeeks } from '@/lib/game';
 import { compressImage } from '@/lib/image';
 import { errMsg, supabase, uploadImage } from '@/lib/supabase';
@@ -26,6 +27,7 @@ export default function Admin() {
   const [bg, setBg] = useState<Blob | null>(null);
   const [pw, setPw] = useState('');
   const [ledger, setLedger] = useState<string | null>(null);
+  const [resetPw, setResetPw] = useState<string | null>(null);
   const [resetName, setResetName] = useState('');
   const [resetting, setResetting] = useState(false);
 
@@ -286,7 +288,7 @@ export default function Admin() {
         </Section>
 
         <Section title={`Membros (${members.length})`}>
-          <p className="text-xs text-[#8A6F57]">Toque em Extrato para ver todos os pontos de um membro (inclusive enquetes), contestar ou ajustar.</p>
+          <p className="text-xs text-[#8A6F57]">Toque em Extrato para ver todos os pontos de um membro (inclusive enquetes), contestar ou ajustar. A chave 🔑 cria uma senha nova para quem esqueceu.</p>
           {members.map((m) => (
             <div key={m.user_id} className="flex items-center gap-3">
               <Avatar url={profiles[m.user_id]?.avatar_url} name={profiles[m.user_id]?.name} size={38} />
@@ -296,6 +298,9 @@ export default function Admin() {
               </div>
               <button onClick={() => setLedger(m.user_id)} className="chip bg-sand !py-2 text-ink">Extrato</button>
               {m.user_id !== me && (
+                <button onClick={() => setResetPw(m.user_id)} className="rounded-full bg-sand p-2 text-ink" aria-label="Redefinir senha"><KeyRound size={16} /></button>
+              )}
+              {m.user_id !== me && (
                 <button onClick={() => removeMember(m.user_id)} className="rounded-full bg-sand p-2 text-[#7a2618]" aria-label="Remover"><UserMinus size={16} /></button>
               )}
             </div>
@@ -303,6 +308,7 @@ export default function Admin() {
         </Section>
 
         <MemberSheet userId={ledger} onClose={() => setLedger(null)} />
+        <ResetPasswordSheet userId={resetPw} onClose={() => setResetPw(null)} />
 
         <Section title="Senha do grupo">
           <div className="flex gap-2">

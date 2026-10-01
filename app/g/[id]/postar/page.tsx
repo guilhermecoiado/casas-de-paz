@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, BookOpen, Camera, Coffee, Flame, HandHeart, Heart, Megaphone, MapPin, MessageCircleHeart, Minus, Plus,
   Smile, Sparkles, Sun, User, Users, UtensilsCrossed,
@@ -11,6 +11,7 @@ import { ACTIONS, WEEKDAYS, actionAvailability, actionPoints, dailyMax, formatDa
 import { ProgressBar } from '@/components/ui';
 import { compressImage } from '@/lib/image';
 import { ShareSheet } from '@/components/ShareSheet';
+import { StreakCard } from '@/components/StreakCard';
 import { errMsg, supabase, uploadPostImage } from '@/lib/supabase';
 import { PhotoPicker, Spinner } from '@/components/ui';
 import { useToast } from '@/components/Providers';
@@ -33,6 +34,7 @@ export default function Postar() {
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [text, setText] = useState('');
   const [guests, setGuests] = useState(0);
+  const [guestNames, setGuestNames] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ post: Post; photo: Blob | null; label: string } | null>(null);
 
@@ -43,6 +45,14 @@ export default function Postar() {
   const dayMax = dailyMax(group);
   const dayDone = myToday.filter((p) => p.status !== 'cancelled' && ACTIONS.some((a) => a.when === 'daily' && a.type === p.type)).reduce((s, p) => s + p.points, 0);
   const weekDone = stats.byUser[me]?.weekPoints ?? 0;
+  // atalho vindo de outra tela (ex.: mural de oração → "Orei pela Casa de Paz")
+  const preset = useSearchParams()?.get('acao');
+  useEffect(() => {
+    if (!preset) return;
+    const a = ACTIONS.find((x) => x.type === preset);
+    if (a && !actionAvailability(group, a.type, today, myToday, groupToday).blocked) setAction(a);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset]);
   const back = () => (action ? setAction(null) : router.push(`/g/${group.id}`));
 
   const submit = async () => {
@@ -63,6 +73,11 @@ export default function Postar() {
         p_group: group.id, p_type: action.type, p_photo_url: photoUrl, p_description: text.trim() || null, p_guests: guests,
       });
       if (error) throw error;
+      const names = guestNames.slice(0, guests).map((n) => n.trim()).filter(Boolean);
+      if (action.type === 'checkin' && names.length) {
+        const { error: ge } = await supabase.rpc('set_guest_names', { p_post: (data as Post).id, p_names: names });
+        if (ge) toast(`Check-in salvo, mas os nomes não: ${errMsg(ge)}`, 'error');
+      }
       setDone({ post: data as Post, photo: small, label: action.short });
       reload();
     } catch (e) {
@@ -88,6 +103,7 @@ export default function Postar() {
             </p>
           )}
         </div>
+        {done.post.type !== 'poll' && <div className="mx-auto mt-5 max-w-[360px] anim-rise"><StreakCard celebrate /></div>}
         {done.photo && (
           <div className="mx-auto mt-6 max-w-[360px] anim-rise">
             <ShareSheet inline open onClose={() => {}} source={done.photo} week={done.post.week} label={done.label} dateLabel={formatDate(today, { day: '2-digit', month: 'long' })} />
@@ -145,7 +161,7 @@ export default function Postar() {
                       <button
                         key={a.type}
                         disabled={!!av.blocked}
-                        onClick={() => { setAction(a); setPhoto(null); setText(''); setGuests(0); }}
+                        onClick={() => { setAction(a); setPhoto(null); setText(''); setGuests(0); setGuestNames([]); }}
                         className={`card relative flex flex-col items-start p-4 text-left transition active:scale-[0.97] disabled:opacity-55 anim-rise ${featured ? 'col-span-2 bg-gradient-to-br from-white to-amber/15' : ''}`}
                         style={{ animationDelay: `${i * 35}ms` }}
                       >
@@ -204,6 +220,22 @@ export default function Postar() {
                 </div>
                 <button className="btn-soft h-12 w-12 !px-0" onClick={() => setGuests((g) => Math.min(20, g + 1))} aria-label="Mais"><Plus /></button>
               </div>
+              {guests > 0 && (
+                <div className="mt-4 space-y-2 border-t border-sand pt-3">
+                  <p className="text-sm font-extrabold text-[#6b5643]">Nome dos convidados <span className="font-bold text-[#a8927a]">(opcional)</span></p>
+                  <p className="text-xs leading-snug text-[#a8927a]">Fica numa lista para o grupo acompanhar e convidar de novo.</p>
+                  {Array.from({ length: guests }, (_, i) => (
+                    <input
+                      key={i}
+                      className="input !py-2.5"
+                      value={guestNames[i] ?? ''}
+                      maxLength={60}
+                      placeholder={`Convidado ${i + 1}`}
+                      onChange={(e) => setGuestNames((l) => { const c = [...l]; c[i] = e.target.value; return c; })}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

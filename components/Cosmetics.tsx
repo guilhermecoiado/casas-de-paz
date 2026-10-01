@@ -50,6 +50,10 @@ const AVATAR_ORN: Record<string, Orn[]> = {
   'af-leao': [
     { e: '🦁', s: 0.34, style: { right: '-14%', bottom: '-6%' } },
   ],
+  'af-brasa': [
+    { e: '🔥', s: 0.3, style: { left: '-8%', bottom: '0%' }, cls: 'orn-flicker' },
+    { e: '🔥', s: 0.24, style: { right: '-6%', top: '2%' }, cls: 'orn-flicker' },
+  ],
   'af-belem': [
     { e: '⭐', s: 0.3, style: { right: '-6%', top: '-10%' }, cls: 'orn-flicker' },
     { e: '✨', s: 0.22, style: { left: '-6%', bottom: '0%' }, cls: 'orn-bob' },
@@ -161,6 +165,13 @@ export function TileFx({ anim, kit }: { anim: string | null | undefined; kit: Pa
             </>
           )}
           {anim === 'ta-alianca' && <span className="fx-rainbow" />}
+          {anim === 'ta-intensivo' && (
+            <>
+              <span className="fx-heat" />
+              {[-2, 16, 34, 52, 70, 86].map((x, i) => <span key={i} className="fx-bigflame" style={{ left: `${x}%`, ...d(i * 0.17) }}>🔥</span>)}
+              {[10, 28, 48, 66, 84, 38, 58].map((x, i) => <span key={`e${i}`} className="fx-ember" style={{ left: `${x}%`, ...d(i * 0.37) }} />)}
+            </>
+          )}
         </div>
       )}
       {kit && <KitFx kit={kit} />}
@@ -197,5 +208,18 @@ export function KitFx({ kit }: { kit: PathId }) {
         </>
       )}
     </div>
+  );
+}
+
+/* ---------------- Sequência de dias ---------------- */
+
+/** Selo 🔥N: o fogo cresce com a sequência; apagado se hoje ainda não postou. */
+export function StreakBadge({ streak, postedToday, className = '' }: { streak: number; postedToday: boolean; className?: string }) {
+  if (!streak) return null;
+  const lv = streak >= 14 ? 4 : streak >= 7 ? 3 : streak >= 3 ? 2 : 1;
+  return (
+    <span className={`streak ${postedToday ? `streak-${lv}` : 'streak-off'} ${className}`} title={`${streak} ${streak === 1 ? 'dia seguido' : 'dias seguidos'}`}>
+      <span className="flame">🔥</span>{streak}
+    </span>
   );
 }

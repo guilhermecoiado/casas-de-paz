@@ -259,3 +259,38 @@ select {
 /* reação: pulinho ao marcar */
 .react-pop { display: inline-block; animation: reactPop 0.35s ease-out; }
 @keyframes reactPop { 0% { transform: scale(0.6); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+
+/* ===================== Sequência de dias 🔥 (estilo Duolingo) ===================== */
+.streak { display: inline-flex; align-items: center; gap: 2px; border-radius: 9999px; padding: 2px 7px 2px 4px; font-size: 11px; font-weight: 900; line-height: 1.2; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.streak .flame { display: inline-block; transform-origin: 50% 90%; }
+/* hoje ainda não postou: fogo apagado, mas a sequência continua valendo até meia-noite */
+.streak-off { background: rgba(255,255,255,.92); color: #a8927a; }
+.streak-off .flame { filter: grayscale(1); opacity: .6; }
+.streak-1 { background: #fff1dc; color: #c25a1c; }
+.streak-2 { background: linear-gradient(90deg, #ffe0b0, #ffc07a); color: #a8400f; }
+.streak-2 .flame { animation: flicker 1s ease-in-out infinite alternate; }
+.streak-3 { background: linear-gradient(90deg, #ffb55c, #ff7a3a); color: #fff; box-shadow: 0 0 0 2px rgba(255,140,60,.35), 0 0 12px rgba(255,110,40,.6); animation: streakPulse 1.6s ease-in-out infinite; }
+.streak-3 .flame { animation: flicker .7s ease-in-out infinite alternate; font-size: 1.15em; }
+.streak-4 { background: linear-gradient(90deg, #7b5cff, #ff4fa3, #ff8a3a); background-size: 200% 100%; color: #fff; box-shadow: 0 0 0 2px rgba(255,90,160,.35), 0 0 16px rgba(255,90,60,.7); animation: streakPulse 1.3s ease-in-out infinite, streakShift 3s linear infinite; }
+.streak-4 .flame { animation: flicker .5s ease-in-out infinite alternate; font-size: 1.25em; filter: hue-rotate(-25deg) saturate(1.4); }
+@keyframes streakPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+@keyframes streakShift { to { background-position: 200% 0; } }
+
+/* cartão grande da sequência (perfil e tela de sucesso) */
+.streak-hero { position: relative; overflow: hidden; }
+.streak-hero .big-flame { display: inline-block; transform-origin: 50% 90%; animation: flicker .9s ease-in-out infinite alternate; }
+.streak-hero.lv-3 .big-flame, .streak-hero.lv-4 .big-flame { animation-duration: .55s; filter: drop-shadow(0 0 10px rgba(255,120,40,.8)); }
+.streak-hero.lv-4 .big-flame { filter: hue-rotate(-25deg) saturate(1.4) drop-shadow(0 0 12px rgba(255,80,160,.8)); }
+.ember { position: absolute; bottom: -6px; width: 6px; height: 6px; border-radius: 9999px; background: radial-gradient(#ffe08a, #ff6a2a); animation: emberRise 2.4s ease-in infinite; opacity: 0; }
+@keyframes emberRise { 0% { transform: translateY(0) scale(1); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-120px) translateX(12px) scale(.3); opacity: 0; } }
+
+/* Fogo do Intensivo (animação exclusiva de 7 dias seguidos) */
+.fx-heat { left: 0; right: 0; bottom: 0; height: 60%; background: radial-gradient(90% 100% at 50% 100%, rgba(255,90,30,.42), rgba(255,170,60,.18) 45%, transparent 75%); animation: glow 1.1s ease-in-out infinite; }
+.fx-bigflame { bottom: -9px; font-size: 19px; opacity: .8; animation: flame .8s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+.fx-ember { bottom: 4px; width: 5px; height: 5px; border-radius: 9999px; background: radial-gradient(#fff3b0, #ff6a2a); animation: emberRise 2.2s ease-in infinite; opacity: 0; }
+
+/* Moldura Brasa Viva (14 dias) e Cor Brasa (21 dias) */
+.af-brasa { background: conic-gradient(from 0deg, #ff3d2e, #ffb347, #ff6a2a, #ffe08a, #ff3d2e); animation: spin 3s linear infinite; box-shadow: 0 0 12px rgba(255,90,40,.55); }
+.af-brasa > .af-inner { animation: spin 3s linear infinite reverse; }
+.tc-brasa { background: linear-gradient(170deg, #ffe7cf 0%, #ffb27a 50%, #ff7a45 100%); animation: brasaGlow 2.4s ease-in-out infinite; }
+@keyframes brasaGlow { 0%, 100% { box-shadow: inset 0 -18px 30px -18px rgba(220,50,20,.45); } 50% { box-shadow: inset 0 -26px 36px -16px rgba(255,90,20,.7); } }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { BellRing, CalendarClock, MessagesSquare, Send } from 'lucide-react';
+import { BellRing, CalendarCheck, CalendarClock, Flame, MessagesSquare, Send } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { WEEKDAYS, timeAgo } from '@/lib/game';
 import { errMsg, supabase } from '@/lib/supabase';
@@ -31,7 +31,7 @@ export function AdminPush() {
     reload();
   };
 
-  const setDigest = async (patch: { digest_enabled?: boolean; digest_hours?: number }) => {
+  const setDigest = async (patch: { digest_enabled?: boolean; digest_hours?: number; nudge_enabled?: boolean; recap_enabled?: boolean }) => {
     const { error } = await supabase.from('groups').update(patch).eq('id', group.id);
     if (error) return toast(errMsg(error), 'error');
     reload();
@@ -117,6 +117,28 @@ export function AdminPush() {
           </div>
         )}
       </div>
+
+      {([
+        { key: 'nudge_enabled', on: group.nudge_enabled, Icon: Flame, title: 'Lembrete das 20h', desc: 'Só para quem ainda não postou no dia: “Ainda dá tempo! Seus pontos de hoje estão te esperando” (ou o aviso da sequência 🔥).' },
+        { key: 'recap_enabled', on: group.recap_enabled, Icon: CalendarCheck, title: 'Fechamento da semana', desc: 'No 1º dia de cada semana, às 8h: pontos da equipe, convidados e o destaque da semana que passou.' },
+      ] as const).map(({ key, on, Icon, title: t, desc }) => (
+        <div key={key} className="flex items-start gap-3 rounded-2xl bg-cream p-3">
+          <Icon size={20} className="mt-0.5 shrink-0 text-terra" />
+          <div className="min-w-0 flex-1">
+            <p className="font-extrabold leading-tight">{t}</p>
+            <p className="text-sm leading-snug text-[#8A6F57]">{desc}</p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={on}
+            aria-label={t}
+            onClick={() => setDigest({ [key]: !on })}
+            className={`relative h-7 w-12 shrink-0 rounded-full transition ${on ? 'bg-olive' : 'bg-[#d9c8b2]'}`}
+          >
+            <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? 'left-6' : 'left-1'}`} />
+          </button>
+        </div>
+      ))}
 
       <p className="pt-1 text-sm font-extrabold text-[#6b5643]">Enviar aviso agora</p>
       <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1">

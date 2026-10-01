@@ -198,5 +198,35 @@ ok((await as('ana', `delete from post_comments where id=$1 returning 1`, [cm[0].
 ok((await as('bia', `delete from notifications returning 1`)).length === 1, 'limpa as próprias notificações');
 ok((await as('zeca', `select * from post_comments`)).length === 0, 'não-membro não vê comentários');
 
+
+// ---- v6: convidados, mural de oração ----
+{
+  await setHouse(dow);
+  const ck = await post('caio', 'checkin', 'http://x/ck.jpg', null, 2);
+  const ckid = ck[0]?.id;
+  ok(!!ckid, `check-in com 2 convidados (${ck.error ?? 'ok'})`);
+  let gn = await as('caio', `select set_guest_names($1, array['  Maria  ', 'João', ''])`, [ckid]);
+  ok(JSON.stringify(gn[0]?.set_guest_names) === JSON.stringify(['Maria', 'João']), `salva nomes limpos (${JSON.stringify(gn[0]?.set_guest_names ?? gn.error)})`);
+  ok((await as('caio', `select set_guest_names($1, array['A','B','C'])`, [ckid])).error?.includes('Mais nomes'), 'não passa do nº de convidados');
+  ok((await as('davi', `select set_guest_names($1, array['X'])`, [ckid])).error?.includes('Só quem'), 'outro membro não edita');
+  ok(!(await as('ana', `select set_guest_names($1, array['Maria'])`, [ckid])).error, 'adm edita');
+
+  const pr = await as('bia', `insert into prayer_requests (group_id,user_id,body) values ($1,$2,'Pela saúde da minha mãe') returning id`, [gid, users.bia]);
+  ok(pr.length === 1, 'cria pedido de oração');
+  const prid = pr[0].id;
+  ok((await as('bia', `insert into prayer_requests (group_id,user_id,body,answered_at) values ($1,$2,'teste já respondido',now())`, [gid, users.bia])).error, 'não cria já respondido');
+  ok((await as('zeca', `insert into prayer_requests (group_id,user_id,body) values ($1,$2,'oi pessoal')`, [gid, users.zeca])).error, 'não-membro não pede');
+  ok(!(await as('davi', `insert into prayer_amens (request_id,group_id,user_id) values ($1,$2,$3)`, [prid, gid, users.davi])).error, 'membro ora pelo pedido');
+  ok((await as('davi', `insert into prayer_amens (request_id,group_id,user_id) values ($1,$2,$3)`, [prid, gid, users.davi])).error, 'orei 2x bloqueado');
+  const pn = await as('bia', `select * from notifications where kind='prayer'`);
+  ok(pn.length === 1 && pn[0].title.includes('DAVI orou'), `dono recebe aviso de oração (${pn[0]?.title})`);
+  ok((await as('davi', `update prayer_requests set answered_at=now() where id=$1 returning 1`, [prid])).length === 0, 'outro não marca respondido');
+  ok((await as('bia', `update prayer_requests set body='mudou' where id=$1`, [prid])).error, 'não edita o texto');
+  ok((await as('bia', `update prayer_requests set answered_at=now() where id=$1 returning 1`, [prid])).length === 1, 'dono marca respondido');
+  ok((await as('davi', `delete from prayer_requests where id=$1 returning 1`, [prid])).length === 0, 'outro não apaga pedido');
+  ok((await as('ana', `delete from prayer_requests where id=$1 returning 1`, [prid])).length === 1, 'adm apaga pedido');
+  ok((await as('zeca', `select * from prayer_requests`)).length === 0, 'não-membro não vê mural');
+}
+
 console.log(fails ? `\n${fails} FALHA(S)` : '\nTODOS OS TESTES PASSARAM');
 await c.end();

@@ -183,6 +183,10 @@ export interface UserStats {
   snacks: number;      // ajudas no lanche
   groupPhotos: number; // fotos em grupo
   reachedAt: string;   // quando chegou na pontuação atual (desempate: quem chegou primeiro)
+  streak: number;      // dias seguidos postando (vale até ontem: hoje ainda dá tempo)
+  bestStreak: number;  // maior sequência da temporada
+  weekGuests: number;
+  weekDays: number;
 }
 
 export interface Stats {
@@ -195,8 +199,25 @@ export interface Stats {
 
 const emptyStats = (): UserStats => ({
   points: 0, weekPoints: 0, checkins: 0, guests: 0, evangelism: 0, posts: 0, postedToday: false, todayPhoto: null, pending: 0,
-  days: 0, polls: 0, snacks: 0, groupPhotos: 0, reachedAt: '',
+  days: 0, polls: 0, snacks: 0, groupPhotos: 0, reachedAt: '', streak: 0, bestStreak: 0, weekGuests: 0, weekDays: 0,
 });
+
+/** Sequência atual e recorde a partir dos dias (yyyy-mm-dd) em que a pessoa postou. */
+export function streakOf(days: Iterable<string>, today: string) {
+  const sorted = Array.from(new Set(days)).filter((d) => d <= today).sort();
+  let best = 0, run = 0, prev = '';
+  for (const d of sorted) {
+    run = prev && daysBetween(prev, d) === 1 ? run + 1 : 1;
+    best = Math.max(best, run);
+    prev = d;
+  }
+  // a sequência só está viva se o último dia postado foi hoje ou ontem
+  const current = prev && daysBetween(prev, today) <= 1 ? run : 0;
+  return { current, best };
+}
+
+/** Nível do fogo (estilo Duolingo): cresce com a sequência. */
+export const streakLevel = (n: number) => (n >= 14 ? 4 : n >= 7 ? 3 : n >= 3 ? 2 : n >= 1 ? 1 : 0);
 
 export function computeStats(g: Group, members: Member[], posts: Post[], today: string): Stats {
   const week = weekOf(g, today);
@@ -205,6 +226,7 @@ export function computeStats(g: Group, members: Member[], posts: Post[], today: 
   members.forEach((m) => (byUser[m.user_id] = emptyStats()));
   const teamByWeek = new Map<number, number>();
   const dayKeys = new Set<string>();
+  const userDays = new Map<string, string[]>();
   // posts vêm do mais novo para o mais antigo
   for (const p of posts) {
     if (p.status === 'cancelled') continue;
@@ -225,13 +247,23 @@ export function computeStats(g: Group, members: Member[], posts: Post[], today: 
     if (p.type !== 'poll' && p.type !== 'adjust' && !dayKeys.has(`${p.user_id}|${p.local_date}`)) {
       dayKeys.add(`${p.user_id}|${p.local_date}`);
       s.days += 1;
+      if (p.week === week) s.weekDays += 1;
+      const l = userDays.get(p.user_id) ?? [];
+      l.push(p.local_date);
+      userDays.set(p.user_id, l);
     }
+    if (p.type === 'checkin' && p.week === week) s.weekGuests += p.guests;
     if (p.local_date === today && p.type !== 'poll' && p.type !== 'adjust') {
       s.postedToday = true;
       if (!s.todayPhoto && p.photo_url) s.todayPhoto = p.photo_url;
     }
     teamByWeek.set(p.week, (teamByWeek.get(p.week) ?? 0) + p.points + p.group_bonus);
   }
+  userDays.forEach((days, uid) => {
+    const st = streakOf(days, today);
+    byUser[uid].streak = st.current;
+    byUser[uid].bestStreak = st.best;
+  });
   // a casa avança no máximo o limite semanal da equipe por semana (liberação gradual)
   let groupPoints = 0;
   teamByWeek.forEach((v) => (groupPoints += Math.max(0, Math.min(v, teamWeekCap))));

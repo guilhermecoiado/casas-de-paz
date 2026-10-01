@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, BellOff, BellRing, CalendarClock, CheckCheck, Images, Megaphone, MessageCircle, X } from 'lucide-react';
+import { ArrowLeft, BellOff, BellRing, CalendarCheck, CalendarClock, CheckCheck, Flame, HandHeart, Images, Megaphone, MessageCircle, X } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { timeAgo } from '@/lib/game';
 import { errMsg, supabase } from '@/lib/supabase';
@@ -11,12 +11,15 @@ import { Avatar } from '@/components/ui';
 import { PushToggle } from '@/components/PushToggle';
 import type { AppNotification } from '@/lib/types';
 
-const ICON = { comment: MessageCircle, digest: Images, reminder: CalendarClock, manual: Megaphone } as const;
+const ICON = { comment: MessageCircle, digest: Images, reminder: CalendarClock, manual: Megaphone, nudge: Flame, recap: CalendarCheck, prayer: HandHeart } as const;
 const TONE = {
   comment: 'bg-terra/10 text-terra',
   digest: 'bg-olive/15 text-olive',
   reminder: 'bg-amber/20 text-[#9a5b00]',
   manual: 'bg-[#7B3FA0]/10 text-[#7B3FA0]',
+  nudge: 'bg-[#ff7a3a]/15 text-[#e8562e]',
+  recap: 'bg-[#2F8FD0]/10 text-[#2F8FD0]',
+  prayer: 'bg-olive/15 text-olive',
 } as const;
 
 export default function Avisos() {

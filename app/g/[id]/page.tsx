@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Bell, CalendarDays, Lock, MessageCircle, Settings } from 'lucide-react';
+import { Bell, CalendarDays, CircleHelp, HandHeart, Lock, MessageCircle, Settings, UserPlus } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { GROUP_UNLOCKS, WEEKDAYS, formatDate, groupThreshold, nextGroupUnlock, totalWeeks, weekdayOf } from '@/lib/game';
 import { Avatar, ProgressBar } from '@/components/ui';
@@ -11,11 +11,14 @@ import { House } from '@/components/House';
 import { PollCard } from '@/components/PollCard';
 import { MemberSheet } from '@/components/MemberSheet';
 import { PushToggle } from '@/components/PushToggle';
+import { WeekRecap } from '@/components/WeekRecap';
+import { WelcomeSheet } from '@/components/WelcomeSheet';
 
 export default function GroupHome() {
   const g = useGroup();
   const { group, members, profiles, stats, unlocked, today, me, isAdmin, polls, look, maxGrp, unread } = g;
   const [sel, setSel] = useState<string | null>(null);
+  const houseRef = useRef<HTMLAnchorElement>(null);
 
   const parts = useMemo(() => new Set(GROUP_UNLOCKS.filter((u) => unlocked.has(u.id)).map((u) => u.part ?? u.id)), [unlocked]);
   const next = nextGroupUnlock(maxGrp, stats.groupPoints);
@@ -85,7 +88,7 @@ export default function GroupHome() {
 
       <div className="space-y-4 px-4">
         {/* progresso da casa */}
-        <Link href={`/g/${group.id}/casa`} className="card block overflow-hidden active:scale-[0.99]">
+        <Link ref={houseRef} href={`/g/${group.id}/casa`} className="card block overflow-hidden active:scale-[0.99]">
           <div className="flex items-center gap-3 p-4 pb-2">
             <House parts={parts} className="h-[86px] w-[106px] shrink-0 drop-shadow-sm" />
             <div className="min-w-0 flex-1">
@@ -111,6 +114,22 @@ export default function GroupHome() {
             </div>
           </div>
         </Link>
+
+        <WeekRecap houseRef={houseRef} />
+
+        {/* atalhos */}
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { href: `/g/${group.id}/oracao`, Icon: HandHeart, label: 'Mural de oração', tone: 'text-olive' },
+            { href: `/g/${group.id}/convidados`, Icon: UserPlus, label: 'Convidados', tone: 'text-[#2F8FD0]' },
+            { href: `/g/${group.id}/como-funciona`, Icon: CircleHelp, label: 'Como funciona', tone: 'text-terra' },
+          ].map(({ href, Icon, label, tone }) => (
+            <Link key={href} href={href} className="flex flex-col items-center gap-1 rounded-2xl bg-white px-2 py-3 text-center shadow-sm active:scale-95">
+              <Icon size={22} className={tone} />
+              <span className="text-[12px] font-extrabold leading-tight text-[#6b5643]">{label}</span>
+            </Link>
+          ))}
+        </div>
 
         <PushToggle variant="compact" />
 
@@ -141,6 +160,7 @@ export default function GroupHome() {
       </div>
 
       <MemberSheet userId={sel} onClose={() => setSel(null)} />
+      <WelcomeSheet />
     </div>
   );
 }

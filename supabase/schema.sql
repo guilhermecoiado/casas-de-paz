@@ -1008,3 +1008,119 @@ end $$;
 alter table public.post_reactions replica identity full;
 alter table public.post_comments  replica identity full;
 alter table public.notifications  replica identity full;
+
+-- =====================================================================
+-- v6: CONVIDADOS, MURAL DE ORAÇÃO, LEMBRETE DAS 20H E FECHAMENTO DA SEMANA
+-- =====================================================================
+alter table public.groups add column if not exists nudge_enabled boolean not null default true;
+alter table public.groups add column if not exists last_nudge_date date;
+alter table public.groups add column if not exists recap_enabled boolean not null default true;
+alter table public.groups add column if not exists last_recap_week int;
+
+-- nomes dos convidados do check-in (para acompanhar depois)
+alter table public.posts add column if not exists guest_names text[] not null default '{}';
+
+create or replace function public.set_guest_names(p_post uuid, p_names text[])
+returns text[] language plpgsql security definer set search_path = public as $$
+declare r public.posts; v text[];
+begin
+  select * into r from posts where id = p_post;
+  if r.id is null or r.type <> 'checkin' or r.status in ('archived', 'removed') then raise exception 'Check-in não encontrado'; end if;
+  if r.user_id <> auth.uid() and not is_admin(r.group_id) then raise exception 'Só quem fez o check-in pode editar'; end if;
+  select coalesce(array_agg(left(trim(n), 60)), '{}') into v
+    from unnest(coalesce(p_names, '{}')) as n where length(trim(n)) > 0;
+  if cardinality(v) > greatest(r.guests, 0) then raise exception 'Mais nomes do que convidados neste check-in'; end if;
+  update posts set guest_names = v where id = p_post;
+  return v;
+end $$;
+revoke execute on function public.set_guest_names(uuid, text[]) from public, anon;
+grant execute on function public.set_guest_names(uuid, text[]) to authenticated;
+
+-- mural de pedidos de oração
+create table if not exists public.prayer_requests (
+  id          bigint generated always as identity primary key,
+  group_id    uuid not null references public.groups(id) on delete cascade,
+  user_id     uuid not null references public.profiles(id) on delete cascade,
+  body        text not null check (length(trim(body)) between 3 and 400),
+  answered_at timestamptz,
+  created_at  timestamptz not null default now()
+);
+create index if not exists prayer_requests_group on public.prayer_requests (group_id, created_at desc);
+
+create table if not exists public.prayer_amens (
+  request_id bigint not null references public.prayer_requests(id) on delete cascade,
+  group_id   uuid not null references public.groups(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (request_id, user_id)
+);
+create index if not exists prayer_amens_group on public.prayer_amens (group_id);
+
+alter table public.prayer_requests enable row level security;
+alter table public.prayer_amens    enable row level security;
+
+create or replace function public._prayer_in_group(p bigint, g uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (select 1 from prayer_requests where id = p and group_id = g);
+$$;
+revoke execute on function public._prayer_in_group(bigint, uuid) from anon;
+
+drop policy if exists prayers_select on public.prayer_requests;
+create policy prayers_select on public.prayer_requests for select to authenticated using (is_member(group_id));
+drop policy if exists prayers_insert on public.prayer_requests;
+create policy prayers_insert on public.prayer_requests for insert to authenticated
+  with check (user_id = auth.uid() and is_member(group_id) and answered_at is null);
+drop policy if exists prayers_update on public.prayer_requests;
+create policy prayers_update on public.prayer_requests for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists prayers_delete on public.prayer_requests;
+create policy prayers_delete on public.prayer_requests for delete to authenticated
+  using (user_id = auth.uid() or is_admin(group_id));
+revoke update on public.prayer_requests from authenticated;
+grant update (answered_at) on public.prayer_requests to authenticated;
+
+drop policy if exists amens_select on public.prayer_amens;
+create policy amens_select on public.prayer_amens for select to authenticated using (is_member(group_id));
+drop policy if exists amens_insert on public.prayer_amens;
+create policy amens_insert on public.prayer_amens for insert to authenticated
+  with check (user_id = auth.uid() and is_member(group_id) and _prayer_in_group(request_id, group_id));
+drop policy if exists amens_delete on public.prayer_amens;
+create policy amens_delete on public.prayer_amens for delete to authenticated using (user_id = auth.uid());
+revoke update on public.prayer_amens from authenticated;
+
+-- novos tipos na central
+alter table public.notifications drop constraint if exists notifications_kind_check;
+alter table public.notifications add constraint notifications_kind_check
+  check (kind in ('comment', 'digest', 'reminder', 'manual', 'nudge', 'recap', 'prayer'));
+
+-- alguém orou pelo seu pedido: avisa na central
+create or replace function public.notify_amen()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_owner uuid; v_name text; v_body text;
+begin
+  select user_id, body into v_owner, v_body from prayer_requests where id = new.request_id;
+  if v_owner is null or v_owner = new.user_id then return new; end if;
+  select split_part(trim(name), ' ', 1) into v_name from profiles where id = new.user_id;
+  insert into notifications (user_id, group_id, kind, title, body, url, actor_id)
+  values (v_owner, new.group_id, 'prayer', coalesce(v_name, 'Alguém') || ' orou pelo seu pedido 🙏',
+          '“' || left(v_body, 80) || case when length(v_body) > 80 then '…' else '' end || '”',
+          '/g/' || new.group_id || '/oracao', new.user_id);
+  return new;
+end $$;
+revoke execute on function public.notify_amen() from public, anon, authenticated;
+drop trigger if exists prayer_amens_notify on public.prayer_amens;
+create trigger prayer_amens_notify after insert on public.prayer_amens
+  for each row execute function public.notify_amen();
+
+do $$
+declare t text;
+begin
+  foreach t in array array['prayer_requests','prayer_amens'] loop
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    exception when duplicate_object then null;
+    end;
+  end loop;
+end $$;
+alter table public.prayer_requests replica identity full;
+alter table public.prayer_amens    replica identity full;

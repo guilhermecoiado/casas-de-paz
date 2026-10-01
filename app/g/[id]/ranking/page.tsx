@@ -1,12 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Crown } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { Avatar } from '@/components/ui';
 import { MemberSheet } from '@/components/MemberSheet';
 import { rankCompare, type UserStats } from '@/lib/game';
 import { REWARDS, isUnlocked } from '@/lib/rewards';
+import { Highlights } from '@/components/Highlights';
 
 const METRICS: { id: keyof UserStats; label: string; unit: string }[] = [
   { id: 'points', label: 'Pontos', unit: 'pts' },
@@ -14,11 +16,13 @@ const METRICS: { id: keyof UserStats; label: string; unit: string }[] = [
   { id: 'checkins', label: 'Check-ins', unit: '' },
   { id: 'guests', label: 'Convidados', unit: '' },
   { id: 'evangelism', label: 'Evangelismo', unit: '' },
+  { id: 'streak', label: '🔥 Sequência', unit: 'dias' },
 ];
 
 export default function Ranking() {
   const { members, profiles, stats, look, me, group, progress } = useGroup();
   const [metric, setMetric] = useState<keyof UserStats>('points');
+  const [tab, setTab] = useState<'rank' | 'highlights'>(useSearchParams()?.get('tab') === 'destaques' ? 'highlights' : 'rank');
   const [sel, setSel] = useState<string | null>(null);
   const m = METRICS.find((x) => x.id === metric)!;
 
@@ -48,14 +52,23 @@ export default function Ranking() {
       <header className="px-4 pt-3">
         <h1 className="font-display text-[26px] font-extrabold">Ranking</h1>
         <p className="text-sm font-bold text-[#8A6F57]">Atualiza em tempo real</p>
-        <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
-          {METRICS.map((x) => (
-            <button key={x.id} onClick={() => setMetric(x.id)} className={`chip shrink-0 !px-3.5 !py-2 !text-sm ${metric === x.id ? 'bg-ink text-white' : 'bg-white text-[#6b5643]'}`}>
-              {x.label}
-            </button>
+        <div className="mt-3 grid grid-cols-2 rounded-2xl bg-sand p-1">
+          {([['rank', 'Classificação'], ['highlights', '⭐ Destaques da semana']] as const).map(([id, label]) => (
+            <button key={id} onClick={() => setTab(id)} className={`rounded-xl py-2 text-sm font-extrabold transition ${tab === id ? 'bg-white text-ink shadow-sm' : 'text-[#8A6F57]'}`}>{label}</button>
           ))}
         </div>
+        {tab === 'rank' && (
+          <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
+            {METRICS.map((x) => (
+              <button key={x.id} onClick={() => setMetric(x.id)} className={`chip shrink-0 !px-3.5 !py-2 !text-sm ${metric === x.id ? 'bg-ink text-white' : 'bg-white text-[#6b5643]'}`}>
+                {x.label}
+              </button>
+            ))}
+          </div>
+        )}
       </header>
+
+      {tab === 'highlights' ? <Highlights onSelect={setSel} /> : <>
 
       {/* pódio */}
       <div className="mt-6 flex items-end justify-center gap-3 px-4">
@@ -96,6 +109,7 @@ export default function Ranking() {
       <p className="mx-6 mt-3 text-center text-[11px] leading-snug text-[#a8927a]">
         Em caso de empate: vence quem foi mais fiel (mais dias postando), depois quem chegou primeiro à pontuação, depois quem desbloqueou mais itens.
       </p>
+      </>}
       <MemberSheet userId={sel} onClose={() => setSel(null)} />
     </div>
   );

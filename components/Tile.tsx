@@ -3,7 +3,7 @@
 import { Check, Crown } from 'lucide-react';
 import { Avatar } from './ui';
 import { thumbOf } from '@/lib/supabase';
-import { TileFx, TileOrnaments } from './Cosmetics';
+import { StreakBadge, TileFx, TileOrnaments } from './Cosmetics';
 import type { Profile } from '@/lib/types';
 import type { UserStats } from '@/lib/game';
 import type { PathId } from '@/lib/rewards';
@@ -77,7 +77,8 @@ export function MemberTile({
       {look.tileFrame && <div className={`pointer-events-none absolute inset-0 z-[2] rounded-[22px] ${look.tileFrame}`} />}
       <TileOrnaments frame={look.tileFrame} />
 
-      <div className={`absolute right-2 top-2 z-[3] ${compact ? 'origin-top-right scale-75' : ''}`}>
+      <div className={`absolute right-2 top-2 z-[3] flex items-center gap-1 ${compact ? 'origin-top-right scale-75' : ''}`}>
+        {!forcePosted && <StreakBadge streak={stats?.streak ?? 0} postedToday={!!stats?.postedToday} />}
         {posted ? (
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-olive text-white shadow"><Check size={14} strokeWidth={3} /></span>
         ) : (

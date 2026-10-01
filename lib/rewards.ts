@@ -14,7 +14,7 @@ import type { Group, Member } from './types';
 
 export type RewardKind = 'title' | 'avatar_frame' | 'tile_color' | 'tile_frame' | 'tile_anim' | 'phrase';
 export type PathId = 'semeador' | 'pescador' | 'mensageiro' | 'reino';
-export type AchStat = 'checkins' | 'guests' | 'evangelism' | 'days' | 'polls' | 'snacks' | 'groupPhotos';
+export type AchStat = 'checkins' | 'guests' | 'evangelism' | 'days' | 'polls' | 'snacks' | 'groupPhotos' | 'bestStreak';
 
 export interface Reward {
   id: string;
@@ -97,6 +97,12 @@ export const REWARDS: Reward[] = [
   { id: 't-guardiao', kind: 'title', name: 'Guardião da Mesa', icon: '🍞', req: { stat: 'snacks', n: 2, label: 'Ajude no lanche 2 vezes' } },
   { id: 'tc-mana', kind: 'tile_color', name: 'Cor Maná', icon: '🍯', req: { stat: 'snacks', n: 3, label: 'Ajude no lanche 3 vezes' } },
   { id: 't-comunhao', kind: 'title', name: 'Construtor de Comunhão', icon: '🤝', req: { stat: 'groupPhotos', n: 3, label: '3 fotos em grupo' } },
+  // 🔥 intensivo: sequência de dias seguidos postando (exclusivos, só por constância)
+  { id: 't-intensivo', kind: 'title', name: 'Intensivo', icon: '🔥', req: { stat: 'bestStreak', n: 7, label: 'Complete o intensivo: 7 dias seguidos' } },
+  { id: 'ta-intensivo', kind: 'tile_anim', name: 'Fogo do Intensivo', icon: '🔥', req: { stat: 'bestStreak', n: 7, label: 'Complete o intensivo: 7 dias seguidos (exclusiva)' } },
+  { id: 'af-brasa', kind: 'avatar_frame', name: 'Moldura Brasa Viva', icon: '♨️', req: { stat: 'bestStreak', n: 14, label: '14 dias seguidos' } },
+  { id: 'tc-brasa', kind: 'tile_color', name: 'Cor Brasa', icon: '🟥', req: { stat: 'bestStreak', n: 21, label: '21 dias seguidos' } },
+  { id: 't-fogo-continuo', kind: 'title', name: 'Fogo que Não se Apaga', icon: '🕯️', req: { stat: 'bestStreak', n: 28, label: '28 dias seguidos (lendário)' } },
 
   /* 🎁 Itens avulsos por pontos (intercalados com os caminhos; não são necessários para completar a evolução) */
   // Títulos
@@ -159,14 +165,14 @@ export const TEAM_PHRASES: { unlock: string; text: string }[] = [
 
 export const ACH_LABEL: Record<AchStat, string> = {
   checkins: 'check-ins', guests: 'convidados', evangelism: 'evangelismos', days: 'dias postando',
-  polls: 'enquetes', snacks: 'lanches', groupPhotos: 'fotos em grupo',
+  polls: 'enquetes', snacks: 'lanches', groupPhotos: 'fotos em grupo', bestStreak: 'dias seguidos',
 };
 
 /* --------------------------- lógica --------------------------- */
 
 export type Progress = Pick<UserStats, 'points' | AchStat>;
 
-export const emptyProgress = (): Progress => ({ points: 0, checkins: 0, guests: 0, evangelism: 0, days: 0, polls: 0, snacks: 0, groupPhotos: 0 });
+export const emptyProgress = (): Progress => ({ points: 0, checkins: 0, guests: 0, evangelism: 0, days: 0, polls: 0, snacks: 0, groupPhotos: 0, bestStreak: 0 });
 
 export const rewardThreshold = (g: Group, r: Reward) => Math.ceil((maxIndividual(g) * (r.pct ?? 0)) / 100);
 
