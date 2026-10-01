@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminClient, pushConfigError, sendToUsers } from '@/lib/push-server';
+import { adminClient, groupMemberIds, pushConfigError, saveNotifications, sendToUsers, withNotification } from '@/lib/push-server';
 import { todayIn } from '@/lib/game';
 import type { PostType } from '@/lib/types';
 
@@ -72,18 +72,24 @@ export async function GET(req: Request) {
     // 5 min de folga: o agendador roda de hora em hora e pode atrasar alguns segundos
     if (last && now - last < every - 5 * 60_000) { report.push({ group: g.name, status: 'aguardando intervalo' }); continue; }
 
-    // posts desde o último resumo (no primeiro, olha só a última janela)
+    // posts e comentários desde o último resumo (no primeiro, olha só a última janela)
     const since = new Date(last || now - every).toISOString();
-    const { data: posts, error: pe } = await db
-      .from('posts')
-      .select('user_id,type,created_at')
-      .eq('group_id', g.id)
-      .gt('created_at', since)
-      .not('type', 'in', '(adjust,poll)')
-      .not('status', 'in', '(cancelled,archived,removed)')
-      .order('created_at', { ascending: false });
-    if (pe) { report.push({ group: g.name, status: `erro: ${pe.message}` }); continue; }
-    if (!posts?.length) { report.push({ group: g.name, status: 'nenhum post novo' }); continue; }
+    const [{ data: posts, error: pe }, { data: comments, error: ce }] = await Promise.all([
+      db.from('posts')
+        .select('user_id,type,created_at')
+        .eq('group_id', g.id)
+        .gt('created_at', since)
+        .not('type', 'in', '(adjust,poll)')
+        .not('status', 'in', '(cancelled,archived,removed)')
+        .order('created_at', { ascending: false }),
+      db.from('post_comments')
+        .select('user_id,post_id,created_at,posts!inner(user_id)')
+        .eq('group_id', g.id)
+        .gt('created_at', since)
+        .order('created_at', { ascending: false }),
+    ]);
+    if (pe || ce) { report.push({ group: g.name, status: `erro: ${(pe ?? ce)!.message}` }); continue; }
+    if (!posts?.length && !comments?.length) { report.push({ group: g.name, status: 'nada novo' }); continue; }
 
     // reserva o envio (evita duplicar se duas execuções coincidirem)
     const stamp = new Date(now).toISOString();
@@ -94,34 +100,62 @@ export async function GET(req: Request) {
 
     // autores na ordem do post mais recente, com o que cada um postou
     const byUser = new Map<string, PostType[]>();
-    for (const p of posts) byUser.set(p.user_id, [...(byUser.get(p.user_id) ?? []), p.type as PostType]);
-    const [{ data: profs }, { data: members }] = await Promise.all([
-      db.from('profiles').select('id,name').in('id', Array.from(byUser.keys())),
-      db.from('group_members').select('user_id').eq('group_id', g.id),
+    for (const p of posts ?? []) byUser.set(p.user_id, [...(byUser.get(p.user_id) ?? []), p.type as PostType]);
+    // quem comentou nos posts de cada dono
+    const commentersOf = new Map<string, string[]>();
+    const commentedPost = new Map<string, string>(); // post comentado mais recente de cada dono
+    for (const c of comments ?? []) {
+      const owner = (c.posts as unknown as { user_id: string }).user_id;
+      if (owner === c.user_id) continue;
+      if (!commentedPost.has(owner)) commentedPost.set(owner, c.post_id as string);
+      const l = commentersOf.get(owner) ?? [];
+      if (!l.includes(c.user_id)) l.push(c.user_id);
+      commentersOf.set(owner, l);
+    }
+    const people = new Set([...Array.from(byUser.keys()), ...Array.from(commentersOf.values()).flat()]);
+    const [{ data: profs }, members] = await Promise.all([
+      db.from('profiles').select('id,name').in('id', Array.from(people)),
+      groupMemberIds(db, g.id),
     ]);
     const nameOf = new Map((profs ?? []).map((p) => [p.id as string, firstName(p.name as string)]));
     const authors = Array.from(byUser.keys()).filter((id) => nameOf.has(id));
 
+    const postsLine = (uid: string) => {
+      const others = authors.filter((a) => a !== uid);
+      if (!others.length) return null;
+      if (others.length === 1) {
+        const types = byUser.get(others[0])!;
+        return types.length === 1 ? `${nameOf.get(others[0])} ${DID[types[0]] ?? 'postou'}` : `${nameOf.get(others[0])} fez ${types.length} posts`;
+      }
+      return `${joinNames(others.map((a) => nameOf.get(a)!))} postaram`;
+    };
+    const commentsLine = (uid: string) => {
+      const who = (commentersOf.get(uid) ?? []).filter((c) => nameOf.has(c));
+      if (!who.length) return null;
+      return `${joinNames(who.map((c) => nameOf.get(c)!))} ${who.length === 1 ? 'comentou' : 'comentaram'} no seu post`;
+    };
+
     const title = `Casa de Paz · ${g.name}`;
+    const feed = `/g/${g.id}/feed`;
     try {
-      const r = await sendToUsers(db, (members ?? []).map((m) => m.user_id as string), (uid) => {
-        const others = authors.filter((a) => a !== uid);
-        if (!others.length) return null;
-        let body: string;
-        if (others.length === 1) {
-          const types = byUser.get(others[0])!;
-          body = types.length === 1
-            ? `${nameOf.get(others[0])} ${DID[types[0]] ?? 'postou'} — venha conferir!`
-            : `${nameOf.get(others[0])} fez ${types.length} posts — venha conferir!`;
-        } else {
-          body = `${joinNames(others.map((a) => nameOf.get(a)!))} postaram — venha conferir!`;
-        }
-        return { title, body, url: `/g/${g.id}/feed`, tag: `digest-${g.id}` };
+      // na central fica só o resumo dos posts (cada comentário já tem a sua notificação)
+      const nids = await saveNotifications(db, members.flatMap((u) => {
+        const pl = postsLine(u);
+        return pl ? [{ user_id: u, group_id: g.id, kind: 'digest' as const, title: 'Novidades no feed', body: `${pl} — venha conferir!`, url: feed }] : [];
+      }));
+      const r = await sendToUsers(db, members, (uid) => {
+        const parts = [commentsLine(uid), postsLine(uid)].filter(Boolean) as string[];
+        if (!parts.length) return null;
+        // só comentários: abre direto no post comentado
+        const url = nids.get(uid) ? withNotification(feed, nids.get(uid)) : `${feed}?post=${commentedPost.get(uid)}`;
+        return { title, body: `${parts.join(' · ')} — venha conferir!`, url, tag: `digest-${g.id}` };
       });
       report.push({ group: g.name, status: 'enviado', devices: r.devices });
     } catch (e) {
       report.push({ group: g.name, status: `erro: ${(e as Error).message}` });
     }
   }
+  // a central guarda só os últimos 30 dias
+  await db.from('notifications').delete().lt('created_at', new Date(now - 30 * 86400_000).toISOString());
   return NextResponse.json({ ok: true, report });
 }

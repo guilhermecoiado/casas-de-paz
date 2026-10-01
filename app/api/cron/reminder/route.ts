@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { REMINDER_BODY, adminClient, pushConfigError, sendToGroup } from '@/lib/push-server';
+import { REMINDER_BODY, adminClient, groupMemberIds, pushConfigError, saveNotifications, sendToUsers, withNotification } from '@/lib/push-server';
 import { todayIn, weekdayOf } from '@/lib/game';
 
 export const runtime = 'nodejs';
@@ -39,7 +39,10 @@ export async function GET(req: Request) {
     if (!logId) { report.push({ group: g.name, status: 'já enviado hoje' }); continue; }
 
     try {
-      const r = await sendToGroup(db, g.id, { title, body: REMINDER_BODY, url: `/g/${g.id}`, tag: `reminder-${today}` });
+      const ids = await groupMemberIds(db, g.id);
+      const url = `/g/${g.id}`;
+      const nids = await saveNotifications(db, ids.map((u) => ({ user_id: u, group_id: g.id, kind: 'reminder' as const, title: 'Hoje tem Casa de Paz! 🏠', body: REMINDER_BODY, url })));
+      const r = await sendToUsers(db, ids, (u) => ({ title, body: REMINDER_BODY, url: withNotification(url, nids.get(u)), tag: `reminder-${today}` }));
       await db.from('push_log').update({ recipients: r.recipients, devices: r.devices }).eq('id', logId);
       report.push({ group: g.name, status: 'enviado', devices: r.devices });
     } catch (e) {

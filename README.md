@@ -41,6 +41,7 @@ O app abre em tela cheia, com ícone próprio e tela de abertura.
 - **Lembrete automático:** no dia da Casa de Paz, às **8h (horário de Brasília)**, todos recebem *"Você tem encontro marcado hoje na casa de paz, esperamos vocês!"*. Ele vai no máximo 1 vez por dia por grupo, só dentro do período configurado. O adm liga e desliga o lembrete no painel ⚙️ → Notificações.
 - **Avisos manuais:** no painel ⚙️ → Notificações, o adm escreve o título e a mensagem (ou usa um modelo pronto) e envia para o grupo todo. O limite é 10 por dia. O histórico mostra quantos aparelhos receberam.
 - **Resumo de posts:** de hora em hora o app confere o que foi postado e manda, no máximo a cada N horas (o adm escolhe 1, 2, 3, 4 ou 6h no painel ⚙️ → Notificações), algo como *"Ana, Beto e mais 3 postaram — venha conferir!"*. Cada pessoa só vê os nomes dos outros, e nada é enviado entre 22h e 8h ou se ninguém postou.
+- **Central de notificações:** o sino no topo do início mostra quantas notificações estão pendentes (o número também aparece no ícone do app, quando o celular permite). Lá ficam os comentários nos seus posts, os resumos do feed, o lembrete do encontro e os avisos do adm. Tocar abre, e o X ou "Limpar todas" apaga. Abrir pelo push também tira a notificação das pendentes.
 - **Mudar o horário do lembrete:** edite `vercel.json` (`"0 11 * * *"` = 11h UTC = 8h em Brasília) e faça um novo deploy. No plano gratuito da Vercel, o agendamento roda 1 vez por dia e pode atrasar até 1 hora.
 
 ### Rodar localmente
@@ -133,6 +134,9 @@ A moldura Casa de Paz já vem liberada desde o início. Depois, conforme a equip
 
 ### Moldura e Instagram
 Depois de cada post com foto, o app gera a imagem com a moldura "Casa de Paz" em formato 4:5 e abre o menu de compartilhamento do celular, onde aparece o Instagram (Stories ou Feed). Qualquer foto do Feed também pode ser compartilhada com moldura pelo botão **Moldura**.
+
+### Reações e comentários
+No feed, cada post tem reações rápidas (🙏 ❤️ 🔥 🙌 😂) e comentários com atalhos de emoji. Não valem pontos. Cada pessoa apaga os próprios comentários, e o adm apaga qualquer um. O dono do post recebe o aviso na central e no próximo resumo de push.
 
 ### Administrador
 - **Painel ⚙️:** datas de início e fim, dia da Casa de Paz, postagem todos os dias ou só em dias escolhidos, limites semanais, pontos de cada ação, enquetes, foto de fundo, membros e senha do grupo.

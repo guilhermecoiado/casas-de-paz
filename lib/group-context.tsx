@@ -5,7 +5,7 @@ import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { computeStats, groupUnlocked, maxGroup, maxIndividual, todayIn, type Stats } from './game';
 import { emptyProgress, equipped, type Look, type Progress } from './rewards';
-import type { Group, Member, Poll, PollAnswer, Post, Profile, Vote } from './types';
+import type { AppNotification, Comment, Group, Member, Poll, PollAnswer, Post, Profile, Reaction, Vote } from './types';
 
 export interface GroupData {
   group: Group;
@@ -15,6 +15,11 @@ export interface GroupData {
   votes: Vote[];
   polls: Poll[];
   answers: PollAnswer[];
+  reactions: Reaction[];
+  comments: Comment[];
+  notifications: AppNotification[];
+  unread: number;
+  setNotifications: React.Dispatch<React.SetStateAction<AppNotification[]>>;
   today: string;
   stats: Stats;
   unlocked: Set<string>;
@@ -69,6 +74,9 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
   const [votes, setVotes] = useState<Vote[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [answers, setAnswers] = useState<PollAnswer[]>([]);
+  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [today, setToday] = useState('');
 
   const reloadProfiles = useCallback(async () => {
@@ -82,13 +90,16 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
   }, [groupId]);
 
   const reload = useCallback(async () => {
-    const [g, m, p, v, pl, a] = await Promise.all([
+    const [g, m, p, v, pl, a, rx, cm, nt] = await Promise.all([
       supabase.from('groups').select('*').eq('id', groupId).maybeSingle(),
       supabase.from('group_members').select('*').eq('group_id', groupId),
       supabase.from('posts').select('*').eq('group_id', groupId).not('status', 'in', '(archived,removed)').order('created_at', { ascending: false }).limit(5000),
       supabase.from('post_votes').select('*').eq('group_id', groupId),
       supabase.from('polls').select('*').eq('group_id', groupId).eq('archived', false).order('created_at', { ascending: false }),
       supabase.from('poll_answers').select('*').eq('group_id', groupId),
+      supabase.from('post_reactions').select('*').eq('group_id', groupId),
+      supabase.from('post_comments').select('*').eq('group_id', groupId).order('created_at').limit(5000),
+      supabase.from('notifications').select('*').eq('group_id', groupId).eq('user_id', userId).order('created_at', { ascending: false }).limit(60),
     ]);
     if (!g.data) return onMissing();
     setGroup(g.data as Group);
@@ -97,8 +108,11 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
     setVotes((v.data ?? []) as Vote[]);
     setPolls((pl.data ?? []) as Poll[]);
     setAnswers((a.data ?? []) as PollAnswer[]);
+    setReactions((rx.data ?? []) as Reaction[]);
+    setComments((cm.data ?? []) as Comment[]);
+    setNotifications((nt.data ?? []) as AppNotification[]);
     await reloadProfiles();
-  }, [groupId, onMissing, reloadProfiles]);
+  }, [groupId, userId, onMissing, reloadProfiles]);
 
   useEffect(() => {
     reload();
@@ -126,6 +140,15 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'groups', filter: `id=eq.${groupId}` }, (pl) =>
         setGroup(pl.new as Group))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_reactions', filter: f }, (pl) =>
+        setReactions((l) => applyChange(l, pl, (r) => `${r.post_id}:${r.user_id}:${r.emoji}`)))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_comments', filter: f }, (pl) =>
+        setComments((l) => applyChange(l, pl, (r) => String(r.id))))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, (pl) => {
+        const row = (pl.new ?? {}) as AppNotification;
+        if (pl.eventType !== 'DELETE' && row.group_id !== groupId) return;
+        setNotifications((l) => applyChange(l, pl, (r) => String(r.id), true));
+      })
       .subscribe();
 
     // ao voltar para o app (PWA em segundo plano), sincroniza tudo
@@ -136,6 +159,16 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [groupId, userId, reload, reloadProfiles, onMissing]);
+
+  // contador no ícone do app (Android/iOS instalados)
+  const unread = useMemo(() => notifications.filter((n) => !n.read_at).length, [notifications]);
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    try {
+      if (unread > 0) nav.setAppBadge?.(unread)?.catch(() => {});
+      else nav.clearAppBadge?.()?.catch(() => {});
+    } catch { /* sem suporte */ }
+  }, [unread]);
 
   // "hoje" no fuso do grupo, atualizado a cada minuto
   useEffect(() => {
@@ -151,7 +184,7 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
     const stats = computeStats(group, members, posts, today);
     const memberMap = new Map(members.map((m) => [m.user_id, m]));
     return {
-      group, members, profiles, posts, votes, polls, answers, today, stats,
+      group, members, profiles, posts, votes, polls, answers, reactions, comments, notifications, unread, setNotifications, today, stats,
       unlocked: groupUnlocked(maxGroup(group, members.length), stats.groupPoints),
       isAdmin: group.admin_id === userId,
       me: userId,
@@ -162,7 +195,7 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
       progress: (uid: string) => stats.byUser[uid] ?? emptyProgress(),
       reload, reloadProfiles,
     };
-  }, [group, members, profiles, posts, votes, polls, answers, today, userId, reload, reloadProfiles]);
+  }, [group, members, profiles, posts, votes, polls, answers, reactions, comments, notifications, unread, today, userId, reload, reloadProfiles]);
 
   if (!value) return <>{fallback}</>;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

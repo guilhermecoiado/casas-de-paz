@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useGroup } from '@/lib/group-context';
 import { PostCard } from '@/components/PostCard';
 
@@ -16,6 +17,14 @@ export default function Feed() {
   const { posts, me } = useGroup();
   const [f, setF] = useState<(typeof FILTERS)[number]['id']>('all');
   const [limit, setLimit] = useState(20);
+  // vindo de uma notificação: abre o post certo com os comentários
+  const target = useSearchParams()?.get('post') ?? null;
+  const [focus, setFocus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!target) return;
+    setF('all');
+    setFocus(target);
+  }, [target]);
 
   const list = useMemo(
     () =>
@@ -29,6 +38,15 @@ export default function Feed() {
       }),
     [posts, f, me],
   );
+  useEffect(() => {
+    if (!focus) return;
+    const i = list.findIndex((p) => p.id === focus);
+    if (i < 0) return;
+    if (i >= limit) { setLimit(i + 5); return; }
+    const t = setTimeout(() => document.getElementById(`post-${focus}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    const t2 = setTimeout(() => setFocus(null), 4000);
+    return () => { clearTimeout(t); clearTimeout(t2); };
+  }, [focus, list, limit]);
   const votingCount = posts.filter((p) => p.status === 'voting').length;
 
   return (
@@ -49,7 +67,7 @@ export default function Feed() {
         </div>
       </header>
       <div className="space-y-4 px-4 pt-2">
-        {list.slice(0, limit).map((p) => <PostCard key={p.id} post={p} />)}
+        {list.slice(0, limit).map((p) => <PostCard key={p.id} post={p} highlight={focus === p.id} openComments={target === p.id && focus === p.id} />)}
         {list.length === 0 && <p className="py-16 text-center font-bold text-[#a8927a]">Nada por aqui ainda.</p>}
         {list.length > limit && (
           <button className="btn-soft w-full" onClick={() => setLimit((l) => l + 20)}>Carregar mais</button>

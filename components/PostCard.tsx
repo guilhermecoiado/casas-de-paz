@@ -6,12 +6,13 @@ import { useRemovePost } from './useRemovePost';
 import { useGroup } from '@/lib/group-context';
 import { TYPE_LABEL, formatDate, timeAgo } from '@/lib/game';
 import { ShareSheet } from './ShareSheet';
+import { PostSocial } from './PostSocial';
 import { errMsg, supabase } from '@/lib/supabase';
 import { Avatar, Sheet, Spinner } from './ui';
 import { useToast } from './Providers';
 import type { Post } from '@/lib/types';
 
-export function PostCard({ post }: { post: Post }) {
+export function PostCard({ post, openComments = false, highlight = false }: { post: Post; openComments?: boolean; highlight?: boolean }) {
   const { profiles, look, isAdmin, me, votes, members, group } = useGroup();
   const toast = useToast();
   const [menu, setMenu] = useState(false);
@@ -38,7 +39,7 @@ export function PostCard({ post }: { post: Post }) {
   };
 
   return (
-    <article className={`card overflow-hidden ${cancelled ? 'opacity-60' : ''}`}>
+    <article id={`post-${post.id}`} className={`card scroll-mt-28 overflow-hidden transition-shadow ${cancelled ? 'opacity-60' : ''} ${highlight ? 'ring-4 ring-amber/60' : ''}`}>
       <div className="flex items-center gap-3 p-3">
         <Avatar url={author?.avatar_url} name={author?.name} size={40} frame={l.avatarFrame} />
         <div className="min-w-0 flex-1">
@@ -83,6 +84,12 @@ export function PostCard({ post }: { post: Post }) {
                 <button onClick={() => vote(false)} className={`btn !min-h-[40px] !text-sm ${myVote?.keep === false ? 'bg-[#7a2618] text-white' : 'bg-white'}`}><ThumbsDown size={16} /> Cancelar</button>
               </div>
             )}
+          </div>
+        )}
+
+        {post.type !== 'poll' && post.type !== 'adjust' && (
+          <div className="border-t border-sand/70 pt-2.5">
+            <PostSocial post={post} autoOpen={openComments} />
           </div>
         )}
       </div>

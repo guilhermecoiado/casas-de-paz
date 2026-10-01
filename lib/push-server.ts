@@ -81,3 +81,32 @@ export async function sendToUsers(db: SupabaseClient, ids: string[], payloadFor:
   if (gone.length) await db.from('push_subscriptions').delete().in('endpoint', gone);
   return { recipients: delivered.size, devices: ok, delivered: ok };
 }
+
+export interface NotificationRow {
+  user_id: string;
+  group_id: string;
+  kind: 'comment' | 'digest' | 'reminder' | 'manual';
+  title: string;
+  body: string;
+  url: string;
+  actor_id?: string | null;
+}
+
+/** Guarda na central de notificações de cada pessoa. Devolve o id criado por usuário. */
+export async function saveNotifications(db: SupabaseClient, rows: NotificationRow[]) {
+  const ids = new Map<string, number>();
+  if (!rows.length) return ids;
+  const { data, error } = await db.from('notifications').insert(rows).select('id,user_id');
+  if (error) { console.error('notifications', error.message); return ids; }
+  (data ?? []).forEach((r) => ids.set(r.user_id as string, r.id as number));
+  return ids;
+}
+
+/** Acrescenta ?n=<id> para a notificação sair das pendentes quando o push for aberto. */
+export const withNotification = (url: string, id?: number) => (id ? `${url}${url.includes('?') ? '&' : '?'}n=${id}` : url);
+
+export async function groupMemberIds(db: SupabaseClient, groupId: string) {
+  const { data, error } = await db.from('group_members').select('user_id').eq('group_id', groupId);
+  if (error) throw error;
+  return (data ?? []).map((m) => m.user_id as string);
+}

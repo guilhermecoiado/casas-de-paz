@@ -894,3 +894,117 @@ alter table public.groups alter column points set default
 alter table public.groups add column if not exists digest_enabled boolean not null default true;
 alter table public.groups add column if not exists digest_hours int not null default 3;
 alter table public.groups add column if not exists last_digest_at timestamptz;
+
+-- =====================================================================
+-- REAÇÕES, COMENTÁRIOS E CENTRAL DE NOTIFICAÇÕES
+-- =====================================================================
+create table if not exists public.post_reactions (
+  post_id    uuid not null references public.posts(id) on delete cascade,
+  group_id   uuid not null references public.groups(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  emoji      text not null check (emoji in ('🙏', '❤️', '🔥', '🙌', '😂')),
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id, emoji)
+);
+create index if not exists post_reactions_group on public.post_reactions (group_id);
+
+create table if not exists public.post_comments (
+  id         bigint generated always as identity primary key,
+  post_id    uuid not null references public.posts(id) on delete cascade,
+  group_id   uuid not null references public.groups(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  body       text not null check (length(trim(body)) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+create index if not exists post_comments_post on public.post_comments (post_id, created_at);
+create index if not exists post_comments_group on public.post_comments (group_id, created_at);
+
+create table if not exists public.notifications (
+  id         bigint generated always as identity primary key,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  group_id   uuid not null references public.groups(id) on delete cascade,
+  kind       text not null check (kind in ('comment', 'digest', 'reminder', 'manual')),
+  title      text not null,
+  body       text not null,
+  url        text not null,
+  actor_id   uuid references public.profiles(id) on delete set null,
+  post_id    uuid,
+  read_at    timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists notifications_user on public.notifications (user_id, group_id, created_at desc);
+
+alter table public.post_reactions enable row level security;
+alter table public.post_comments  enable row level security;
+alter table public.notifications  enable row level security;
+
+-- o post precisa ser do mesmo grupo e estar visível
+create or replace function public._post_in_group(p uuid, g uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (select 1 from posts where id = p and group_id = g and status not in ('archived', 'removed'));
+$$;
+revoke execute on function public._post_in_group(uuid, uuid) from anon;
+
+drop policy if exists reactions_select on public.post_reactions;
+create policy reactions_select on public.post_reactions for select to authenticated using (is_member(group_id));
+drop policy if exists reactions_insert on public.post_reactions;
+create policy reactions_insert on public.post_reactions for insert to authenticated
+  with check (user_id = auth.uid() and is_member(group_id) and _post_in_group(post_id, group_id));
+drop policy if exists reactions_delete on public.post_reactions;
+create policy reactions_delete on public.post_reactions for delete to authenticated using (user_id = auth.uid());
+
+drop policy if exists comments_select on public.post_comments;
+create policy comments_select on public.post_comments for select to authenticated using (is_member(group_id));
+drop policy if exists comments_insert on public.post_comments;
+create policy comments_insert on public.post_comments for insert to authenticated
+  with check (user_id = auth.uid() and is_member(group_id) and _post_in_group(post_id, group_id));
+drop policy if exists comments_delete on public.post_comments;
+create policy comments_delete on public.post_comments for delete to authenticated
+  using (user_id = auth.uid() or is_admin(group_id));
+revoke update on public.post_comments from authenticated;
+
+-- cada um vê, marca como lida e limpa só as próprias notificações
+drop policy if exists notifications_select on public.notifications;
+create policy notifications_select on public.notifications for select to authenticated using (user_id = auth.uid());
+drop policy if exists notifications_update on public.notifications;
+create policy notifications_update on public.notifications for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists notifications_delete on public.notifications;
+create policy notifications_delete on public.notifications for delete to authenticated using (user_id = auth.uid());
+revoke insert, update on public.notifications from authenticated, anon;
+grant update (read_at) on public.notifications to authenticated;
+
+-- comentário novo: avisa o dono do post na central (o push vai no resumo)
+create or replace function public.notify_comment()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_owner uuid; v_name text; v_excerpt text;
+begin
+  select user_id into v_owner from posts where id = new.post_id;
+  if v_owner is null or v_owner = new.user_id then return new; end if;
+  select split_part(trim(name), ' ', 1) into v_name from profiles where id = new.user_id;
+  v_excerpt := left(regexp_replace(trim(new.body), '\s+', ' ', 'g'), 80);
+  if length(trim(new.body)) > 80 then v_excerpt := v_excerpt || '…'; end if;
+  insert into notifications (user_id, group_id, kind, title, body, url, actor_id, post_id)
+  values (v_owner, new.group_id, 'comment', coalesce(v_name, 'Alguém') || ' comentou no seu post',
+          '“' || v_excerpt || '”', '/g/' || new.group_id || '/feed?post=' || new.post_id, new.user_id, new.post_id);
+  return new;
+end $$;
+revoke execute on function public.notify_comment() from public, anon, authenticated;
+drop trigger if exists post_comments_notify on public.post_comments;
+create trigger post_comments_notify after insert on public.post_comments
+  for each row execute function public.notify_comment();
+
+do $$
+declare t text;
+begin
+  foreach t in array array['post_reactions','post_comments','notifications'] loop
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    exception when duplicate_object then null;
+    end;
+  end loop;
+end $$;
+-- DELETE em tempo real precisa da linha antiga completa
+alter table public.post_reactions replica identity full;
+alter table public.post_comments  replica identity full;
+alter table public.notifications  replica identity full;

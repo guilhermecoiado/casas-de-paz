@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Home, Images, Plus, Trophy, Heart } from 'lucide-react';
 import { useAuth } from '@/components/Providers';
 import { FullLoader } from '@/components/ui';
-import { GroupProvider } from '@/lib/group-context';
+import { GroupProvider, useGroup } from '@/lib/group-context';
+import { supabase } from '@/lib/supabase';
 import { UnlockWatcher } from '@/components/UnlockWatcher';
 
 export default function GroupLayout({ children }: { children: React.ReactNode }) {
@@ -34,6 +35,7 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
       <div className="mx-auto min-h-[100dvh] max-w-md pb-nav">{children}</div>
       <BottomNav id={id} />
       <UnlockWatcher />
+      <MarkOpened />
     </GroupProvider>
   );
 }
@@ -86,4 +88,23 @@ function BottomNav({ id }: { id: string }) {
       </div>
     </nav>
   );
+}
+
+/** Abriu o app tocando numa notificação push: ela sai da lista de pendentes. */
+function MarkOpened() {
+  const params = useSearchParams();
+  const path = usePathname();
+  const { notifications, setNotifications } = useGroup();
+  const n = params?.get('n');
+  const post = params?.get('post');
+  useEffect(() => {
+    const ids = notifications
+      .filter((x) => !x.read_at && ((n && String(x.id) === n) || (post && x.kind === 'comment' && x.post_id === post)))
+      .map((x) => x.id);
+    if (!ids.length) return;
+    const now = new Date().toISOString();
+    setNotifications((l) => l.map((x) => (ids.includes(x.id) ? { ...x, read_at: now } : x)));
+    supabase.from('notifications').update({ read_at: now }).in('id', ids).then(() => {});
+  }, [n, post, path, notifications, setNotifications]);
+  return null;
 }

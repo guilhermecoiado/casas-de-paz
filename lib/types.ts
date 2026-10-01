@@ -143,3 +143,37 @@ export interface PushLog {
   local_date: string;
   created_at: string;
 }
+
+export const REACTIONS = ['🙏', '❤️', '🔥', '🙌', '😂'] as const;
+export type ReactionEmoji = (typeof REACTIONS)[number];
+
+export interface Reaction {
+  post_id: string;
+  group_id: string;
+  user_id: string;
+  emoji: ReactionEmoji;
+  created_at: string;
+}
+
+export interface Comment {
+  id: number;
+  post_id: string;
+  group_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+}
+
+export interface AppNotification {
+  id: number;
+  user_id: string;
+  group_id: string;
+  kind: 'comment' | 'digest' | 'reminder' | 'manual';
+  title: string;
+  body: string;
+  url: string;
+  actor_id: string | null;
+  post_id: string | null;
+  read_at: string | null;
+  created_at: string;
+}

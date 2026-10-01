@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminClient, pushConfigError, sendToGroup } from '@/lib/push-server';
+import { adminClient, groupMemberIds, pushConfigError, saveNotifications, sendToUsers, withNotification } from '@/lib/push-server';
 import { todayIn } from '@/lib/game';
 
 export const runtime = 'nodejs';
@@ -32,7 +32,11 @@ export async function POST(req: Request) {
     .eq('group_id', group.id).eq('kind', 'manual').eq('local_date', today);
   if ((count ?? 0) >= 10) return NextResponse.json({ error: 'Limite de 10 avisos por dia atingido' }, { status: 429 });
 
-  const result = await sendToGroup(db, group.id, { title, body, url: `/g/${group.id}`, tag: `manual-${Date.now()}` });
+  const ids = await groupMemberIds(db, group.id);
+  const url = `/g/${group.id}`;
+  const nids = await saveNotifications(db, ids.map((u) => ({ user_id: u, group_id: group.id, kind: 'manual' as const, title, body, url, actor_id: auth.user.id })));
+  const tag = `manual-${Date.now()}`;
+  const result = await sendToUsers(db, ids, (u) => ({ title, body, url: withNotification(url, nids.get(u)), tag }));
   await db.from('push_log').insert({
     group_id: group.id, kind: 'manual', title, body, sent_by: auth.user.id,
     recipients: result.recipients, devices: result.devices, local_date: today,

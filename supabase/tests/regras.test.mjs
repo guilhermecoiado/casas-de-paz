@@ -1,5 +1,3 @@
-// Testes das regras do banco. Rodar contra um Postgres local vazio na porta 5499
-// com o schema.sql na mesma pasta: node regras.test.mjs
 import pg from 'pg';
 import { readFileSync } from 'node:fs';
 
@@ -170,6 +168,35 @@ ok((await as('zeca', `select * from submit_post($1,'prayer',null,null)`, [gid]))
 ok((await as('ana', `select claim_reminder($1, current_date, 't', 'b')`, [gid])).error, 'membro não dispara lembrete');
 ok(!(await as('bia', `select save_push_subscription('https://push/1','k','a','Android')`)).error, 'salva inscrição push');
 ok(!(await as('bia', `insert into messages (group_id,user_id,body) values ($1,$2,'oi')`, [gid, users.bia])).error, 'membro envia mensagem');
+
+
+// ---- reações, comentários e central de notificações ----
+let spid = (await as('bia', `select id from posts where group_id=$1 and user_id=$2 and status in ('ok','voting') limit 1`, [gid, users.bia]))[0]?.id;
+if (!spid) { const rr = await as('bia', `select * from submit_post($1,'devotional',null,'TSD de hoje')`, [gid]); spid = rr[0]?.id ?? rr[0]?.post_id; console.log('post novo', JSON.stringify(rr).slice(0,200)); }
+ok(!(await as('caio', `insert into post_reactions (post_id,group_id,user_id,emoji) values ($1,$2,$3,'🙏')`, [spid, gid, users.caio])).error, 'membro reage');
+ok((await as('caio', `insert into post_reactions (post_id,group_id,user_id,emoji) values ($1,$2,$3,'🙏')`, [spid, gid, users.caio])).error, 'mesma reação 2x bloqueada');
+ok((await as('caio', `insert into post_reactions (post_id,group_id,user_id,emoji) values ($1,$2,$3,'💩')`, [spid, gid, users.caio])).error, 'emoji fora da lista bloqueado');
+ok((await as('caio', `insert into post_reactions (post_id,group_id,user_id,emoji) values ($1,$2,$3,'🔥')`, [spid, gid, users.bia])).error, 'não reage em nome de outro');
+ok((await as('zeca', `insert into post_reactions (post_id,group_id,user_id,emoji) values ($1,$2,$3,'🔥')`, [spid, gid, users.zeca])).error, 'não-membro não reage');
+ok((await as('bia', `delete from post_reactions where post_id=$1 returning 1`, [spid])).length === 0, 'não remove reação dos outros');
+ok((await as('caio', `delete from post_reactions where post_id=$1 returning 1`, [spid])).length === 1, 'remove a própria reação');
+
+const cm = await as('caio', `insert into post_comments (post_id,group_id,user_id,body) values ($1,$2,$3,'Amém 🙏 que benção!') returning id`, [spid, gid, users.caio]);
+ok(cm.length === 1, 'membro comenta');
+ok((await as('caio', `insert into post_comments (post_id,group_id,user_id,body) values ($1,$2,$3,'   ')`, [spid, gid, users.caio])).error, 'comentário vazio bloqueado');
+const nn = await as('bia', `select * from notifications`);
+ok(nn.length === 1 && nn[0].kind === 'comment' && nn[0].title === 'CAIO comentou no seu post' && nn[0].url.includes(spid), `dono recebe aviso do comentário (${nn[0]?.title})`);
+await as('bia', `insert into post_comments (post_id,group_id,user_id,body) values ($1,$2,$3,'obrigada!')`, [spid, gid, users.bia]);
+ok((await as('bia', `select * from notifications`)).length === 1, 'comentar no próprio post não gera aviso');
+ok((await as('caio', `select * from notifications`)).length === 0, 'cada um só vê as suas notificações');
+ok((await as('caio', `update notifications set read_at=now() returning 1`)).length === 0, 'não marca notificação dos outros');
+ok((await as('bia', `update notifications set read_at=now() returning 1`)).length === 1, 'marca como lida');
+ok((await as('bia', `update notifications set body='x'`)).error, 'não altera o texto da notificação');
+ok((await as('bia', `insert into notifications (user_id,group_id,kind,title,body,url) values ($1,$2,'manual','a','b','/')`, [users.bia, gid])).error, 'usuário não cria notificação');
+ok((await as('davi', `delete from post_comments where id=$1 returning 1`, [cm[0].id])).length === 0, 'membro não apaga comentário dos outros');
+ok((await as('ana', `delete from post_comments where id=$1 returning 1`, [cm[0].id])).length === 1, 'adm apaga qualquer comentário');
+ok((await as('bia', `delete from notifications returning 1`)).length === 1, 'limpa as próprias notificações');
+ok((await as('zeca', `select * from post_comments`)).length === 0, 'não-membro não vê comentários');
 
 console.log(fails ? `\n${fails} FALHA(S)` : '\nTODOS OS TESTES PASSARAM');
 await c.end();
