@@ -158,7 +158,7 @@ No feed, cada post tem reações rápidas (🙏 ❤️ 🔥 🙌 😂) e coment�
 
 ### Administrador
 - **Painel ⚙️:** datas de início e fim, dia da Casa de Paz, postagem todos os dias ou só em dias escolhidos, limites semanais, pontos de cada ação, enquetes, foto de fundo, membros e senha do grupo.
-- **Grupo:** no painel dá para renomear o grupo (muda para todos na hora) e excluir o grupo (some para todos os membros; as contas continuam). Para tirar alguém do grupo, use o botão de remover membro na lista de membros.
+- **Grupo:** no painel dá para renomear o grupo (muda para todos na hora) e excluir o grupo (apaga de vez dados e fotos para todos os membros; as contas continuam). Para tirar alguém do grupo, use o botão de remover membro na lista de membros.
 - **Contestar pontos:** no Feed, toque em ••• num post. Dá para **cancelar direto** ou **enviar para votação**. Na votação, os membros votam em "manter" ou "cancelar", e a maioria absoluta decide na hora. O adm também pode encerrar a votação ou restaurar os pontos.
 
 ---

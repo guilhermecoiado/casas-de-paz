@@ -85,6 +85,16 @@ export default function Admin() {
       });
     });
     supabase.removeChannel(ch);
+    // apaga de vez no servidor: dados e fotos (libera espaço)
+    try {
+      const { data: s } = await supabase.auth.getSession();
+      const res = await fetch('/api/admin/purge-group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${s.session?.access_token ?? ''}` },
+        body: JSON.stringify({ groupId: group.id }),
+      });
+      if (!res.ok) console.warn('purge', await res.text());
+    } catch (e) { console.warn('purge', e); }
     try { localStorage.removeItem('cdp-last-group'); } catch { /* ok */ }
     toast('Grupo excluído');
     router.replace('/grupos');
@@ -377,7 +387,7 @@ export default function Admin() {
         <section className="space-y-3 rounded-3xl border-2 border-[#7a2618] bg-[#7a2618]/10 p-4">
           <h2 className="font-display text-lg font-bold text-[#7a2618]">Excluir grupo</h2>
           <p className="text-sm leading-snug text-[#6b5643]">
-            O grupo some para <b>todos os membros</b>, com posts, pontos, chat, enquetes e pedidos de oração. As contas das pessoas continuam e elas podem entrar em outro grupo.
+            O grupo é apagado <b>de vez para todos os membros</b>, com posts, fotos, pontos, chat, enquetes e pedidos de oração. Não dá para recuperar. As contas das pessoas continuam e elas podem entrar em outro grupo.
             Para confirmar, digite o nome do grupo (<b>{group.name}</b>).
           </p>
           <input className="input" value={delName} onChange={(e) => setDelName(e.target.value)} placeholder="Nome do grupo" />
