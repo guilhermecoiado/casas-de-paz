@@ -7,7 +7,7 @@ import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { useGroup } from '@/lib/group-context';
 import { timeAgo } from '@/lib/game';
 import { errMsg, supabase } from '@/lib/supabase';
-import { useToast } from '@/components/Providers';
+import { useConfirm, useToast } from '@/components/Providers';
 import { Avatar, Spinner } from '@/components/ui';
 import type { PrayerAmen, PrayerRequest } from '@/lib/types';
 
@@ -27,6 +27,7 @@ function apply<T>(list: T[], pl: RealtimePostgresChangesPayload<Row>, key: (r: T
 export default function Oracao() {
   const { group, me, profiles, look, isAdmin, posts, today } = useGroup();
   const toast = useToast();
+  const ask = useConfirm();
   const [requests, setRequests] = useState<PrayerRequest[] | null>(null);
   const [amens, setAmens] = useState<PrayerAmen[]>([]);
   const [tab, setTab] = useState<'open' | 'answered'>('open');
@@ -88,7 +89,7 @@ export default function Oracao() {
   };
 
   const del = async (r: PrayerRequest) => {
-    if (!confirm('Apagar este pedido?')) return;
+    if (!(await ask({ title: 'Apagar este pedido?', message: 'Ele sai do mural para todos.', confirmLabel: 'Apagar', danger: true }))) return;
     const { error } = await supabase.from('prayer_requests').delete().eq('id', r.id);
     if (error) toast(errMsg(error), 'error');
   };

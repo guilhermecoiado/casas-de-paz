@@ -3,13 +3,14 @@
 import { useCallback, useState } from 'react';
 import { errMsg, supabase } from '@/lib/supabase';
 import { useGroup } from '@/lib/group-context';
-import { useToast } from './Providers';
+import { useConfirm, useToast } from './Providers';
 import type { Post } from '@/lib/types';
 
 /** Remover post: o autor remove o próprio; o adm remove o de qualquer membro. */
 export function useRemovePost() {
   const { me, isAdmin, reload } = useGroup();
   const toast = useToast();
+  const ask = useConfirm();
   const [removing, setRemoving] = useState<string | null>(null);
 
   const canRemove = useCallback(
@@ -23,7 +24,7 @@ export function useRemovePost() {
       const msg = mine
         ? 'Remover este post? Os pontos dele saem da sua pontuação e você pode postar de novo.'
         : 'Remover este post do membro? Os pontos dele saem da pontuação.';
-      if (!confirm(msg)) return false;
+      if (!(await ask({ title: 'Remover este post?', message: msg, confirmLabel: 'Remover', danger: true }))) return false;
       setRemoving(p.id);
       const { error } = await supabase.rpc('remove_post', { p_post: p.id });
       setRemoving(null);
@@ -32,7 +33,7 @@ export function useRemovePost() {
       reload();
       return true;
     },
-    [me, toast, reload],
+    [me, toast, reload, ask],
   );
 
   return { canRemove, remove, removing };

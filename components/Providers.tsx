@@ -29,6 +29,18 @@ type ToastKind = 'ok' | 'error' | 'info';
 const ToastContext = createContext<(msg: string, kind?: ToastKind) => void>(() => {});
 export const useToast = () => useContext(ToastContext);
 
+/* ---------------- Confirmação (modal no estilo do app, no lugar do confirm() do navegador) ---------------- */
+
+export interface ConfirmOptions {
+  title: string;
+  message?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean; // ação destrutiva: botão vinho
+}
+const ConfirmContext = createContext<(o: ConfirmOptions) => Promise<boolean>>(async () => false);
+export const useConfirm = () => useContext(ConfirmContext);
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
@@ -36,6 +48,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [toast, setToast] = useState<{ msg: string; kind: ToastKind; id: number } | null>(null);
   const [showSplash, setShowSplash] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>();
+  const [ask, setAsk] = useState<(ConfirmOptions & { resolve: (v: boolean) => void }) | null>(null);
+  const confirm = useCallback((o: ConfirmOptions) => new Promise<boolean>((resolve) => setAsk({ ...o, resolve })), []);
+  const answer = (v: boolean) => { ask?.resolve(v); setAsk(null); };
 
   const loadProfile = useCallback(async (uid: string | undefined) => {
     if (!uid) return setProfile(null);
@@ -90,7 +105,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={value}>
       <ToastContext.Provider value={show}>
+      <ConfirmContext.Provider value={confirm}>
         {children}
+        {ask && (
+          <div className="fixed inset-0 z-[110] flex items-end justify-center bg-ink/55 px-4 pb-[calc(var(--safe-bottom,0px)+16px)] anim-fade sm:items-center" onClick={() => answer(false)}>
+            <div role="alertdialog" aria-modal="true" aria-labelledby="cdp-confirm-title" className="w-full max-w-sm rounded-[28px] bg-cream p-5 shadow-2xl anim-rise" onClick={(e) => e.stopPropagation()}>
+              <p id="cdp-confirm-title" className={`font-display text-xl font-bold leading-tight ${ask.danger ? 'text-[#7a2618]' : 'text-ink'}`}>{ask.title}</p>
+              {ask.message && <p className="mt-2 text-[15px] leading-snug text-[#6b5643]">{ask.message}</p>}
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <button className="btn-soft w-full !px-3 outline-none" onClick={() => answer(false)}>{ask.cancelLabel ?? 'Cancelar'}</button>
+                <button className={`btn w-full whitespace-nowrap !px-3 text-white ${ask.danger ? 'bg-[#7a2618]' : 'bg-terra'}`} onClick={() => answer(true)}>{ask.confirmLabel ?? 'Confirmar'}</button>
+              </div>
+            </div>
+          </div>
+        )}
         {toast && (
           <div
             key={toast.id}
@@ -107,6 +135,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           </div>
         )}
         {showSplash && <Splash />}
+      </ConfirmContext.Provider>
       </ToastContext.Provider>
     </AuthContext.Provider>
   );

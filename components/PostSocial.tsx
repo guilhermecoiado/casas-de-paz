@@ -6,7 +6,7 @@ import { useGroup } from '@/lib/group-context';
 import { timeAgo } from '@/lib/game';
 import { errMsg, supabase } from '@/lib/supabase';
 import { REACTIONS, type Comment, type Post, type ReactionEmoji } from '@/lib/types';
-import { useToast } from './Providers';
+import { useConfirm, useToast } from './Providers';
 import { Avatar, Sheet, Spinner } from './ui';
 
 const QUICK = ['🙏', '❤️', '🔥', '🙌', '😂', '👏', '✨', '🏠', '🥹', '💪'];
@@ -99,6 +99,7 @@ function useSocial() {
 function CommentsSheet({ open, onClose, post, list }: { open: boolean; onClose: () => void; post: Post; list: Comment[] }) {
   const { profiles, look, me, isAdmin } = useGroup();
   const toast = useToast();
+  const ask = useConfirm();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -119,7 +120,7 @@ function CommentsSheet({ open, onClose, post, list }: { open: boolean; onClose: 
   };
 
   const del = async (c: Comment) => {
-    if (!confirm('Apagar este comentário?')) return;
+    if (!(await ask({ title: 'Apagar este comentário?', confirmLabel: 'Apagar', danger: true }))) return;
     const { error } = await supabase.from('post_comments').delete().eq('id', c.id);
     if (error) toast(errMsg(error), 'error');
   };

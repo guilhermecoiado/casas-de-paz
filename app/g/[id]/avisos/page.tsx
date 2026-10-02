@@ -6,7 +6,7 @@ import { ArrowLeft, BellOff, BellRing, CalendarCheck, CalendarClock, CheckCheck,
 import { useGroup } from '@/lib/group-context';
 import { timeAgo } from '@/lib/game';
 import { errMsg, supabase } from '@/lib/supabase';
-import { useToast } from '@/components/Providers';
+import { useConfirm, useToast } from '@/components/Providers';
 import { Avatar } from '@/components/ui';
 import { PushToggle } from '@/components/PushToggle';
 import type { AppNotification } from '@/lib/types';
@@ -26,6 +26,7 @@ export default function Avisos() {
   const { group, me, notifications, setNotifications, unread, profiles, look } = useGroup();
   const router = useRouter();
   const toast = useToast();
+  const ask = useConfirm();
 
   const markRead = async (ids: number[]) => {
     if (!ids.length) return;
@@ -47,8 +48,8 @@ export default function Avisos() {
     router.push(n.url);
   };
 
-  const clearAll = () => {
-    if (!confirm('Limpar todas as notificações?')) return;
+  const clearAll = async () => {
+    if (!(await ask({ title: 'Limpar todas as notificações?', message: 'Elas saem da sua central. Isso não afeta os outros membros.', confirmLabel: 'Limpar' }))) return;
     remove(notifications.map((n) => n.id));
   };
 

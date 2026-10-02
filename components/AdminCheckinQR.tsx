@@ -6,7 +6,7 @@ import { Download, QrCode, RefreshCw } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { errMsg, supabase } from '@/lib/supabase';
 import { shareImage } from '@/lib/image';
-import { useToast } from './Providers';
+import { useConfirm, useToast } from './Providers';
 import { Spinner } from './ui';
 
 const qrText = (groupId: string, code: string) => `CASADEPAZ:${groupId}:${code}`;
@@ -57,6 +57,7 @@ export async function posterBlob(groupName: string, data: string, code: string):
 export function AdminCheckinQR() {
   const { group, reload } = useGroup();
   const toast = useToast();
+  const ask = useConfirm();
   const [code, setCode] = useState<string | null>(null);
   const [img, setImg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,7 +77,7 @@ export function AdminCheckinQR() {
   };
 
   const rotate = async () => {
-    if (!confirm('Gerar um QR novo? O cartaz impresso atual deixa de funcionar.')) return;
+    if (!(await ask({ title: 'Gerar um QR novo?', message: 'O cartaz impresso atual deixa de funcionar e você vai precisar imprimir de novo.', confirmLabel: 'Gerar novo', danger: true }))) return;
     await load(true);
     toast('QR novo gerado. Imprima o cartaz de novo.');
   };

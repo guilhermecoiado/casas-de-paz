@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Gavel, ImagePlus, KeyRound, Plus, Trash2, UserMinus, X } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
-import { useToast } from '@/components/Providers';
+import { useConfirm, useToast } from '@/components/Providers';
 import { Avatar, PhotoPicker, Spinner } from '@/components/ui';
 import { AdminPush } from '@/components/AdminPush';
 import { AdminCheckinQR } from '@/components/AdminCheckinQR';
@@ -19,6 +19,7 @@ import type { Group, PointsConfig } from '@/lib/types';
 export default function Admin() {
   const router = useRouter();
   const toast = useToast();
+  const ask = useConfirm();
   const { group, isAdmin, members, profiles, polls, answers, posts, me, today, unlocked, reload } = useGroup();
   const [form, setForm] = useState<Group>(group);
   const [saving, setSaving] = useState(false);
@@ -51,7 +52,7 @@ export default function Admin() {
   const teamCap = teamWeeklyCap(form, members.length);
 
   const resetSeason = async () => {
-    if (!confirm('Zerar TODA a pontuação do grupo? Pontos, enquetes e itens equipados serão apagados e a temporada recomeça hoje. Não dá para desfazer.')) return;
+    if (!(await ask({ title: 'Zerar a temporada?', message: 'Pontos, enquetes e itens equipados de todo o grupo serão apagados e a temporada recomeça hoje. Não dá para desfazer.', confirmLabel: 'Zerar tudo', danger: true }))) return;
     setResetting(true);
     const { error } = await supabase.rpc('admin_reset_group', { p_group: group.id, p_confirm: resetName });
     setResetting(false);
@@ -72,7 +73,7 @@ export default function Admin() {
   };
 
   const deleteGroup = async () => {
-    if (!confirm(`Excluir o grupo "${group.name}" para TODOS os membros? Posts, pontos, chat e enquetes deixam de existir. Não dá para desfazer.`)) return;
+    if (!(await ask({ title: `Excluir "${group.name}"?`, message: 'O grupo é apagado de vez para TODOS os membros, com posts, fotos, pontos, chat e enquetes. Não dá para desfazer.', confirmLabel: 'Excluir grupo', danger: true }))) return;
     setDeleting(true);
     const { error } = await supabase.rpc('admin_delete_group', { p_group: group.id, p_confirm: delName });
     if (error) { setDeleting(false); return toast(errMsg(error), 'error'); }
@@ -125,7 +126,7 @@ export default function Admin() {
   };
 
   const deletePoll = async (id: string) => {
-    if (!confirm('Excluir esta enquete? Os pontos de quem já respondeu serão cancelados.')) return;
+    if (!(await ask({ title: 'Excluir esta enquete?', message: 'Os pontos de quem já respondeu serão cancelados.', confirmLabel: 'Excluir', danger: true }))) return;
     const { error } = await supabase.from('polls').delete().eq('id', id);
     if (error) return toast(errMsg(error), 'error');
     reload();
@@ -148,7 +149,7 @@ export default function Admin() {
   };
 
   const removeMember = async (uid: string) => {
-    if (!confirm(`Remover ${profiles[uid]?.name} do grupo?`)) return;
+    if (!(await ask({ title: `Remover ${profiles[uid]?.name ?? 'membro'}?`, message: 'A pessoa sai do grupo na hora. A conta dela continua e ela pode entrar de novo com a senha do grupo.', confirmLabel: 'Remover', danger: true }))) return;
     const { error } = await supabase.rpc('admin_remove_member', { p_group: group.id, p_user: uid });
     if (error) return toast(errMsg(error), 'error');
     reload();

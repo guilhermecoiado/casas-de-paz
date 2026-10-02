@@ -6,7 +6,7 @@ import { useGroup } from '@/lib/group-context';
 import { WEEKDAYS, timeAgo } from '@/lib/game';
 import { errMsg, supabase } from '@/lib/supabase';
 import type { PushLog } from '@/lib/types';
-import { useToast } from './Providers';
+import { useConfirm, useToast } from './Providers';
 import { Spinner } from './ui';
 
 const REMINDER = 'Você tem encontro marcado hoje na casa de paz, esperamos vocês!';
@@ -14,6 +14,7 @@ const REMINDER = 'Você tem encontro marcado hoje na casa de paz, esperamos voc�
 export function AdminPush() {
   const { group, reload } = useGroup();
   const toast = useToast();
+  const ask = useConfirm();
   const [title, setTitle] = useState(`Casa de Paz · ${group.name}`);
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
@@ -39,7 +40,7 @@ export function AdminPush() {
 
   const send = async () => {
     if (!title.trim() || body.trim().length < 3) return toast('Escreva o título e a mensagem', 'error');
-    if (!confirm('Enviar esta notificação para todos do grupo?')) return;
+    if (!(await ask({ title: 'Enviar para o grupo?', message: `“${title}”: ${body}`, confirmLabel: 'Enviar' }))) return;
     setBusy(true);
     try {
       const { data: s } = await supabase.auth.getSession();
