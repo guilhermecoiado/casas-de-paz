@@ -31,6 +31,10 @@ export default function Admin() {
   const [resetPw, setResetPw] = useState<string | null>(null);
   const [resetName, setResetName] = useState('');
   const [resetting, setResetting] = useState(false);
+  const [newName, setNewName] = useState(group.name);
+  const [renaming, setRenaming] = useState(false);
+  const [delName, setDelName] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   if (!isAdmin) {
     return (
@@ -55,6 +59,35 @@ export default function Admin() {
     setResetName('');
     toast('Temporada zerada. Começa hoje!');
     reload();
+  };
+
+  const rename = async () => {
+    setRenaming(true);
+    const { data, error } = await supabase.rpc('admin_rename_group', { p_group: group.id, p_name: newName });
+    setRenaming(false);
+    if (error) return toast(errMsg(error), 'error');
+    setNewName(data as string);
+    toast('Nome do grupo atualizado para todos');
+    reload();
+  };
+
+  const deleteGroup = async () => {
+    if (!confirm(`Excluir o grupo "${group.name}" para TODOS os membros? Posts, pontos, chat e enquetes deixam de existir. Não dá para desfazer.`)) return;
+    setDeleting(true);
+    const { error } = await supabase.rpc('admin_delete_group', { p_group: group.id, p_confirm: delName });
+    if (error) { setDeleting(false); return toast(errMsg(error), 'error'); }
+    // avisa quem está com o app aberto agora para sair do grupo na hora
+    const ch = supabase.channel(`groupdel-${group.id}`);
+    await new Promise<void>((res) => {
+      const t = setTimeout(res, 2500);
+      ch.subscribe(async (st) => {
+        if (st === 'SUBSCRIBED') { await ch.send({ type: 'broadcast', event: 'deleted', payload: {} }); clearTimeout(t); res(); }
+      });
+    });
+    supabase.removeChannel(ch);
+    try { localStorage.removeItem('cdp-last-group'); } catch { /* ok */ }
+    toast('Grupo excluído');
+    router.replace('/grupos');
   };
 
   const save = async () => {
@@ -312,6 +345,16 @@ export default function Admin() {
         <MemberSheet userId={ledger} onClose={() => setLedger(null)} />
         <ResetPasswordSheet userId={resetPw} onClose={() => setResetPw(null)} />
 
+        <Section title="Nome do grupo">
+          <div className="flex gap-2">
+            <input className="input" value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={40} />
+            <button className="btn-soft shrink-0" onClick={rename} disabled={renaming || newName.trim().length < 3 || newName.trim() === group.name}>
+              {renaming ? <Spinner /> : 'Salvar'}
+            </button>
+          </div>
+          <p className="text-xs text-[#8A6F57]">Muda para todos os membros na hora. Para entrar no grupo, novos membros passam a usar o nome novo (a senha continua a mesma).</p>
+        </Section>
+
         <Section title="Senha do grupo">
           <div className="flex gap-2">
             <input className="input" type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Nova senha" autoComplete="off" />
@@ -328,6 +371,18 @@ export default function Admin() {
           <input className="input" value={resetName} onChange={(e) => setResetName(e.target.value)} placeholder="Nome do grupo" />
           <button className="btn w-full bg-[#7a2618] text-white" onClick={resetSeason} disabled={resetting || resetName.trim().toLowerCase() !== group.name.toLowerCase()}>
             {resetting ? <Spinner /> : 'Zerar e recomeçar hoje'}
+          </button>
+        </section>
+
+        <section className="space-y-3 rounded-3xl border-2 border-[#7a2618] bg-[#7a2618]/10 p-4">
+          <h2 className="font-display text-lg font-bold text-[#7a2618]">Excluir grupo</h2>
+          <p className="text-sm leading-snug text-[#6b5643]">
+            O grupo some para <b>todos os membros</b>, com posts, pontos, chat, enquetes e pedidos de oração. As contas das pessoas continuam e elas podem entrar em outro grupo.
+            Para confirmar, digite o nome do grupo (<b>{group.name}</b>).
+          </p>
+          <input className="input" value={delName} onChange={(e) => setDelName(e.target.value)} placeholder="Nome do grupo" />
+          <button className="btn w-full bg-[#7a2618] text-white" onClick={deleteGroup} disabled={deleting || delName.trim().toLowerCase() !== group.name.toLowerCase()}>
+            {deleting ? <Spinner /> : <><Trash2 size={18} /> Excluir grupo para todos</>}
           </button>
         </section>
       </div>

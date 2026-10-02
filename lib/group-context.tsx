@@ -144,6 +144,7 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'groups', filter: `id=eq.${groupId}` }, (pl) =>
         setGroup(pl.new as Group))
+
       .on('postgres_changes', { event: '*', schema: 'public', table: 'post_reactions', filter: f }, (pl) =>
         setReactions((l) => applyChange(l, pl, (r) => `${r.post_id}:${r.user_id}:${r.emoji}`)))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'member_items', filter: f }, (pl) =>
@@ -157,11 +158,15 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
       })
       .subscribe();
 
+    // o adm excluiu o grupo: todo mundo sai na hora
+    const del = supabase.channel(`groupdel-${groupId}`).on('broadcast', { event: 'deleted' }, () => onMissing()).subscribe();
+
     // ao voltar para o app (PWA em segundo plano), sincroniza tudo
     const onVisible = () => { if (document.visibilityState === 'visible') reload(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       supabase.removeChannel(ch);
+      supabase.removeChannel(del);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [groupId, userId, reload, reloadProfiles, onMissing]);

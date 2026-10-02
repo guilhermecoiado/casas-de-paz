@@ -267,5 +267,25 @@ ok((await as('zeca', `select * from post_comments`)).length === 0, 'não-membro 
   ok(re === it[0].item_id, `item de check-in cancelado volta para o sorteio (${re})`);
 }
 
+
+// ---- v8: renomear e excluir grupo ----
+{
+  ok((await as('bia', `select admin_rename_group($1, 'Novo nome')`, [gid])).error?.includes('Apenas'), 'membro não renomeia');
+  ok((await as('ana', `select admin_rename_group($1, 'ab')`, [gid])).error?.includes('3 a 40'), 'nome curto recusado');
+  const [{ create_group: g2 }] = await as('zeca', `select create_group('Outra Casa', 'abcd')`);
+  ok((await as('ana', `select admin_rename_group($1, 'outra casa')`, [gid])).error?.includes('Já existe'), 'nome repetido recusado');
+  const rn = await as('ana', `select admin_rename_group($1, '  Casa   Jardins  Norte ') n`, [gid]);
+  ok(rn[0]?.n === 'Casa Jardins Norte', `renomeia e limpa espaços (${rn[0]?.n})`);
+  ok(!(await as('bia', `select join_group('casa jardins norte', 'paz123')`)).error, 'entra pelo nome novo');
+  ok((await as('zeca', `select admin_delete_group($1, 'Outra Casa')`, [gid])).error?.includes('Apenas'), 'outro adm não exclui meu grupo');
+  ok((await as('zeca', `select admin_delete_group($1, 'errado')`, [g2])).error?.includes('confirmar'), 'exclusão pede o nome certo');
+  ok(!(await as('zeca', `select admin_delete_group($1, 'outra casa')`, [g2])).error, 'adm exclui o grupo');
+  ok((await as('zeca', `select * from groups where id=$1`, [g2])).length === 0, 'grupo some para o adm');
+  ok((await as('zeca', `select * from group_members where group_id=$1`, [g2])).length === 0, 'grupo some da lista de grupos');
+  ok((await as('zeca', `select * from submit_post($1,'prayer',null,null)`, [g2])).error?.includes('não faz parte'), 'ninguém posta no grupo excluído');
+  ok(!(await as('zeca', `select create_group('Outra Casa', 'abcd')`)).error, 'nome fica livre para outro grupo');
+  ok((await c.query(`select count(*)::int n from profiles where id=$1`, [users.zeca])).rows[0].n === 1, 'conta do adm continua');
+}
+
 console.log(fails ? `\n${fails} FALHA(S)` : '\nTODOS OS TESTES PASSARAM');
 await c.end();

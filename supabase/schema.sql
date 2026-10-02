@@ -1277,3 +1277,53 @@ begin
   exception when duplicate_object then null;
   end;
 end $$;
+
+-- =====================================================================
+-- v8: ADM RENOMEIA E EXCLUI O GRUPO
+-- =====================================================================
+create or replace function public.admin_rename_group(p_group uuid, p_name text)
+returns text language plpgsql security definer set search_path = public as $$
+declare v text := regexp_replace(trim(coalesce(p_name, '')), '\s+', ' ', 'g');
+begin
+  if not is_admin(p_group) then raise exception 'Apenas o administrador'; end if;
+  if length(v) < 3 or length(v) > 40 then raise exception 'O nome do grupo precisa ter de 3 a 40 letras'; end if;
+  if exists (select 1 from groups where lower(name) = lower(v) and id <> p_group) then
+    raise exception 'Já existe um grupo com esse nome';
+  end if;
+  update groups set name = v where id = p_group;
+  return v;
+end $$;
+
+-- excluir grupo: o grupo some para todos os membros na hora (is_member/is_admin passam a ignorá-lo)
+-- e o nome fica livre para outro grupo. As contas das pessoas continuam.
+alter table public.groups add column if not exists deleted_at timestamptz;
+
+create or replace function public.is_member(g uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (select 1 from group_members m join groups gr on gr.id = m.group_id
+                  where m.group_id = g and m.user_id = auth.uid() and gr.deleted_at is null);
+$$;
+
+create or replace function public.is_admin(g uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (select 1 from groups where id = g and admin_id = auth.uid() and deleted_at is null);
+$$;
+
+create or replace function public.admin_delete_group(p_group uuid, p_confirm text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_name text;
+begin
+  if not is_admin(p_group) then raise exception 'Apenas o administrador'; end if;
+  select name into v_name from groups where id = p_group;
+  if lower(trim(coalesce(p_confirm, ''))) <> lower(v_name) then raise exception 'Digite o nome do grupo para confirmar'; end if;
+  update groups
+     set deleted_at = now(),
+         name = left(v_name, 40) || ' · excluído ' || left(p_group::text, 8),
+         reminder_enabled = false, digest_enabled = false, nudge_enabled = false, recap_enabled = false
+   where id = p_group;
+end $$;
+
+revoke execute on function public.admin_rename_group(uuid, text) from public, anon;
+grant execute on function public.admin_rename_group(uuid, text) to authenticated;
+revoke execute on function public.admin_delete_group(uuid, text) from public, anon;
+grant execute on function public.admin_delete_group(uuid, text) to authenticated;
