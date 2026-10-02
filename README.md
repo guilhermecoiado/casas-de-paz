@@ -137,6 +137,12 @@ A moldura Casa de Paz já vem liberada desde o início. Depois, conforme a equip
 ### Moldura e Instagram
 Depois de cada post com foto, o app gera a imagem com a moldura "Casa de Paz" em formato 4:5 e abre o menu de compartilhamento do celular, onde aparece o Instagram (Stories ou Feed). Qualquer foto do Feed também pode ser compartilhada com moldura pelo botão **Moldura**.
 
+### Check-in com QR code e item surpresa
+- O check-in só libera a foto depois que a pessoa escaneia o QR code impresso no local (ou digita o código de 6 letras embaixo dele). O servidor confere o código, e ele vale só no dia do encontro.
+- **Painel ⚙️ → QR code do check-in:** baixe o cartaz para imprimir, gere um QR novo se o código vazar, ou desligue a exigência do QR.
+- Cada check-in sorteia **1 item surpresa** que só sai assim. São 14 itens: 7 comuns (títulos e frases), 5 raros (cores e molduras) e 2 lendários (animações). O sorteio nunca repete um item que a pessoa já tem. Se o check-in for cancelado ou removido, o item volta para o sorteio.
+- A surpresa abre numa caixa de presente logo depois do check-in. As que faltam aparecem como "?" em Meu perfil → Surpresas do check-in.
+
 ### Sequência de dias 🔥
 O número no tile mostra quantos dias seguidos a pessoa está postando, e o fogo cresce com a sequência (3, 7 e 14 dias mudam o visual). Se a pessoa ainda não postou hoje, o fogo fica cinza até ela postar. **Intensivo:** 7 dias seguidos liberam o título *Intensivo* e a animação exclusiva *Fogo do Intensivo*. Com 14 dias vem a *Moldura Brasa Viva*, com 21 a *Cor Brasa* e com 28 o título *Fogo que Não se Apaga*.
 

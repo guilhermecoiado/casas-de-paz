@@ -1124,3 +1124,156 @@ begin
 end $$;
 alter table public.prayer_requests replica identity full;
 alter table public.prayer_amens    replica identity full;
+
+-- =====================================================================
+-- v7: CHECK-IN COM QR CODE + ITEM SURPRESA
+-- =====================================================================
+alter table public.groups add column if not exists checkin_qr boolean not null default true;
+alter table public.group_secrets add column if not exists checkin_code text;
+
+-- código do QR (sem letras/números parecidos: 0/O, 1/I/L)
+create or replace function public._new_checkin_code()
+returns text language sql volatile as $$
+  select string_agg(substr('ABCDEFGHJKMNPQRSTUVWXYZ23456789', 1 + floor(random() * 31)::int, 1), '')
+    from generate_series(1, 6);
+$$;
+update public.group_secrets set checkin_code = public._new_checkin_code() where checkin_code is null;
+
+-- passe do dia: quem escaneou o QR pode fazer o check-in hoje
+create table if not exists public.checkin_passes (
+  group_id   uuid not null references public.groups(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  local_date date not null,
+  created_at timestamptz not null default now(),
+  primary key (group_id, user_id, local_date)
+);
+alter table public.checkin_passes enable row level security;
+drop policy if exists passes_select on public.checkin_passes;
+create policy passes_select on public.checkin_passes for select to authenticated using (user_id = auth.uid());
+revoke insert, update, delete on public.checkin_passes from authenticated, anon;
+
+create or replace function public.claim_checkin_pass(p_group uuid, p_code text)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare g public.groups; v_today date; v_code text;
+begin
+  if not is_member(p_group) then raise exception 'Você não faz parte deste grupo'; end if;
+  select * into g from groups where id = p_group;
+  v_today := (now() at time zone g.timezone)::date;
+  if extract(dow from v_today)::int <> g.house_weekday then raise exception 'O check-in só abre no dia do encontro'; end if;
+  select checkin_code into v_code from group_secrets where group_id = p_group;
+  -- aceita o texto do QR inteiro (CASADEPAZ:<grupo>:<código>) ou só o código digitado
+  p_code := upper(regexp_replace(coalesce(p_code, ''), '^.*:', ''));
+  p_code := regexp_replace(p_code, '[^A-Z0-9]', '', 'g');
+  if v_code is null or p_code <> v_code then raise exception 'QR code inválido. Escaneie o QR da Casa de Paz.'; end if;
+  insert into checkin_passes (group_id, user_id, local_date) values (p_group, auth.uid(), v_today)
+    on conflict do nothing;
+  return true;
+end $$;
+
+create or replace function public.admin_checkin_code(p_group uuid, p_rotate boolean default false)
+returns text language plpgsql security definer set search_path = public as $$
+declare v text;
+begin
+  if not is_admin(p_group) then raise exception 'Apenas o administrador'; end if;
+  if p_rotate then
+    update group_secrets set checkin_code = _new_checkin_code() where group_id = p_group;
+  end if;
+  select checkin_code into v from group_secrets where group_id = p_group;
+  if v is null then
+    update group_secrets set checkin_code = _new_checkin_code() where group_id = p_group returning checkin_code into v;
+  end if;
+  return v;
+end $$;
+
+-- grupo novo já nasce com código
+create or replace function public._secrets_code()
+returns trigger language plpgsql as $$
+begin
+  if new.checkin_code is null then new.checkin_code := _new_checkin_code(); end if;
+  return new;
+end $$;
+drop trigger if exists group_secrets_code on public.group_secrets;
+create trigger group_secrets_code before insert on public.group_secrets
+  for each row execute function public._secrets_code();
+
+-- itens surpresa: 1 por check-in (o item some se o check-in for cancelado ou removido)
+create table if not exists public.member_items (
+  post_id    uuid primary key references public.posts(id) on delete cascade,
+  group_id   uuid not null references public.groups(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  item_id    text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists member_items_group on public.member_items (group_id);
+alter table public.member_items enable row level security;
+drop policy if exists items_select on public.member_items;
+create policy items_select on public.member_items for select to authenticated using (is_member(group_id));
+revoke insert, update, delete on public.member_items from authenticated, anon;
+
+-- sorteio ponderado: comum 10, raro 5, lendário 3 (manter igual a lib/rewards.ts → drop)
+create or replace function public._checkin_pool()
+returns table (item_id text, weight int) language sql immutable as $$
+  values
+    ('ck-t-porta', 10), ('ck-t-mesa', 10), ('ck-t-lampada', 10), ('ck-t-coracao', 10),
+    ('ck-ph-vem', 10), ('ck-ph-entre', 10), ('ck-ph-reunidos', 10),
+    ('ck-tc-sol', 5), ('ck-tc-lavanda', 5), ('ck-tc-aurora', 5),
+    ('ck-af-lampiao', 5), ('ck-af-chave', 5),
+    ('ck-ta-lanternas', 3), ('ck-ta-festa', 3)
+$$;
+
+create or replace function public.checkin_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare g public.groups;
+begin
+  if new.type <> 'checkin' then return new; end if;
+  select * into g from groups where id = new.group_id;
+  if g.checkin_qr and not exists (
+    select 1 from checkin_passes where group_id = new.group_id and user_id = new.user_id and local_date = new.local_date
+  ) then
+    raise exception 'Escaneie o QR code da Casa de Paz para fazer o check-in';
+  end if;
+  return new;
+end $$;
+drop trigger if exists posts_checkin_guard on public.posts;
+create trigger posts_checkin_guard before insert on public.posts
+  for each row execute function public.checkin_guard();
+
+create or replace function public.checkin_drop()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_item text;
+begin
+  if new.type <> 'checkin' then return new; end if;
+  -- só itens que a pessoa ainda não tem (de check-ins válidos)
+  select p.item_id into v_item
+    from _checkin_pool() p
+   where p.item_id not in (
+     select mi.item_id from member_items mi join posts po on po.id = mi.post_id
+      where mi.group_id = new.group_id and mi.user_id = new.user_id
+        and po.status not in ('cancelled', 'archived', 'removed'))
+   order by -ln(1 - random()) / p.weight   -- sorteio ponderado
+   limit 1;
+  if v_item is not null then
+    insert into member_items (post_id, group_id, user_id, item_id) values (new.id, new.group_id, new.user_id, v_item);
+  end if;
+  return new;
+end $$;
+drop trigger if exists posts_checkin_drop on public.posts;
+create trigger posts_checkin_drop after insert on public.posts
+  for each row execute function public.checkin_drop();
+
+revoke execute on function public._new_checkin_code() from public, anon, authenticated;
+revoke execute on function public.checkin_guard() from public, anon, authenticated;
+revoke execute on function public.checkin_drop() from public, anon, authenticated;
+revoke execute on function public._checkin_pool() from public, anon, authenticated;
+revoke execute on function public.claim_checkin_pass(uuid, text) from public, anon;
+grant execute on function public.claim_checkin_pass(uuid, text) to authenticated;
+revoke execute on function public.admin_checkin_code(uuid, boolean) from public, anon;
+grant execute on function public.admin_checkin_code(uuid, boolean) to authenticated;
+
+do $$
+begin
+  begin
+    execute 'alter publication supabase_realtime add table public.member_items';
+  exception when duplicate_object then null;
+  end;
+end $$;

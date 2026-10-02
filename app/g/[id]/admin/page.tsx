@@ -8,6 +8,7 @@ import { useGroup } from '@/lib/group-context';
 import { useToast } from '@/components/Providers';
 import { Avatar, PhotoPicker, Spinner } from '@/components/ui';
 import { AdminPush } from '@/components/AdminPush';
+import { AdminCheckinQR } from '@/components/AdminCheckinQR';
 import { MemberSheet } from '@/components/MemberSheet';
 import { ResetPasswordSheet } from '@/components/ResetPasswordSheet';
 import { POINT_LABELS, WEEKDAYS, WEEKDAYS_SHORT, dailyMax, formatDate, meetingMax, suggestedWeeklyCap, teamWeeklyCap, totalWeeks } from '@/lib/game';
@@ -136,6 +137,7 @@ export default function Admin() {
           {voting > 0 && <span className="chip bg-terra text-white">{voting}</span>}
         </Link>
 
+        <AdminCheckinQR />
         <AdminPush />
 
         <Section title="Período">

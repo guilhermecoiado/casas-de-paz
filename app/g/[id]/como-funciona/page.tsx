@@ -61,6 +61,7 @@ export default function ComoFunciona() {
         <Topic icon="🏠" title={`Dia da Casa de Paz (${day})`}>
           <p>No dia do encontro abrem as <b>ações bônus</b>, que valem mais (até <b>{meetingMax(group)} pts</b>). Cada uma vale 1 vez.</p>
           <div>{meeting.map((a) => <Row key={a.type} label={a.label} pts={`+${actionPoints(group, a.type, 0)}`} note={a.hint} />)}</div>
+          <p className="rounded-2xl bg-[#2b2118] p-3 font-bold text-white">📲 <b className="!text-amber">Check-in com QR code:</b> no local tem um QR code impresso. Toque no + → Check-in e escaneie para liberar a foto. Cada check-in sorteia um <b className="!text-amber">item surpresa</b> (título, moldura, cor, frase ou até uma animação lendária) que só sai assim!</p>
           <p className="rounded-2xl bg-olive/15 p-3 font-bold text-[#3f5a24]">🙌 Cada convidado vale o dobro do check-in: <b>+{ck * 2} pts por pessoa</b>. Anote o nome dele para o grupo acompanhar depois.</p>
         </Topic>
 

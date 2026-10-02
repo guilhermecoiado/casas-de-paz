@@ -25,7 +25,15 @@ export interface Reward {
   pct?: number;                                   // linha da evolução
   req?: { stat: AchStat; n: number; label: string }; // coleção
   free?: boolean;                                 // liberado desde o início
+  drop?: Rarity;                                  // surpresa do check-in (sorteada no servidor)
 }
+
+export type Rarity = 'comum' | 'raro' | 'lendario';
+export const RARITY: Record<Rarity, { label: string; cls: string }> = {
+  comum: { label: 'Comum', cls: 'bg-sand text-[#6b5643]' },
+  raro: { label: 'Raro', cls: 'bg-[#2F8FD0]/15 text-[#1f6fa8]' },
+  lendario: { label: 'Lendário', cls: 'bg-gradient-to-r from-[#f3c64a] to-[#ff8a5c] text-white' },
+};
 
 export const KIND_LABEL: Record<RewardKind, string> = {
   title: 'Título',
@@ -97,6 +105,21 @@ export const REWARDS: Reward[] = [
   { id: 't-guardiao', kind: 'title', name: 'Guardião da Mesa', icon: '🍞', req: { stat: 'snacks', n: 2, label: 'Ajude no lanche 2 vezes' } },
   { id: 'tc-mana', kind: 'tile_color', name: 'Cor Maná', icon: '🍯', req: { stat: 'snacks', n: 3, label: 'Ajude no lanche 3 vezes' } },
   { id: 't-comunhao', kind: 'title', name: 'Construtor de Comunhão', icon: '🤝', req: { stat: 'groupPhotos', n: 3, label: '3 fotos em grupo' } },
+  // 🎁 surpresas do check-in (QR code): 1 item sorteado por check-in. Manter igual a _checkin_pool() no schema.sql
+  { id: 'ck-t-porta', kind: 'title', name: 'Porta Aberta', icon: '🚪', drop: 'comum' },
+  { id: 'ck-t-mesa', kind: 'title', name: 'Mesa Posta', icon: '🍽️', drop: 'comum' },
+  { id: 'ck-t-lampada', kind: 'title', name: 'Lâmpada Acesa', icon: '🪔', drop: 'comum' },
+  { id: 'ck-t-coracao', kind: 'title', name: 'Coração Hospitaleiro', icon: '💛', drop: 'comum' },
+  { id: 'ck-ph-vem', kind: 'phrase', name: 'Vem pra Casa de Paz', icon: '💬', drop: 'comum' },
+  { id: 'ck-ph-entre', kind: 'phrase', name: 'Pode entrar, a casa é sua', icon: '💬', drop: 'comum' },
+  { id: 'ck-ph-reunidos', kind: 'phrase', name: 'Onde dois ou três se reúnem', icon: '💬', drop: 'comum' },
+  { id: 'ck-tc-sol', kind: 'tile_color', name: 'Pôr do Sol', icon: '🌅', drop: 'raro' },
+  { id: 'ck-tc-lavanda', kind: 'tile_color', name: 'Lavanda', icon: '💜', drop: 'raro' },
+  { id: 'ck-tc-aurora', kind: 'tile_color', name: 'Aurora', icon: '🌌', drop: 'raro' },
+  { id: 'ck-af-lampiao', kind: 'avatar_frame', name: 'Moldura Lampião', icon: '🏮', drop: 'raro' },
+  { id: 'ck-af-chave', kind: 'avatar_frame', name: 'Moldura Chave da Casa', icon: '🗝️', drop: 'raro' },
+  { id: 'ck-ta-lanternas', kind: 'tile_anim', name: 'Lanternas', icon: '🏮', drop: 'lendario' },
+  { id: 'ck-ta-festa', kind: 'tile_anim', name: 'Casa em Festa', icon: '🎊', drop: 'lendario' },
   // 🔥 intensivo: sequência de dias seguidos postando (exclusivos, só por constância)
   { id: 't-intensivo', kind: 'title', name: 'Intensivo', icon: '🔥', req: { stat: 'bestStreak', n: 7, label: 'Complete o intensivo: 7 dias seguidos' } },
   { id: 'ta-intensivo', kind: 'tile_anim', name: 'Fogo do Intensivo', icon: '🔥', req: { stat: 'bestStreak', n: 7, label: 'Complete o intensivo: 7 dias seguidos (exclusiva)' } },
@@ -170,7 +193,7 @@ export const ACH_LABEL: Record<AchStat, string> = {
 
 /* --------------------------- lógica --------------------------- */
 
-export type Progress = Pick<UserStats, 'points' | AchStat>;
+export type Progress = Pick<UserStats, 'points' | AchStat> & { owned?: string[] };
 
 export const emptyProgress = (): Progress => ({ points: 0, checkins: 0, guests: 0, evangelism: 0, days: 0, polls: 0, snacks: 0, groupPhotos: 0, bestStreak: 0 });
 
@@ -178,6 +201,7 @@ export const rewardThreshold = (g: Group, r: Reward) => Math.ceil((maxIndividual
 
 export function isUnlocked(g: Group, r: Reward, p: Progress) {
   if (r.free) return true;
+  if (r.drop) return !!p.owned?.includes(r.id);
   if (r.req) return p[r.req.stat] >= r.req.n;
   return p.points >= rewardThreshold(g, r);
 }

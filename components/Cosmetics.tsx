@@ -54,6 +54,12 @@ const AVATAR_ORN: Record<string, Orn[]> = {
     { e: '🔥', s: 0.3, style: { left: '-8%', bottom: '0%' }, cls: 'orn-flicker' },
     { e: '🔥', s: 0.24, style: { right: '-6%', top: '2%' }, cls: 'orn-flicker' },
   ],
+  'ck-af-lampiao': [
+    { e: '🏮', s: 0.32, style: { right: '-10%', top: '-8%' }, cls: 'orn-bob' },
+  ],
+  'ck-af-chave': [
+    { e: '🗝️', s: 0.34, style: { left: '-12%', bottom: '-2%', transform: 'rotate(-25deg)' } },
+  ],
   'af-belem': [
     { e: '⭐', s: 0.3, style: { right: '-6%', top: '-10%' }, cls: 'orn-flicker' },
     { e: '✨', s: 0.22, style: { left: '-6%', bottom: '0%' }, cls: 'orn-bob' },
@@ -165,6 +171,16 @@ export function TileFx({ anim, kit }: { anim: string | null | undefined; kit: Pa
             </>
           )}
           {anim === 'ta-alianca' && <span className="fx-rainbow" />}
+          {anim === 'ck-ta-lanternas' && [10, 38, 62, 84].map((x, i) => <span key={i} className="fx-lantern" style={{ left: `${x}%`, ...d(i * 1.4) }}>🏮</span>)}
+          {anim === 'ck-ta-festa' && (
+            <>
+              {[6, 18, 30, 42, 54, 66, 78, 90].map((x, i) => (
+                <span key={i} className="fx-confetti" style={{ left: `${x}%`, background: ['#ff6b6b', '#ffd56b', '#6bcBff', '#8be08b', '#c58bff'][i % 5], ...d(i * 0.42) }} />
+              ))}
+              <span className="fx-party" style={{ left: '8%' }}>🎉</span>
+              <span className="fx-party" style={{ right: '8%', animationDelay: '.6s' }}>🎊</span>
+            </>
+          )}
           {anim === 'ta-intensivo' && (
             <>
               <span className="fx-heat" />

@@ -39,6 +39,9 @@ const ok = (cond, msg) => { console.log(`${cond ? '✓' : '✗ FALHOU'} ${msg}`)
 
 const [{ create_group: gid }] = await as('ana', `select create_group('Casa Jardins', 'paz123')`);
 ok(!!gid, 'cria grupo');
+ok(!!(await c.query(`select checkin_code from group_secrets where group_id=$1`, [gid])).rows[0].checkin_code, 'grupo novo já tem código de check-in');
+await c.query(`update groups set checkin_qr=false where id=$1`, [gid]); // testes antigos de check-in sem QR
+
 ok((await as('bia', `select join_group('casa jardins', 'errada')`)).error?.includes('incorretos'), 'senha errada bloqueada');
 for (const u of ['bia', 'caio', 'davi']) await as(u, `select join_group('Casa Jardins', 'paz123')`);
 ok((await as('bia', `select * from group_secrets`)).length === 0, 'hash da senha invisível');
@@ -226,6 +229,42 @@ ok((await as('zeca', `select * from post_comments`)).length === 0, 'não-membro 
   ok((await as('davi', `delete from prayer_requests where id=$1 returning 1`, [prid])).length === 0, 'outro não apaga pedido');
   ok((await as('ana', `delete from prayer_requests where id=$1 returning 1`, [prid])).length === 1, 'adm apaga pedido');
   ok((await as('zeca', `select * from prayer_requests`)).length === 0, 'não-membro não vê mural');
+}
+
+
+// ---- v7: check-in com QR + item surpresa ----
+{
+  await c.query(`update groups set checkin_qr=true where id=$1`, [gid]);
+  await setHouse(dow);
+  // davi ainda não fez check-in hoje
+  ok((await post('davi', 'checkin', 'http://x/d.jpg', null)).error?.includes('Escaneie'), 'check-in bloqueado sem QR');
+  ok((await as('davi', `select claim_checkin_pass($1, 'ERRADO')`, [gid])).error?.includes('inválido'), 'código errado recusado');
+  ok((await as('davi', `select admin_checkin_code($1)`, [gid])).error?.includes('Apenas'), 'membro não vê o código');
+  const code = (await as('ana', `select admin_checkin_code($1) c`, [gid]))[0].c;
+  ok(/^[A-Z2-9]{6}$/.test(code), `adm vê o código (${code})`);
+  ok((await as('davi', `select * from group_secrets`)).length === 0, 'código continua secreto');
+  ok(!(await as('davi', `select claim_checkin_pass($1, $2)`, [gid, `CASADEPAZ:${gid}:${code.toLowerCase()}`])).error, 'QR completo aceito (sem diferenciar maiúsculas)');
+  const ck = await post('davi', 'checkin', 'http://x/d.jpg', null);
+  ok(!!ck[0]?.id, `check-in liberado após QR (${ck.error ?? 'ok'})`);
+  const it = await as('davi', `select * from member_items where post_id=$1`, [ck[0]?.id]);
+  ok(it.length === 1 && it[0].item_id.startsWith('ck-'), `ganhou item surpresa (${it[0]?.item_id})`);
+  ok((await as('davi', `insert into member_items (post_id,group_id,user_id,item_id) values ($1,$2,$3,'ck-ta-festa')`, [ck[0]?.id, gid, users.davi])).error, 'não cria item na mão');
+  ok((await as('caio', `select * from member_items where user_id=$1`, [users.davi])).length === 1, 'grupo vê os itens (para mostrar o tile)');
+  // sorteio nunca repete item válido: simula 14 check-ins
+  const pool = (await c.query(`select count(*)::int n from _checkin_pool()`)).rows[0].n;
+  const got = new Set([it[0].item_id]);
+  for (let i = 0; i < pool + 2; i++) {
+    const pr = await c.query(`insert into posts (group_id,user_id,type,local_date,week,base_points,points) values ($1,$2,'checkin',current_date - ($3::int + 30),1,0,0) returning id`, [gid, users.davi, i]).catch((e) => ({ error: e.message }));
+    if (pr.error) { await c.query(`insert into checkin_passes values ($1,$2,current_date - ($3::int + 30)) on conflict do nothing`, [gid, users.davi, i]); await c.query(`insert into posts (group_id,user_id,type,local_date,week,base_points,points) values ($1,$2,'checkin',current_date - ($3::int + 30),1,0,0)`, [gid, users.davi, i]); }
+  }
+  const all = (await c.query(`select item_id from member_items where user_id=$1`, [users.davi])).rows.map((r) => r.item_id);
+  ok(all.length === pool && new Set(all).size === pool, `coleção completa sem repetir (${all.length}/${pool})`);
+  // cancelar o check-in devolve o item ao sorteio
+  await c.query(`update posts set status='cancelled' where id=$1`, [ck[0].id]);
+  await c.query(`insert into checkin_passes values ($1,$2,current_date - 90) on conflict do nothing`, [gid, users.davi]);
+  const again = (await c.query(`insert into posts (group_id,user_id,type,local_date,week,base_points,points) values ($1,$2,'checkin',current_date - 90,1,0,0) returning id`, [gid, users.davi])).rows[0];
+  const re = (await c.query(`select item_id from member_items where post_id=$1`, [again.id])).rows[0]?.item_id;
+  ok(re === it[0].item_id, `item de check-in cancelado volta para o sorteio (${re})`);
 }
 
 console.log(fails ? `\n${fails} FALHA(S)` : '\nTODOS OS TESTES PASSARAM');

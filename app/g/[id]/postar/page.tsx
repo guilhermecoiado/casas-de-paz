@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, BookOpen, Camera, Coffee, Flame, HandHeart, Heart, Megaphone, MapPin, MessageCircleHeart, Minus, Plus,
@@ -12,6 +12,8 @@ import { ProgressBar } from '@/components/ui';
 import { compressImage } from '@/lib/image';
 import { ShareSheet } from '@/components/ShareSheet';
 import { StreakCard } from '@/components/StreakCard';
+import { CheckinGate } from '@/components/CheckinGate';
+import { CheckinSurprise } from '@/components/CheckinSurprise';
 import { errMsg, supabase, uploadPostImage } from '@/lib/supabase';
 import { PhotoPicker, Spinner } from '@/components/ui';
 import { useToast } from '@/components/Providers';
@@ -35,6 +37,8 @@ export default function Postar() {
   const [text, setText] = useState('');
   const [guests, setGuests] = useState(0);
   const [guestNames, setGuestNames] = useState<string[]>([]);
+  const [passed, setPassed] = useState(false); // escaneou o QR do check-in
+  const onPass = useCallback(() => setPassed(true), []);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ post: Post; photo: Blob | null; label: string } | null>(null);
 
@@ -103,6 +107,7 @@ export default function Postar() {
             </p>
           )}
         </div>
+        {done.post.type === 'checkin' && <div className="mx-auto mt-5 max-w-[360px]"><CheckinSurprise postId={done.post.id} /></div>}
         {done.post.type !== 'poll' && <div className="mx-auto mt-5 max-w-[360px] anim-rise"><StreakCard celebrate /></div>}
         {done.photo && (
           <div className="mx-auto mt-6 max-w-[360px] anim-rise">
@@ -195,6 +200,8 @@ export default function Postar() {
             );
           })}
         </div>
+      ) : action.type === 'checkin' && !passed ? (
+        <div className="px-4 pb-10 anim-rise"><CheckinGate onPass={onPass} /></div>
       ) : (
         <div className="space-y-5 px-4 pb-10 anim-rise">
           <p className="rounded-2xl bg-sand/70 px-4 py-3 text-sm font-bold text-[#6b5643]">{action.hint}</p>

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Check, Gift, Lock, Sparkles } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import {
-  ACH_LABEL, KIND_LABEL, PATHS, REWARDS, TEAM_PHRASES, isUnlocked, kitItems, rewardThreshold,
+  ACH_LABEL, KIND_LABEL, PATHS, RARITY, REWARDS, TEAM_PHRASES, isUnlocked, kitItems, rewardThreshold,
   type PathInfo, type Reward,
 } from '@/lib/rewards';
 import { GROUP_UNLOCKS } from '@/lib/game';
@@ -178,7 +178,7 @@ export function Collection(props: Props) {
   const p = progress(me);
   const prof = profiles[me];
   // por pontos primeiro (em ordem), depois as conquistas por ação
-  const all = REWARDS.filter((r) => !r.path && r.kind !== 'phrase').sort(
+  const all = REWARDS.filter((r) => !r.path && !r.drop && r.kind !== 'phrase').sort(
     (a, b) => (a.req ? 1 : 0) - (b.req ? 1 : 0) || (a.pct ?? 0) - (b.pct ?? 0),
   );
   const got = all.filter((r) => isUnlocked(group, r, p)).length;
@@ -233,7 +233,56 @@ export function Collection(props: Props) {
           </div>
         );
       })}
+      <Surprises {...props} />
     </section>
+  );
+}
+
+/** Surpresas do check-in: cada check-in com QR code sorteia uma. As que faltam ficam em mistério. */
+function Surprises(props: Props) {
+  const { group, me, progress, profiles } = useGroup();
+  const p = progress(me);
+  const prof = profiles[me];
+  const pool = REWARDS.filter((r) => r.drop);
+  const got = pool.filter((r) => isUnlocked(group, r, p));
+  const order = { lendario: 0, raro: 1, comum: 2 } as const;
+  const sorted = [...pool].sort((a, b) => Number(isUnlocked(group, b, p)) - Number(isUnlocked(group, a, p)) || order[a.drop!] - order[b.drop!]);
+  return (
+    <div className="mt-6 rounded-3xl bg-gradient-to-br from-[#2b2118] to-[#5a3a26] p-4 text-white">
+      <div className="flex items-end justify-between">
+        <div>
+          <h3 className="flex items-center gap-1.5 font-display text-lg font-bold"><Gift size={18} className="text-amber" /> Surpresas do check-in</h3>
+          <p className="text-xs leading-snug text-white/70">Cada check-in com o QR code da Casa de Paz sorteia 1 item.</p>
+        </div>
+        <span className="chip bg-white/15 text-white">{got.length}/{pool.length}</span>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {sorted.map((r) => {
+          const ok = isUnlocked(group, r, p);
+          const worn = ok && isWorn(r, props.member, props.titleId);
+          const rar = RARITY[r.drop!];
+          if (!ok)
+            return (
+              <div key={r.id} className="flex flex-col items-center rounded-2xl bg-white/10 p-2 text-center">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 font-display text-xl font-extrabold text-white/50">?</span>
+                <span className={`chip mt-1.5 !px-2 !py-0.5 !text-[9px] ${rar.cls}`}>{rar.label}</span>
+              </div>
+            );
+          return (
+            <button
+              key={r.id}
+              onClick={() => r.kind !== 'phrase' && props.onEquip(r)}
+              disabled={props.saving !== null || r.kind === 'phrase'}
+              className={`flex flex-col items-center rounded-2xl bg-white p-2 text-center text-ink ${worn ? 'ring-2 ring-amber' : ''}`}
+            >
+              <RewardPreview r={r} url={prof?.avatar_url} name={prof?.name} />
+              <span className="mt-1 line-clamp-2 text-[10px] font-extrabold leading-tight">{r.name}</span>
+              <span className={`chip mt-1 !px-2 !py-0.5 !text-[9px] ${rar.cls}`}>{worn ? 'Em uso' : r.kind === 'phrase' ? 'Frase' : rar.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -242,7 +291,8 @@ export function Collection(props: Props) {
 export function Phrases() {
   const { group, me, progress, unlocked } = useGroup();
   const p = progress(me);
-  const own = REWARDS.filter((r) => r.kind === 'phrase');
+  // surpresas do check-in só aparecem aqui depois de ganhas
+  const own = REWARDS.filter((r) => r.kind === 'phrase' && (!r.drop || isUnlocked(group, r, p)));
   return (
     <section className="mx-4 mt-8">
       <h2 className="font-display text-xl font-bold">Frases de sobrepor</h2>

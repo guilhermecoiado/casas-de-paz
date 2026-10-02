@@ -69,6 +69,7 @@ export interface Group {
   last_nudge_date: string | null;
   recap_enabled: boolean;
   last_recap_week: number | null;
+  checkin_qr: boolean;
   group_cap_auto: boolean;
   group_cap_factor: number;
   diminishing: boolean;
@@ -196,5 +197,13 @@ export interface PrayerAmen {
   request_id: number;
   group_id: string;
   user_id: string;
+  created_at: string;
+}
+
+export interface MemberItem {
+  post_id: string;
+  group_id: string;
+  user_id: string;
+  item_id: string;
   created_at: string;
 }
