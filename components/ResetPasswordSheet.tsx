@@ -16,7 +16,13 @@ export function ResetPasswordSheet({ userId, onClose }: { userId: string | null;
   const [pw, setPw] = useState(temp());
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  const p = userId ? profiles[userId] : null;
+  const [extra, setExtra] = useState<{ name: string; username: string } | null>(null);
+  // quem pediu pode não estar no grupo (ex.: sem grupo): busca o perfil
+  useEffect(() => {
+    if (!userId || profiles[userId]) return;
+    supabase.from('profiles').select('name,username').eq('id', userId).maybeSingle().then(({ data }) => setExtra(data as { name: string; username: string } | null));
+  }, [userId, profiles]);
+  const p = userId ? profiles[userId] ?? extra : null;
 
   useEffect(() => { if (userId) { setPw(temp()); setDone(false); } }, [userId]);
 

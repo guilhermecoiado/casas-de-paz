@@ -20,10 +20,15 @@ export async function POST(req: Request) {
   const { data: auth, error: authErr } = await db.auth.getUser(token);
   if (authErr || !auth.user) return NextResponse.json({ error: 'Sessão expirada. Entre novamente.' }, { status: 401 });
 
-  const { data: group } = await db.from('groups').select('id,admin_id').eq('id', input.groupId).maybeSingle();
-  if (!group || group.admin_id !== auth.user.id) return NextResponse.json({ error: 'Apenas o administrador' }, { status: 403 });
+  const { data: group } = await db.from('groups').select('id,admin_id,deleted_at').eq('id', input.groupId).maybeSingle();
+  if (!group || group.deleted_at || group.admin_id !== auth.user.id) return NextResponse.json({ error: 'Apenas o administrador' }, { status: 403 });
   const { data: member } = await db.from('group_members').select('user_id').eq('group_id', group.id).eq('user_id', input.userId).maybeSingle();
-  if (!member) return NextResponse.json({ error: 'Essa pessoa não faz parte do grupo' }, { status: 404 });
+  if (!member) {
+    // fora do grupo: só se a própria pessoa pediu senha nova nos últimos 2 dias
+    const { data: req2 } = await db.from('password_requests').select('id').eq('user_id', input.userId).is('resolved_at', null)
+      .gte('created_at', new Date(Date.now() - 48 * 3600_000).toISOString()).limit(1);
+    if (!req2?.length) return NextResponse.json({ error: 'Essa pessoa não faz parte do grupo' }, { status: 404 });
+  }
 
   // o adm não pode trocar a senha de quem administra outro grupo (protege outros adms)
   if (input.userId !== auth.user.id) {
@@ -33,5 +38,6 @@ export async function POST(req: Request) {
 
   const { error } = await db.auth.admin.updateUserById(input.userId, { password });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await db.from('password_requests').update({ resolved_at: new Date().toISOString() }).eq('user_id', input.userId).is('resolved_at', null);
   return NextResponse.json({ ok: true });
 }

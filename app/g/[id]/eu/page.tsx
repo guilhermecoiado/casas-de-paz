@@ -10,6 +10,7 @@ import { Avatar, PhotoPicker, ProgressBar, Sheet, Spinner } from '@/components/u
 import { MemberTile } from '@/components/Tile';
 import { PushToggle } from '@/components/PushToggle';
 import { StreakCard } from '@/components/StreakCard';
+import { ChangePassword } from '@/components/ChangePassword';
 import { KIND_LABEL, fieldOf, rewardById, kitItems, nextPathReward, rewardThreshold, type PathInfo, type Reward } from '@/lib/rewards';
 import { Collection, EvolutionLine, Phrases } from '@/components/Evolution';
 import { errMsg, supabase, uploadImage } from '@/lib/supabase';
@@ -145,6 +146,7 @@ export default function Eu() {
       <Link href={`/g/${group.id}/como-funciona`} className="mx-4 mt-3 flex items-center gap-3 rounded-2xl bg-white p-3 font-extrabold shadow-sm">
         <CircleHelp size={20} className="text-terra" /> Como funciona a gincana
       </Link>
+      <ChangePassword />
 
       <EvolutionLine member={member} titleId={l.titleId} kit={l.kit} onEquip={equip} onEquipKit={equipKit} saving={saving} />
       <Collection member={member} titleId={l.titleId} kit={l.kit} onEquip={equip} onEquipKit={equipKit} saving={saving} />

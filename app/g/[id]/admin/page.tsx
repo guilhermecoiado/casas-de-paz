@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Gavel, ImagePlus, KeyRound, Plus, Trash2, UserMinus, X } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { useConfirm, useToast } from '@/components/Providers';
@@ -30,6 +30,9 @@ export default function Admin() {
   const [pw, setPw] = useState('');
   const [ledger, setLedger] = useState<string | null>(null);
   const [resetPw, setResetPw] = useState<string | null>(null);
+  // vindo do aviso "pediu uma senha nova": já abre a redefinição
+  const askedPw = useSearchParams()?.get('senha');
+  useEffect(() => { if (askedPw) setResetPw(askedPw); }, [askedPw]);
   const [resetName, setResetName] = useState('');
   const [resetting, setResetting] = useState(false);
   const [newName, setNewName] = useState(group.name);

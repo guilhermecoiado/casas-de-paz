@@ -174,7 +174,7 @@ export interface AppNotification {
   id: number;
   user_id: string;
   group_id: string;
-  kind: 'comment' | 'digest' | 'reminder' | 'manual' | 'nudge' | 'recap' | 'prayer';
+  kind: 'comment' | 'digest' | 'reminder' | 'manual' | 'nudge' | 'recap' | 'prayer' | 'reset';
   title: string;
   body: string;
   url: string;

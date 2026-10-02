@@ -43,7 +43,7 @@ O app abre em tela cheia, com ícone próprio e tela de abertura.
 - **Resumo de posts:** de hora em hora o app confere o que foi postado e manda, no máximo a cada N horas (o adm escolhe 1, 2, 3, 4 ou 6h no painel ⚙️ → Notificações), algo como *"Ana, Beto e mais 3 postaram — venha conferir!"*. Cada pessoa só vê os nomes dos outros, e nada é enviado entre 22h e 8h ou se ninguém postou.
 - **Central de notificações:** o sino no topo do início mostra quantas notificações estão pendentes (o número também aparece no ícone do app, quando o celular permite). Lá ficam os comentários nos seus posts, os resumos do feed, o lembrete do encontro e os avisos do adm. Tocar abre, e o X ou "Limpar todas" apaga. Abrir pelo push também tira a notificação das pendentes.
 - **Lembrete das 20h:** só vai para quem ainda não postou no dia, e lembra a sequência 🔥 quando ela existe. Pode ser desligado no painel.
-- **Esqueceu a senha:** no painel ⚙️ → Membros, a chave 🔑 cria uma senha nova e já monta a mensagem para enviar à pessoa.
+- **Esqueceu a senha:** na tela de entrar, a pessoa toca em *Esqueci minha senha* e digita o @usuário. O adm do grupo dela recebe um push e um aviso na central; ao tocar, abre a 🔑 já preenchida, que cria uma senha temporária e monta a mensagem para enviar. Se a pessoa não estiver em nenhum grupo, o aviso vai para os adms dos grupos ativos. Depois ela troca em Meu perfil → Trocar senha. O adm também pode usar a 🔑 direto em ⚙️ → Membros.
 - **Mudar o horário do lembrete:** edite `vercel.json` (`"0 11 * * *"` = 11h UTC = 8h em Brasília) e faça um novo deploy. No plano gratuito da Vercel, o agendamento roda 1 vez por dia e pode atrasar até 1 hora.
 
 ### Rodar localmente

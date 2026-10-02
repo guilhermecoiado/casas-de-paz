@@ -1327,3 +1327,20 @@ revoke execute on function public.admin_rename_group(uuid, text) from public, an
 grant execute on function public.admin_rename_group(uuid, text) to authenticated;
 revoke execute on function public.admin_delete_group(uuid, text) from public, anon;
 grant execute on function public.admin_delete_group(uuid, text) to authenticated;
+
+-- =====================================================================
+-- v9: "ESQUECI MINHA SENHA" → PEDIDO PARA O ADM
+-- =====================================================================
+create table if not exists public.password_requests (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references public.profiles(id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  resolved_at timestamptz
+);
+create index if not exists password_requests_user on public.password_requests (user_id, created_at desc);
+-- só o servidor (service role) lê e escreve
+alter table public.password_requests enable row level security;
+
+alter table public.notifications drop constraint if exists notifications_kind_check;
+alter table public.notifications add constraint notifications_kind_check
+  check (kind in ('comment', 'digest', 'reminder', 'manual', 'nudge', 'recap', 'prayer', 'reset'));

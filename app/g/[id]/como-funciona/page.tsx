@@ -112,7 +112,7 @@ export default function ComoFunciona() {
 
         <Topic icon="⚖️" title="Regras e justiça">
           <p>O adm pode cancelar pontos de um post que não vale ou mandar para <b>votação do grupo</b>. Quem postou algo errado pode remover o próprio post, e os pontos saem junto.</p>
-          <p>Esqueceu a senha? Peça ao adm: ele cria uma senha nova para você.</p>
+          <p>Esqueceu a senha? Na tela de entrar, toque em <b>Esqueci minha senha</b>: o adm recebe o pedido e manda uma senha nova. Depois, troque em <b>Meu perfil → Trocar senha</b>.</p>
         </Topic>
       </div>
     </div>
