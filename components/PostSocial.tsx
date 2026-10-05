@@ -15,6 +15,7 @@ const QUICK = ['🙏', '❤️', '🔥', '🙌', '😂', '👏', '✨', '🏠', 
 export function PostSocial({ post, autoOpen = false }: { post: Post; autoOpen?: boolean }) {
   const { reactions, comments, me, profiles, setReactionsOptimistic } = useSocial();
   const [open, setOpen] = useState(autoOpen);
+  const [who, setWho] = useState(false);
   useEffect(() => { if (autoOpen) setOpen(true); }, [autoOpen]);
 
   const mine = useMemo(() => reactions.filter((r) => r.post_id === post.id && r.user_id === me).map((r) => r.emoji), [reactions, post.id, me]);
@@ -25,6 +26,16 @@ export function PostSocial({ post, autoOpen = false }: { post: Post; autoOpen?: 
   }, [reactions, post.id]);
   const list = useMemo(() => comments.filter((c) => c.post_id === post.id), [comments, post.id]);
   const last = list[list.length - 1];
+  // quem reagiu (mais recentes primeiro), com os emojis de cada pessoa
+  const reactors = useMemo(() => {
+    const m = new Map<string, ReactionEmoji[]>();
+    reactions
+      .filter((r) => r.post_id === post.id)
+      .sort((a, b) => ((a.created_at || '9') < (b.created_at || '9') ? 1 : -1))
+      .forEach((r) => m.set(r.user_id, [...(m.get(r.user_id) ?? []), r.emoji]));
+    return Array.from(m.entries()).map(([user_id, emojis]) => ({ user_id, emojis }));
+  }, [reactions, post.id]);
+  const firstName = (uid: string) => (uid === me ? 'Você' : profiles[uid]?.name?.split(' ')[0] ?? '…');
 
   return (
     <div className="space-y-2">
@@ -47,6 +58,23 @@ export function PostSocial({ post, autoOpen = false }: { post: Post; autoOpen?: 
         })}
       </div>
 
+      {reactors.length > 0 && (
+        <button onClick={() => setWho(true)} className="flex w-full items-center gap-2 text-left" aria-label="Ver quem reagiu">
+          <span className="flex -space-x-1.5">
+            {reactors.slice(0, 3).map((r) => (
+              <span key={r.user_id} className="rounded-full ring-2 ring-white"><Avatar url={profiles[r.user_id]?.avatar_url} name={profiles[r.user_id]?.name} size={24} /></span>
+            ))}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#8A6F57]">
+            {reactors.length === 1
+              ? `${firstName(reactors[0].user_id)} reagiu`
+              : reactors.length === 2
+                ? `${firstName(reactors[0].user_id)} e ${firstName(reactors[1].user_id)} reagiram`
+                : `${firstName(reactors[0].user_id)}, ${firstName(reactors[1].user_id)} e mais ${reactors.length - 2} reagiram`}
+          </span>
+        </button>
+      )}
+
       <button onClick={() => setOpen(true)} className="w-full text-left">
         {last ? (
           <div className="space-y-0.5">
@@ -61,7 +89,45 @@ export function PostSocial({ post, autoOpen = false }: { post: Post; autoOpen?: 
       </button>
 
       <CommentsSheet open={open} onClose={() => setOpen(false)} post={post} list={list} />
+      <ReactionsSheet open={who} onClose={() => setWho(false)} reactors={reactors} />
     </div>
+  );
+}
+
+/** Lista de quem reagiu, com filtro por emoji. */
+function ReactionsSheet({ open, onClose, reactors }: { open: boolean; onClose: () => void; reactors: { user_id: string; emojis: ReactionEmoji[] }[] }) {
+  const { profiles, look, me } = useGroup();
+  const [tab, setTab] = useState<ReactionEmoji | 'all'>('all');
+  useEffect(() => { if (open) setTab('all'); }, [open]);
+  const total = reactors.reduce((n, r) => n + r.emojis.length, 0);
+  const tabs = REACTIONS.map((e) => ({ e, n: reactors.filter((r) => r.emojis.includes(e)).length })).filter((t) => t.n > 0);
+  const shown = tab === 'all' ? reactors : reactors.filter((r) => r.emojis.includes(tab));
+  return (
+    <Sheet open={open} onClose={onClose} title="Reações">
+      <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-3">
+        <button onClick={() => setTab('all')} className={`chip shrink-0 !px-3.5 !py-2 !text-sm ${tab === 'all' ? 'bg-ink text-white' : 'bg-white text-[#6b5643]'}`}>Todas · {total}</button>
+        {tabs.map((t) => (
+          <button key={t.e} onClick={() => setTab(t.e)} className={`chip shrink-0 !px-3.5 !py-2 !text-sm ${tab === t.e ? 'bg-ink text-white' : 'bg-white text-[#6b5643]'}`}>
+            <span className="text-base">{t.e}</span> {t.n}
+          </button>
+        ))}
+      </div>
+      <div className="max-h-[52vh] space-y-1 overflow-y-auto">
+        {shown.map((r) => {
+          const p = profiles[r.user_id];
+          return (
+            <div key={r.user_id} className="flex items-center gap-3 rounded-2xl px-1 py-2">
+              <Avatar url={p?.avatar_url} name={p?.name} size={40} frame={look(r.user_id).avatarFrame} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-extrabold leading-tight">{p?.name ?? '…'}{r.user_id === me ? ' (você)' : ''}</p>
+                <p className="truncate text-xs font-bold text-[#a8927a]">{look(r.user_id).title}</p>
+              </div>
+              <span className="shrink-0 text-xl tracking-wider">{(tab === 'all' ? r.emojis : [tab]).join('')}</span>
+            </div>
+          );
+        })}
+      </div>
+    </Sheet>
   );
 }
 
