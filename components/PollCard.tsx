@@ -8,7 +8,7 @@ import { useToast } from './Providers';
 import type { Poll } from '@/lib/types';
 
 export function PollCard({ poll }: { poll: Poll }) {
-  const { answers, me, group, members } = useGroup();
+  const { answers, me, group, members, today } = useGroup();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const mine = answers.find((a) => a.poll_id === poll.id && a.user_id === me);
@@ -21,7 +21,7 @@ export function PollCard({ poll }: { poll: Poll }) {
     setBusy(false);
     if (error) return toast(errMsg(error), 'error');
     const pts = (data as { points: number } | null)?.points ?? 0;
-    toast(pts > 0 ? `+${pts} pontos pela resposta!` : 'Resposta registrada (limite semanal atingido)');
+    toast(pts > 0 ? `+${pts} pontos pela resposta!` : today < group.start_date ? 'Resposta registrada (a gincana ainda não começou)' : 'Resposta registrada (limite semanal atingido)');
   };
 
   return (

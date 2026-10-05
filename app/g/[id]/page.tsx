@@ -30,7 +30,7 @@ export default function GroupHome() {
   });
   const bg = unlocked.has('background') && group.background_url;
   const isHouseDay = weekdayOf(today) === group.house_weekday;
-  const myWeek = stats.byUser[me]?.weekPoints ?? 0;
+  const myWeek = stats.byUser[me]?.weekCapUsed ?? 0;
   const before = today < group.start_date;
   const after = today > group.end_date;
   const left = daysLeft(group, today);

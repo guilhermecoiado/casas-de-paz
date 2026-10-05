@@ -32,7 +32,7 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
 
   return (
     <GroupProvider groupId={id} userId={userId} fallback={<FullLoader />} onMissing={onMissing}>
-      <div className="mx-auto min-h-[100dvh] max-w-md pb-nav">{children}</div>
+      <Main>{children}</Main>
       <BottomNav id={id} />
       <UnlockWatcher />
       <MarkOpened />
@@ -107,4 +107,11 @@ function MarkOpened() {
     supabase.from('notifications').update({ read_at: now }).in('id', ids).then(() => {});
   }, [n, post, path, notifications, setNotifications]);
   return null;
+}
+
+/** Conteúdo com espaço para o menu inferior (sem espaço nas telas que escondem o menu). */
+function Main({ children }: { children: React.ReactNode }) {
+  const path = usePathname();
+  const noNav = path?.endsWith('/postar') || path?.endsWith('/chat');
+  return <div className={`mx-auto min-h-[100dvh] max-w-md ${noNav ? '' : 'pb-nav'}`}>{children}</div>;
 }

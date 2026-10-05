@@ -7,12 +7,24 @@ import { WEEKDAYS, timeAgo } from '@/lib/game';
 import { errMsg, supabase } from '@/lib/supabase';
 import type { PushLog } from '@/lib/types';
 import { useConfirm, useToast } from './Providers';
-import { Spinner } from './ui';
+import { Avatar, Spinner } from './ui';
 
 const REMINDER = 'Você tem encontro marcado hoje na casa de paz, esperamos vocês!';
 
 export function AdminPush() {
-  const { group, reload } = useGroup();
+  const { group, reload, members, profiles } = useGroup();
+  const [withPush, setWithPush] = useState<string[] | null>(null);
+  useEffect(() => {
+    supabase.rpc('admin_push_members', { p_group: group.id }).then(({ data }) => setWithPush(((data ?? []) as unknown as string[]).map(String)));
+  }, [group.id, members.length]);
+  const missing = withPush ? members.filter((m) => !withPush.includes(m.user_id)) : [];
+  const cobrar = async () => {
+    const text = 'Oi! Ativa as notificações do app da Casa de Paz 🔔 É só abrir o app e tocar em "Ativar agora" no início. No iPhone, antes instale o app: Compartilhar → Adicionar à Tela de Início.';
+    const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
+    if (nav.share) { try { await nav.share({ text }); return; } catch { /* cancelou */ } }
+    await navigator.clipboard?.writeText(text);
+    toast('Mensagem copiada');
+  };
   const toast = useToast();
   const ask = useConfirm();
   const [title, setTitle] = useState(`Casa de Paz · ${group.name}`);
@@ -64,6 +76,28 @@ export function AdminPush() {
   return (
     <section className="card space-y-3 p-4">
       <h2 className="flex items-center gap-2 font-display text-lg font-bold"><BellRing size={20} className="text-terra" /> Notificações</h2>
+
+      {withPush && (
+        <div className="rounded-2xl bg-cream p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-extrabold leading-tight">Com notificações ativas</p>
+            <span className={`chip ${missing.length ? 'bg-amber/25 text-[#9a5b00]' : 'bg-olive/15 text-olive'}`}>{members.length - missing.length} de {members.length}</span>
+          </div>
+          {missing.length > 0 && (
+            <>
+              <p className="mt-1 text-sm leading-snug text-[#8A6F57]">Ainda não ativaram (não recebem lembrete, resumo nem avisos):</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {missing.map((m) => (
+                  <span key={m.user_id} className="flex items-center gap-1.5 rounded-full bg-white py-1 pl-1 pr-2.5 text-xs font-extrabold">
+                    <Avatar url={profiles[m.user_id]?.avatar_url} name={profiles[m.user_id]?.name} size={22} />{profiles[m.user_id]?.name?.split(' ')[0]}
+                  </span>
+                ))}
+              </div>
+              <button onClick={cobrar} className="btn-soft mt-2 w-full !min-h-[40px] !text-sm">Mandar lembrete para ativarem</button>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="flex items-start gap-3 rounded-2xl bg-cream p-3">
         <CalendarClock size={20} className="mt-0.5 shrink-0 text-terra" />

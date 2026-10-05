@@ -102,7 +102,7 @@ export default function Avisos() {
                     </div>
                   </button>
                   {!n.read_at && <span className="absolute right-4 top-4 h-2.5 w-2.5 rounded-full bg-terra" aria-label="Não lida" />}
-                  <button onClick={() => remove([n.id])} className="absolute bottom-2.5 right-2.5 rounded-full p-1.5 text-[#c4b09a]" aria-label="Limpar notificação">
+                  <button onClick={() => remove([n.id])} className="absolute bottom-1 right-1 rounded-full p-2.5 text-[#c4b09a]" aria-label="Limpar notificação">
                     <X size={16} />
                   </button>
                 </li>

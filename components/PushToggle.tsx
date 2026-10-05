@@ -19,7 +19,11 @@ export function PushToggle({ variant = 'full' }: { variant?: 'compact' | 'full' 
 
   useEffect(() => {
     getPushState().then(setState).catch(() => setState('unsupported'));
-    try { setDismissed(localStorage.getItem('cdp-push-dismissed') === '1'); } catch {}
+    // "fechar" esconde o convite por 2 dias (depois ele volta: notificações fazem muita diferença no engajamento)
+    try {
+      const t = Number(localStorage.getItem('cdp-push-dismissed-at') || 0);
+      setDismissed(Date.now() - t < 2 * 86400_000);
+    } catch {}
   }, []);
 
   const on = async () => {
@@ -46,27 +50,37 @@ export function PushToggle({ variant = 'full' }: { variant?: 'compact' | 'full' 
   if (!state || state === 'no-key') return null;
 
   if (variant === 'compact') {
-    if (dismissed || state === 'on' || state === 'unsupported' || state === 'denied') return null;
+    if (dismissed || state === 'on' || state === 'unsupported') return null;
+    const close = () => { setDismissed(true); try { localStorage.setItem('cdp-push-dismissed-at', String(Date.now())); } catch {} };
     return (
-      <div className="card relative flex items-center gap-3 p-4 anim-rise">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber/20 text-terra"><BellRing size={22} /></span>
-        <div className="min-w-0 flex-1 pr-4">
-          <p className="font-extrabold leading-tight">Receba o lembrete do encontro</p>
-          {state === 'ios-install' ? (
-            <p className="text-xs leading-snug text-[#8A6F57]">No iPhone, instale o app: <Share size={12} className="inline -mt-0.5" /> Compartilhar → <SquarePlus size={12} className="inline -mt-0.5" /> Tela de Início</p>
-          ) : (
-            <button onClick={on} disabled={busy} className="mt-1 flex items-center gap-1 text-sm font-extrabold text-terra">
-              {busy ? <Spinner className="h-4 w-4" /> : <Bell size={15} />} Ativar notificações
-            </button>
-          )}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-terra to-[#e07a4f] p-4 text-white shadow-lg anim-rise">
+        <button className="absolute right-1.5 top-1.5 rounded-full p-2.5 text-white/80" aria-label="Fechar" onClick={close}><X size={16} /></button>
+        <div className="flex items-start gap-3 pr-6">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/20"><BellRing size={22} /></span>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-lg font-bold leading-tight">
+              {state === 'denied' ? 'Notificações bloqueadas' : 'Ative as notificações'}
+            </p>
+            <p className="mt-0.5 text-[13px] leading-snug text-white/90">
+              {state === 'denied'
+                ? 'Libere nas configurações do celular (Notificações → este app) para receber os avisos do grupo.'
+                : 'Lembrete do encontro, aviso antes de perder a sequência 🔥 e quem comentou nos seus posts.'}
+            </p>
+          </div>
         </div>
-        <button
-          className="absolute right-3 top-3 text-[#b9a690]"
-          aria-label="Fechar"
-          onClick={() => { setDismissed(true); try { localStorage.setItem('cdp-push-dismissed', '1'); } catch {} }}
-        >
-          <X size={16} />
-        </button>
+        {state === 'off' && (
+          <button onClick={on} disabled={busy} className="btn mt-3 w-full bg-white !min-h-[44px] text-terra">
+            {busy ? <Spinner className="h-4 w-4" /> : <><Bell size={17} /> Ativar agora</>}
+          </button>
+        )}
+        {state === 'ios-install' && (
+          <div className="mt-3 space-y-1.5 rounded-2xl bg-white/15 p-3 text-[13px] font-bold leading-snug">
+            <p>No iPhone, as notificações só funcionam com o app instalado:</p>
+            <p>1. Toque em <Share size={13} className="-mt-0.5 inline" /> <b>Compartilhar</b> (barra do Safari)</p>
+            <p>2. Escolha <SquarePlus size={13} className="-mt-0.5 inline" /> <b>Adicionar à Tela de Início</b></p>
+            <p>3. Abra o app pelo ícone e toque em <b>Ativar</b></p>
+          </div>
+        )}
       </div>
     );
   }

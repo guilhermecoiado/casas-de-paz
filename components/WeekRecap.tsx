@@ -56,7 +56,7 @@ export function WeekRecap({ houseRef }: { houseRef: React.RefObject<HTMLElement>
     <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#2b2118] to-[#5a3a26] p-4 text-white shadow-lg anim-rise">
       <button
         onClick={() => { try { localStorage.setItem(key, '1'); } catch { /* ok */ } setHidden(true); }}
-        className="absolute right-3 top-3 rounded-full bg-white/10 p-1.5" aria-label="Fechar"
+        className="absolute right-2 top-2 rounded-full bg-white/10 p-2.5" aria-label="Fechar"
       >
         <X size={16} />
       </button>

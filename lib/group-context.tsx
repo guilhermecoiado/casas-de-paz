@@ -46,6 +46,18 @@ export const useGroup = () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = { [k: string]: any };
 
+/** Busca todas as linhas (a API do Supabase devolve no máximo 1000 por vez). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchAll<T>(make: () => any, page = 1000): Promise<{ data: T[] | null; error: unknown }> {
+  const all: T[] = [];
+  for (let from = 0; ; from += page) {
+    const { data, error } = await make().range(from, from + page - 1);
+    if (error) return { data: null, error };
+    all.push(...((data ?? []) as T[]));
+    if (!data || data.length < page) return { data: all, error: null };
+  }
+}
+
 function applyChange<T>(list: T[], payload: RealtimePostgresChangesPayload<Row>, key: (r: T) => string, prepend = false): T[] {
   if (payload.eventType === 'DELETE') {
     const old = payload.old as unknown as T;
@@ -97,28 +109,31 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
     const [g, m, p, v, pl, a, rx, cm, nt, it, aw] = await Promise.all([
       supabase.from('groups').select('*').eq('id', groupId).maybeSingle(),
       supabase.from('group_members').select('*').eq('group_id', groupId),
-      supabase.from('posts').select('*').eq('group_id', groupId).not('status', 'in', '(archived,removed)').order('created_at', { ascending: false }).limit(5000),
-      supabase.from('post_votes').select('*').eq('group_id', groupId),
+      fetchAll<Post>(() => supabase.from('posts').select('*').eq('group_id', groupId).not('status', 'in', '(archived,removed)').order('created_at', { ascending: false }).order('id')),
+      fetchAll<Vote>(() => supabase.from('post_votes').select('*').eq('group_id', groupId).order('post_id').order('user_id')),
       supabase.from('polls').select('*').eq('group_id', groupId).eq('archived', false).order('created_at', { ascending: false }),
-      supabase.from('poll_answers').select('*').eq('group_id', groupId),
-      supabase.from('post_reactions').select('*').eq('group_id', groupId),
-      supabase.from('post_comments').select('*').eq('group_id', groupId).order('created_at').limit(5000),
+      fetchAll<PollAnswer>(() => supabase.from('poll_answers').select('*').eq('group_id', groupId).order('poll_id').order('user_id')),
+      fetchAll<Reaction>(() => supabase.from('post_reactions').select('*').eq('group_id', groupId).order('created_at').order('post_id')),
+      fetchAll<Comment>(() => supabase.from('post_comments').select('*').eq('group_id', groupId).order('created_at').order('id')),
       supabase.from('notifications').select('*').eq('group_id', groupId).eq('user_id', userId).order('created_at', { ascending: false }).limit(60),
-      supabase.from('member_items').select('*').eq('group_id', groupId),
+      fetchAll<MemberItem>(() => supabase.from('member_items').select('*').eq('group_id', groupId).order('post_id')),
       supabase.from('streak_awards').select('*').eq('group_id', groupId),
     ]);
+    // só sai do grupo se ele realmente não existe mais (sem sinal ≠ grupo excluído)
+    if (g.error) return;
     if (!g.data) return onMissing();
     setGroup(g.data as Group);
-    setMembers((m.data ?? []) as Member[]);
-    setPosts((p.data ?? []) as Post[]);
-    setVotes((v.data ?? []) as Vote[]);
-    setPolls((pl.data ?? []) as Poll[]);
-    setAnswers((a.data ?? []) as PollAnswer[]);
-    setReactions((rx.data ?? []) as Reaction[]);
-    setComments((cm.data ?? []) as Comment[]);
-    setNotifications((nt.data ?? []) as AppNotification[]);
-    setItems((it.data ?? []) as MemberItem[]);
-    setAwards((aw.data ?? []) as StreakAward[]);
+    // em erro de rede, mantém o que já estava na tela
+    if (!m.error) setMembers((m.data ?? []) as Member[]);
+    if (!p.error) setPosts((p.data ?? []) as Post[]);
+    if (!v.error) setVotes((v.data ?? []) as Vote[]);
+    if (!pl.error) setPolls((pl.data ?? []) as Poll[]);
+    if (!a.error) setAnswers((a.data ?? []) as PollAnswer[]);
+    if (!rx.error) setReactions((rx.data ?? []) as Reaction[]);
+    if (!cm.error) setComments((cm.data ?? []) as Comment[]);
+    if (!nt.error) setNotifications((nt.data ?? []) as AppNotification[]);
+    if (!it.error) setItems((it.data ?? []) as MemberItem[]);
+    if (!aw.error) setAwards((aw.data ?? []) as StreakAward[]);
     await reloadProfiles();
   }, [groupId, userId, onMissing, reloadProfiles]);
 
@@ -196,9 +211,10 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
     return () => clearInterval(t);
   }, [group]);
 
-  const value = useMemo<GroupData | null>(() => {
-    if (!group || !today) return null;
-    const stats = computeStats(group, members, posts, today);
+  // cálculo pesado separado: só refaz quando posts/membros mudam (não a cada reação ou comentário)
+  const stats = useMemo(() => (group && today ? computeStats(group, members, posts, today) : null), [group, members, posts, today]);
+  const derived = useMemo(() => {
+    if (!group || !stats) return null;
     const memberMap = new Map(members.map((m) => [m.user_id, m]));
     // surpresas do check-in: só contam se o check-in continua válido
     const valid = new Map(posts.map((p) => [p.id, p.status]));
@@ -209,19 +225,32 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
       ownedBy.set(i.user_id, [...(ownedBy.get(i.user_id) ?? []), i.item_id]);
     });
     const prog = (uid: string) => ({ ...(stats.byUser[uid] ?? emptyProgress()), owned: ownedBy.get(uid) ?? [] });
+    // níveis do intensivo só valem se o bônus continua válido (temporada zerada ou bônus cancelado não contam)
+    const validAwards = awards.filter((a) => a.post_id && valid.has(a.post_id) && valid.get(a.post_id) !== 'cancelled');
     return {
-      group, members, profiles, posts, votes, polls, answers, reactions, comments, notifications, items, awards, unread, setNotifications, today, stats,
+      prog,
+      look: (uid: string) => equipped(group, memberMap.get(uid), prog(uid)),
+      validAwards,
       unlocked: groupUnlocked(maxGroup(group, members.length), stats.groupPoints),
+    };
+  }, [group, stats, members, posts, items, awards]);
+
+  const value = useMemo<GroupData | null>(() => {
+    if (!group || !today || !stats || !derived) return null;
+    const { prog } = derived;
+    return {
+      group, members, profiles, posts, votes, polls, answers, reactions, comments, notifications, items, awards: derived.validAwards, unread, setNotifications, today, stats,
+      unlocked: derived.unlocked,
       isAdmin: group.admin_id === userId,
       me: userId,
       myPoints: stats.byUser[userId]?.points ?? 0,
       maxInd: maxIndividual(group),
       maxGrp: maxGroup(group, members.length),
-      look: (uid: string) => equipped(group, memberMap.get(uid), prog(uid)),
+      look: derived.look,
       progress: prog,
       reload, reloadProfiles,
     };
-  }, [group, members, profiles, posts, votes, polls, answers, reactions, comments, notifications, items, awards, unread, today, userId, reload, reloadProfiles]);
+  }, [group, members, profiles, posts, votes, polls, answers, reactions, comments, notifications, items, unread, today, userId, reload, reloadProfiles, stats, derived]);
 
   if (!value) return <>{fallback}</>;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -22,6 +22,9 @@ export default function Admin() {
   const ask = useConfirm();
   const { group, isAdmin, members, profiles, polls, answers, posts, me, today, unlocked, reload } = useGroup();
   const [form, setForm] = useState<Group>(group);
+  const [dirty, setDirty] = useState(false);
+  // acompanha o grupo (ex.: depois de zerar a temporada) enquanto não houver edição pendente
+  useEffect(() => { if (!dirty) setForm(group); }, [group, dirty]);
   const [saving, setSaving] = useState(false);
   const [q, setQ] = useState('');
   const [opts, setOpts] = useState<string[]>(['', '']);
@@ -49,8 +52,8 @@ export default function Admin() {
     );
   }
 
-  const set = <K extends keyof Group>(k: K, v: Group[K]) => setForm((f) => ({ ...f, [k]: v }));
-  const setPoint = (k: keyof PointsConfig, v: number) => setForm((f) => ({ ...f, points: { ...f.points, [k]: v } }));
+  const set = <K extends keyof Group>(k: K, v: Group[K]) => { setDirty(true); setForm((f) => ({ ...f, [k]: v })); };
+  const setPoint = (k: keyof PointsConfig, v: number) => { setDirty(true); setForm((f) => ({ ...f, points: { ...f.points, [k]: v } })); };
   const weeks = totalWeeks(form);
   const teamCap = teamWeeklyCap(form, members.length);
 
@@ -115,6 +118,7 @@ export default function Admin() {
     }).eq('id', group.id);
     setSaving(false);
     if (error) return toast(errMsg(error), 'error');
+    setDirty(false);
     toast('Configurações salvas');
     reload();
   };
@@ -313,7 +317,7 @@ export default function Admin() {
                     <p className="text-xs font-bold text-[#a8927a]">{formatDate(p.poll_date)}{p.poll_date === today ? ' · hoje' : ''}</p>
                     <p className="font-extrabold leading-snug">{p.question}</p>
                   </div>
-                  <button onClick={() => deletePoll(p.id)} className="p-1 text-[#a8927a]" aria-label="Excluir"><Trash2 size={18} /></button>
+                  <button onClick={() => deletePoll(p.id)} className="-m-1.5 p-2.5 text-[#a8927a]" aria-label="Excluir"><Trash2 size={18} /></button>
                 </div>
                 <p className="mt-1 text-xs text-[#8A6F57]">
                   {p.options.map((o, i) => `${o}: ${answers.filter((a) => a.poll_id === p.id && a.option_index === i).length}`).join(' · ')}
@@ -418,14 +422,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function NumberInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  // texto livre enquanto digita (dá para apagar tudo); vira número ao sair do campo
+  const [text, setText] = useState(String(Number.isFinite(value) ? value : 0));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { if (!editing) setText(String(Number.isFinite(value) ? value : 0)); }, [value, editing]);
   return (
     <input
       className="input text-center font-extrabold"
-      type="number"
+      type="text"
       inputMode="numeric"
-      min={0}
-      value={Number.isFinite(value) ? value : 0}
-      onChange={(e) => onChange(parseInt(e.target.value || '0', 10))}
+      value={text}
+      onFocus={(e) => { setEditing(true); e.currentTarget.select(); }}
+      onChange={(e) => {
+        const t = e.target.value.replace(/[^0-9]/g, '');
+        setText(t);
+        if (t !== '') onChange(parseInt(t, 10));
+      }}
+      onBlur={() => { setEditing(false); onChange(parseInt(text || '0', 10)); }}
     />
   );
 }

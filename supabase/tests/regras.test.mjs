@@ -325,5 +325,18 @@ ok((await as('zeca', `select * from post_comments`)).length === 0, 'não-membro 
   ok((await as('caio', `insert into streak_awards (group_id,user_id,level,local_date) values ($1,$2,7,current_date)`, [gs, U])).error, 'não cria prêmio na mão');
 }
 
+
+// ---- v11: refazer check-in no mesmo dia não sorteia de novo ----
+{
+  const [{ create_group: gq }] = await as('davi', `select create_group('Grupo Sorteio', 'abcd')`);
+  await c.query(`update groups set start_date = current_date - 3, end_date = current_date + 20, house_weekday = $2, checkin_qr = false where id=$1`, [gq, dow]);
+  const first = (await as('davi', `select * from submit_post($1,'checkin','http://x/a.jpg',null,0)`, [gq]))[0];
+  const item1 = (await c.query(`select item_id from member_items where post_id=$1`, [first.id])).rows[0]?.item_id;
+  ok(!(await as('davi', `select remove_post($1)`, [first.id])).error, 'remove o próprio check-in');
+  const second = (await as('davi', `select * from submit_post($1,'checkin','http://x/b.jpg',null,0)`, [gq]))[0];
+  const item2 = (await c.query(`select item_id from member_items where post_id=$1`, [second?.id])).rows[0]?.item_id;
+  ok(!!item1 && item1 === item2, `mesmo item ao refazer (${item1} / ${item2})`);
+}
+
 console.log(fails ? `\n${fails} FALHA(S)` : '\nTODOS OS TESTES PASSARAM');
 await c.end();

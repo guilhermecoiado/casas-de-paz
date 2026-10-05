@@ -213,7 +213,7 @@ function CommentsSheet({ open, onClose, post, list }: { open: boolean; onClose: 
                 <div className="mt-0.5 flex items-center gap-3 pl-2 text-xs font-bold text-[#a8927a]">
                   <span>{timeAgo(c.created_at)}</span>
                   {(c.user_id === me || isAdmin) && (
-                    <button onClick={() => del(c)} className="flex items-center gap-1 text-[#a8927a]"><Trash2 size={12} /> Apagar</button>
+                    <button onClick={() => del(c)} className="-my-2 flex items-center gap-1 px-1 py-2 text-[#a8927a]"><Trash2 size={13} /> Apagar</button>
                   )}
                 </div>
               </div>

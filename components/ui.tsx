@@ -54,7 +54,7 @@ export function Sheet({
         {title && (
           <div className="mb-4 flex items-center justify-between">
             <h3 className="font-display text-xl font-bold">{title}</h3>
-            <button onClick={onClose} className="rounded-full bg-sand p-2" aria-label="Fechar"><X size={18} /></button>
+            <button onClick={onClose} className="rounded-full bg-sand p-2.5" aria-label="Fechar"><X size={19} /></button>
           </div>
         )}
         <div className="pb-6">{children}</div>

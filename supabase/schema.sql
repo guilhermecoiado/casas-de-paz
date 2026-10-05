@@ -1454,3 +1454,58 @@ create trigger posts_streak_milestone after insert on public.posts
 revoke execute on function public._streak(uuid, uuid, date) from public, anon, authenticated;
 revoke execute on function public.streak_boost() from public, anon, authenticated;
 revoke execute on function public.streak_milestone() from public, anon, authenticated;
+
+-- =====================================================================
+-- v11: ajustes da revisão
+-- =====================================================================
+-- zerar temporada também recomeça o fechamento semanal (os níveis do intensivo já
+-- ficam sem efeito porque os bônus deles são arquivados)
+create or replace function public.admin_reset_group(p_group uuid, p_confirm text)
+returns void language plpgsql security definer set search_path = public as $$
+declare g public.groups; v_today date;
+begin
+  if not is_admin(p_group) then raise exception 'Apenas o administrador'; end if;
+  select * into g from groups where id = p_group;
+  if lower(trim(coalesce(p_confirm, ''))) <> lower(g.name) then raise exception 'Digite o nome do grupo para confirmar'; end if;
+  v_today := (now() at time zone g.timezone)::date;
+  update posts set status = 'archived' where group_id = p_group and status <> 'archived';
+  update polls set archived = true where group_id = p_group and not archived;
+  update group_members set title = null, avatar_frame = null, tile_frame = null, tile_color = null, tile_anim = null
+   where group_id = p_group;
+  update groups set start_date = v_today, end_date = v_today + 27, last_recap_week = null, last_nudge_date = null where id = p_group;
+end $$;
+
+-- surpresa do check-in: remover e refazer o check-in no mesmo dia devolve o MESMO item (sem novo sorteio)
+create or replace function public.checkin_drop()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_item text;
+begin
+  if new.type <> 'checkin' then return new; end if;
+  select mi.item_id into v_item from member_items mi join posts po on po.id = mi.post_id
+   where mi.group_id = new.group_id and mi.user_id = new.user_id and po.local_date = new.local_date and po.id <> new.id
+   order by mi.created_at desc limit 1;
+  if v_item is null then
+    select p.item_id into v_item
+      from _checkin_pool() p
+     where p.item_id not in (
+       select mi.item_id from member_items mi join posts po on po.id = mi.post_id
+        where mi.group_id = new.group_id and mi.user_id = new.user_id
+          and po.status not in ('cancelled', 'archived', 'removed'))
+     order by -ln(1 - random()) / p.weight
+     limit 1;
+  end if;
+  if v_item is not null then
+    insert into member_items (post_id, group_id, user_id, item_id) values (new.id, new.group_id, new.user_id, v_item);
+  end if;
+  return new;
+end $$;
+
+-- adm vê quem ainda não ativou as notificações (só a lista de quem tem, sem dados do aparelho)
+create or replace function public.admin_push_members(p_group uuid)
+returns setof uuid language sql stable security definer set search_path = public as $$
+  select distinct s.user_id from push_subscriptions s
+    join group_members m on m.user_id = s.user_id and m.group_id = p_group
+   where is_admin(p_group);
+$$;
+revoke execute on function public.admin_push_members(uuid) from public, anon;
+grant execute on function public.admin_push_members(uuid) to authenticated;

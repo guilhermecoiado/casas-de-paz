@@ -48,14 +48,14 @@ export function PostCard({ post, openComments = false, highlight = false }: { po
         </div>
         <span className="chip bg-terra/10 text-terra">{TYPE_LABEL[post.type]}</span>
         {(isAdmin || canRemove(post)) && (
-          <button onClick={() => setMenu(true)} className="rounded-full p-1.5 text-[#8A6F57]" aria-label="Opções do post"><MoreHorizontal size={20} /></button>
+          <button onClick={() => setMenu(true)} className="-mr-1 rounded-full p-2.5 text-[#8A6F57]" aria-label="Opções do post"><MoreHorizontal size={20} /></button>
         )}
       </div>
 
       {post.photo_url && (
         <div className="relative bg-sand">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={post.photo_url} alt="" className="max-h-[70vh] w-full object-cover" loading="lazy" />
+          <img src={post.photo_url} alt="" className="aspect-[4/5] max-h-[70vh] w-full object-cover" loading="lazy" />
         </div>
       )}
 
@@ -124,7 +124,7 @@ export function PostCard({ post, openComments = false, highlight = false }: { po
         </div>
       </Sheet>
       {post.photo_url && (
-        <ShareSheet open={sharing} onClose={() => setSharing(false)} source={post.photo_url} week={post.week} label={TYPE_LABEL[post.type]} dateLabel={formatDate(post.local_date, { day: '2-digit', month: 'long' })} />
+        sharing && <ShareSheet open={sharing} onClose={() => setSharing(false)} source={post.photo_url} week={post.week} label={TYPE_LABEL[post.type]} dateLabel={formatDate(post.local_date, { day: '2-digit', month: 'long' })} />
       )}
     </article>
   );

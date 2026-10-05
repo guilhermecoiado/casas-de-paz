@@ -47,8 +47,8 @@ export default function Postar() {
   const isHouseDay = weekdayOf(today) === group.house_weekday;
   const groupPhotoBy = groupToday.find((p) => p.type === 'group' && p.status !== 'cancelled');
   const dayMax = dailyMax(group);
-  const dayDone = myToday.filter((p) => p.status !== 'cancelled' && ACTIONS.some((a) => a.when === 'daily' && a.type === p.type)).reduce((s, p) => s + p.points, 0);
-  const weekDone = stats.byUser[me]?.weekPoints ?? 0;
+  const dayDone = myToday.filter((p) => p.status !== 'cancelled' && ACTIONS.some((a) => a.when === 'daily' && a.type === p.type)).reduce((s, p) => s + p.points - (p.boost ?? 0), 0);
+  const weekDone = stats.byUser[me]?.weekCapUsed ?? 0;
   // atalho vindo de outra tela (ex.: mural de oração → "Orei pela Casa de Paz")
   const preset = useSearchParams()?.get('acao');
   useEffect(() => {
@@ -144,7 +144,11 @@ export default function Postar() {
             </div>
           </div>
           {(['daily', 'meeting'] as const).map((when) => {
-            const list = ACTIONS.filter((a) => a.when === when);
+            // o que já foi feito hoje vai para o fim (o que falta fica em cima)
+            const list = ACTIONS.filter((a) => a.when === when)
+              .map((a, i) => ({ a, i, done: actionAvailability(group, a.type, today, myToday, groupToday).blocked === 'done' }))
+              .sort((x, y) => Number(x.done) - Number(y.done) || x.i - y.i)
+              .map((x) => x.a);
             return (
               <section key={when}>
                 <div className="mb-2.5 flex items-end justify-between px-1">
