@@ -23,12 +23,21 @@ export const totalWeeks = (g: Group) => Math.max(Math.ceil((daysBetween(g.start_
 /** Semana do período (depois do fim continua contando: semana 5, 6...). */
 export const weekOf = (g: Group, d: string) => Math.max(Math.floor(daysBetween(g.start_date, d) / 7) + 1, 1);
 
-export const maxIndividual = (g: Group) => g.weekly_user_cap * totalWeeks(g);
+/** Dias do período (início e fim inclusos). */
+export const periodDays = (g: Group) => Math.max(daysBetween(g.start_date, g.end_date) + 1, 1);
+/** Duração em semanas com fração: 22 dias = 3,14 semanas (a última semana curta conta só os dias que tem). */
+export const periodWeeks = (g: Group) => periodDays(g) / 7;
+/** Dias que faltam até o fim do período, contando hoje. */
+export const daysLeft = (g: Group, today: string) => Math.max(daysBetween(today, g.end_date) + 1, 0);
+const round10 = (n: number) => Math.max(10, Math.round(n / 10) * 10);
+
+/** Meta individual = limite semanal × semanas do período (proporcional aos dias reais). */
+export const maxIndividual = (g: Group) => round10(g.weekly_user_cap * periodWeeks(g));
 
 /** Quanto a equipe pode somar por semana para a casa: automático (membros × limite × %) ou manual. */
 export const teamWeeklyCap = (g: Group, members: number) =>
   g.group_cap_auto ? Math.max(1, Math.round(g.weekly_user_cap * Math.max(members, 1) * Number(g.group_cap_factor || 0.6))) : g.weekly_group_cap;
-export const maxGroup = (g: Group, members: number) => teamWeeklyCap(g, members) * totalWeeks(g);
+export const maxGroup = (g: Group, members: number) => round10(teamWeeklyCap(g, members) * periodWeeks(g));
 
 export const WEEKDAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 export const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];

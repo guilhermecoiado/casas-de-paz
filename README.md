@@ -94,8 +94,8 @@ Cada resposta de enquete vale 10 pts.
 ### Limites semanais (liberação gradual)
 - **Por pessoa** (padrão: 250 por semana) e **da equipe** (padrão: 2.000 por semana).
 - O que passa do limite não conta. O post aparece com o selo "limite semanal".
-- **Pontuação máxima individual** = limite por pessoa × número de semanas. Ela libera **todos os prêmios individuais**.
-- **Pontuação máxima da equipe** = limite da equipe × número de semanas. Ela **completa a casa**.
+- **Pontuação máxima individual** = limite por pessoa × semanas do período, contadas pelos dias reais (22 dias = 3,14 semanas; a última semana curta conta só os dias que tem). Ela libera **todos os prêmios individuais**.
+- **Pontuação máxima da equipe** = limite da equipe × semanas do período (pelos dias reais). Ela **completa a casa**.
 - Os desbloqueios usam **percentuais** desses máximos, então se ajustam sozinhos quando o adm muda os limites ou as datas.
 - Atenção: quando a equipe atinge o limite da semana, os pontos individuais também param até a semana seguinte.
 

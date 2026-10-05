@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Bell, CalendarDays, CircleHelp, HandHeart, Lock, MessageCircle, Settings, UserPlus } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
-import { GROUP_UNLOCKS, WEEKDAYS, formatDate, groupThreshold, nextGroupUnlock, totalWeeks, weekdayOf } from '@/lib/game';
+import { GROUP_UNLOCKS, WEEKDAYS, daysLeft, formatDate, groupThreshold, nextGroupUnlock, totalWeeks, weekdayOf } from '@/lib/game';
 import { Avatar, ProgressBar } from '@/components/ui';
 import { MemberTile } from '@/components/Tile';
 import { House } from '@/components/House';
@@ -33,6 +33,7 @@ export default function GroupHome() {
   const myWeek = stats.byUser[me]?.weekPoints ?? 0;
   const before = today < group.start_date;
   const after = today > group.end_date;
+  const left = daysLeft(group, today);
 
   return (
     <div>
@@ -81,7 +82,7 @@ export default function GroupHome() {
             <CalendarDays size={15} />
             {before
               ? `Começa ${formatDate(group.start_date)}`
-              : `${after ? `Semana ${stats.week} (extra)` : `Semana ${stats.week} de ${totalWeeks(group)}`} · ${isHouseDay ? 'Hoje é dia de Casa de Paz! 🏠' : `Casa de Paz às ${WEEKDAYS[group.house_weekday].toLowerCase()}s`}`}
+              : `${after ? `Semana ${stats.week} (extra)` : `Semana ${stats.week} de ${totalWeeks(group)} · ${left <= 1 ? 'último dia! 🏁' : `faltam ${left} dias`}`} · ${isHouseDay ? 'Hoje é dia de Casa de Paz! 🏠' : `Casa de Paz às ${WEEKDAYS[group.house_weekday].toLowerCase()}s`}`}
           </p>
         </div>
       </header>

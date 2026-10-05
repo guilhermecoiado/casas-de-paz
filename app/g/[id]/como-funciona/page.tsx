@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
-import { ACTIONS, WEEKDAYS, actionPoints, dailyMax, formatDate, meetingMax, totalWeeks } from '@/lib/game';
+import { ACTIONS, WEEKDAYS, actionPoints, dailyMax, formatDate, maxIndividual, meetingMax, totalWeeks } from '@/lib/game';
 import { PATHS } from '@/lib/rewards';
 
 function Topic({ icon, title, children, open = false }: { icon: string; title: string; children: React.ReactNode; open?: boolean }) {
@@ -67,7 +67,7 @@ export default function ComoFunciona() {
 
         <Topic icon="🎯" title="Limites e meta da semana">
           <p>Cada pessoa pode somar até <b>{group.weekly_user_cap.toLocaleString('pt-BR')} pts por semana</b>. O que passa disso não conta, e o post fica com o selo “limite semanal”.</p>
-          <p>A meta é chegar perto de <b>{(group.weekly_user_cap * weeks).toLocaleString('pt-BR')} pts</b> nas {weeks} semanas: isso libera todos os prêmios individuais.</p>
+          <p>A meta é chegar perto de <b>{maxIndividual(group).toLocaleString('pt-BR')} pts</b> no período: isso libera todos os prêmios individuais.</p>
           <p>A pontuação não zera sozinha no fim do período: só o adm pode começar uma temporada nova.</p>
         </Topic>
 

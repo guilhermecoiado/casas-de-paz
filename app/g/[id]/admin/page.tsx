@@ -11,7 +11,7 @@ import { AdminPush } from '@/components/AdminPush';
 import { AdminCheckinQR } from '@/components/AdminCheckinQR';
 import { MemberSheet } from '@/components/MemberSheet';
 import { ResetPasswordSheet } from '@/components/ResetPasswordSheet';
-import { POINT_LABELS, WEEKDAYS, WEEKDAYS_SHORT, dailyMax, formatDate, meetingMax, suggestedWeeklyCap, teamWeeklyCap, totalWeeks } from '@/lib/game';
+import { POINT_LABELS, WEEKDAYS, WEEKDAYS_SHORT, dailyMax, formatDate, maxGroup, maxIndividual, meetingMax, periodDays, suggestedWeeklyCap, teamWeeklyCap, totalWeeks } from '@/lib/game';
 import { compressImage } from '@/lib/image';
 import { errMsg, supabase, uploadImage } from '@/lib/supabase';
 import type { Group, PointsConfig } from '@/lib/types';
@@ -197,7 +197,7 @@ export default function Admin() {
               {WEEKDAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
             </select>
           </Field>
-          <p className="text-xs font-bold text-[#a8927a]">{weeks} semana{weeks > 1 ? 's' : ''} · {formatDate(form.start_date)} a {formatDate(form.end_date)}</p>
+          <p className="text-xs font-bold text-[#a8927a]">{periodDays(form)} dias ({weeks} semana{weeks > 1 ? 's' : ''}{periodDays(form) % 7 ? `, a última com ${periodDays(form) % 7} dia${periodDays(form) % 7 > 1 ? 's' : ''}` : ''}) · {formatDate(form.start_date)} a {formatDate(form.end_date)}</p>
         </Section>
 
         <Section title="Dias de postagem">
@@ -259,8 +259,8 @@ export default function Admin() {
           </div>
           <p className="text-xs leading-relaxed text-[#8A6F57]">
             Por semana: <b>{form.weekly_user_cap.toLocaleString('pt-BR')} pts por pessoa</b> e <b>{teamCap.toLocaleString('pt-BR')} pts da equipe</b>.<br />
-            No período ({weeks} semanas): <b>{(form.weekly_user_cap * weeks).toLocaleString('pt-BR')}</b> por pessoa (libera toda a evolução) e{' '}
-            <b>{(teamCap * weeks).toLocaleString('pt-BR')}</b> da equipe (completa a casa). O limite da equipe só controla o avanço da casa; não trava os pontos de ninguém.
+            No período ({periodDays(form)} dias): <b>{maxIndividual(form).toLocaleString('pt-BR')}</b> por pessoa (libera toda a evolução) e{' '}
+            <b>{maxGroup(form, members.length).toLocaleString('pt-BR')}</b> da equipe (completa a casa). Semana incompleta conta só pelos dias que tem. O limite da equipe só controla o avanço da casa; não trava os pontos de ninguém.
           </p>
         </Section>
 
