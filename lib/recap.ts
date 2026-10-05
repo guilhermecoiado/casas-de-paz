@@ -41,7 +41,7 @@ export function weekSummary(g: Group, members: Member[], posts: Post[], week: nu
     rawPoints: inWeek.reduce((n, p) => n + p.points + p.group_bonus, 0),
     checkins: inWeek.filter((p) => p.type === 'checkin').length,
     guests: inWeek.filter((p) => p.type === 'checkin').reduce((n, p) => n + p.guests, 0),
-    posters: new Set(inWeek.filter((p) => p.type !== 'poll' && p.type !== 'adjust').map((p) => p.user_id)).size,
+    posters: new Set(inWeek.filter((p) => p.type !== 'poll' && p.type !== 'adjust' && p.type !== 'streak').map((p) => p.user_id)).size,
     members: members.length,
     top: ranked.filter((r) => r.points === topPts).slice(0, 3),
     topGuests: guestsBy && guestsBy.guests > 0 ? guestsBy : null,

@@ -79,7 +79,7 @@ export async function GET(req: Request) {
         .select('user_id,type,created_at')
         .eq('group_id', g.id)
         .gt('created_at', since)
-        .not('type', 'in', '(adjust,poll)')
+        .not('type', 'in', '(adjust,poll,streak)')
         .not('status', 'in', '(cancelled,archived,removed)')
         .order('created_at', { ascending: false }),
       db.from('post_comments')

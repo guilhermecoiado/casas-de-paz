@@ -120,12 +120,9 @@ export const REWARDS: Reward[] = [
   { id: 'ck-af-chave', kind: 'avatar_frame', name: 'Moldura Chave da Casa', icon: '🗝️', drop: 'raro' },
   { id: 'ck-ta-lanternas', kind: 'tile_anim', name: 'Lanternas', icon: '🏮', drop: 'lendario' },
   { id: 'ck-ta-festa', kind: 'tile_anim', name: 'Casa em Festa', icon: '🎊', drop: 'lendario' },
-  // 🔥 intensivo: sequência de dias seguidos postando (exclusivos, só por constância)
-  { id: 't-intensivo', kind: 'title', name: 'Intensivo', icon: '🔥', req: { stat: 'bestStreak', n: 7, label: 'Complete o intensivo: 7 dias seguidos' } },
-  { id: 'ta-intensivo', kind: 'tile_anim', name: 'Fogo do Intensivo', icon: '🔥', req: { stat: 'bestStreak', n: 7, label: 'Complete o intensivo: 7 dias seguidos (exclusiva)' } },
-  { id: 'af-brasa', kind: 'avatar_frame', name: 'Moldura Brasa Viva', icon: '♨️', req: { stat: 'bestStreak', n: 14, label: '14 dias seguidos' } },
-  { id: 'tc-brasa', kind: 'tile_color', name: 'Cor Brasa', icon: '🟥', req: { stat: 'bestStreak', n: 21, label: '21 dias seguidos' } },
-  { id: 't-fogo-continuo', kind: 'title', name: 'Fogo que Não se Apaga', icon: '🕯️', req: { stat: 'bestStreak', n: 28, label: '28 dias seguidos (lendário)' } },
+  // 🔥 intensivo: títulos dos níveis 21 e 28 dias seguidos (os bônus e as chamas ficam em lib/streak.ts)
+  { id: 't-daniel', kind: 'title', name: 'Discípulo de Daniel', icon: '🦁', req: { stat: 'bestStreak', n: 21, label: 'Intensivo: 21 dias seguidos' } },
+  { id: 't-imitadores', kind: 'title', name: 'Sede meus Imitadores', icon: '🕯️', req: { stat: 'bestStreak', n: 28, label: 'Intensivo: 28 dias seguidos' } },
 
   /* 🎁 Itens avulsos por pontos (intercalados com os caminhos; não são necessários para completar a evolução) */
   // Títulos

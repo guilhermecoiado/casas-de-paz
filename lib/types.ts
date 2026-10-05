@@ -9,6 +9,7 @@ export type PostType =
   | 'checkin'
   | 'poll'
   | 'adjust'
+  | 'streak'
   | 'verse'
   | 'encourage'
   | 'devotional'
@@ -16,7 +17,7 @@ export type PostType =
   | 'fasting'
   | 'testimony';
 
-export type ActionType = Exclude<PostType, 'poll' | 'adjust'>;
+export type ActionType = Exclude<PostType, 'poll' | 'adjust' | 'streak'>;
 
 export interface Profile {
   id: string;
@@ -96,6 +97,7 @@ export interface Post {
   poll_id?: string | null;
   guests: number;
   guest_names?: string[];
+  boost?: number; // parte dobrada pelo intensivo (fora do limite semanal)
   base_points: number;
   points: number;
   group_bonus: number;
@@ -205,5 +207,14 @@ export interface MemberItem {
   group_id: string;
   user_id: string;
   item_id: string;
+  created_at: string;
+}
+
+export interface StreakAward {
+  group_id: string;
+  user_id: string;
+  level: 7 | 14 | 21 | 28;
+  local_date: string;
+  post_id: string | null;
   created_at: string;
 }

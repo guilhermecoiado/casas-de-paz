@@ -109,6 +109,7 @@ export const TYPE_LABEL: Record<PostType, string> = {
   testimony: 'Testemunho',
   poll: 'Enquete',
   adjust: 'Ajuste do adm',
+  streak: 'Intensivo',
 };
 
 export const POINT_LABELS: { key: keyof Group['points']; label: string; when: ActionWhen | 'other' }[] = [
@@ -253,7 +254,7 @@ export function computeStats(g: Group, members: Member[], posts: Post[], today: 
     if (p.type === 'poll') s.polls += 1;
     if (p.type === 'snack') s.snacks += 1;
     if (p.type === 'group') s.groupPhotos += 1;
-    if (p.type !== 'poll' && p.type !== 'adjust' && !dayKeys.has(`${p.user_id}|${p.local_date}`)) {
+    if (p.type !== 'poll' && p.type !== 'adjust' && p.type !== 'streak' && !dayKeys.has(`${p.user_id}|${p.local_date}`)) {
       dayKeys.add(`${p.user_id}|${p.local_date}`);
       s.days += 1;
       if (p.week === week) s.weekDays += 1;
@@ -262,7 +263,7 @@ export function computeStats(g: Group, members: Member[], posts: Post[], today: 
       userDays.set(p.user_id, l);
     }
     if (p.type === 'checkin' && p.week === week) s.weekGuests += p.guests;
-    if (p.local_date === today && p.type !== 'poll' && p.type !== 'adjust') {
+    if (p.local_date === today && p.type !== 'poll' && p.type !== 'adjust' && p.type !== 'streak') {
       s.postedToday = true;
       if (!s.todayPhoto && p.photo_url) s.todayPhoto = p.photo_url;
     }

@@ -5,6 +5,7 @@ import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { ACTIONS, WEEKDAYS, actionPoints, dailyMax, formatDate, maxIndividual, meetingMax, totalWeeks } from '@/lib/game';
 import { PATHS } from '@/lib/rewards';
+import { STREAK_TIERS } from '@/lib/streak';
 
 function Topic({ icon, title, children, open = false }: { icon: string; title: string; children: React.ReactNode; open?: boolean }) {
   return (
@@ -71,10 +72,18 @@ export default function ComoFunciona() {
           <p>A pontuação não zera sozinha no fim do período: só o adm pode começar uma temporada nova.</p>
         </Topic>
 
-        <Topic icon="🔥" title="Sequência de dias">
+        <Topic icon="🔥" title="Sequência de dias e intensivo">
           <p>Poste <b>pelo menos uma coisa por dia</b> para manter o fogo aceso. O número no seu tile mostra quantos dias seguidos você está postando, e o fogo cresce conforme a sequência aumenta.</p>
           <p>Se ainda não postou hoje, o fogo fica apagado (cinza), mas a sequência só se perde se o dia virar sem post.</p>
-          <p className="rounded-2xl bg-[#fff1dc] p-3 font-bold text-[#a8400f]">Intensivo: <b>7 dias seguidos</b> liberam a animação exclusiva <b>Fogo do Intensivo</b> e o título <b>Intensivo</b>. Com 14, 21 e 28 dias tem mais prêmios.</p>
+          <div className="space-y-1.5">
+            {STREAK_TIERS.map((t) => (
+              <div key={t.days} className="flex items-center gap-2.5 rounded-2xl bg-cream p-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-display font-extrabold" style={{ background: t.swatch, color: t.days === 14 ? '#2b2118' : '#fff' }}>{t.days}</span>
+                <p className="text-[13px] leading-snug"><b>{t.name}</b> no tile · +{t.bonus} pts{t.double ? ' · pontos em dobro por 7 dias' : ''}{t.title ? ` · título ${t.title}` : ''}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[13px]">Bônus e pontos em dobro não ocupam o limite da semana. Cada nível vale 1 vez na temporada.</p>
         </Topic>
 
         <Topic icon="🎁" title="Prêmios individuais">

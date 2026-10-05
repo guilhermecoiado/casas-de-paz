@@ -1344,3 +1344,113 @@ alter table public.password_requests enable row level security;
 alter table public.notifications drop constraint if exists notifications_kind_check;
 alter table public.notifications add constraint notifications_kind_check
   check (kind in ('comment', 'digest', 'reminder', 'manual', 'nudge', 'recap', 'prayer', 'reset'));
+
+-- =====================================================================
+-- v10: INTENSIVO EM NÍVEIS (7 / 14 / 21 / 28 dias seguidos)
+--   7  → +150
+--   14 → +150 e pontos em dobro nos 7 dias seguintes (com o fogo aceso)
+--   21 → +210 e pontos em dobro nos 7 dias seguintes
+--   28 → +210 e pontos em dobro nos 7 dias seguintes
+-- Bônus e a metade "dobrada" ficam FORA do limite semanal (premiam a constância).
+-- =====================================================================
+alter table public.posts add column if not exists boost int not null default 0;
+alter table public.posts drop constraint if exists posts_type_check;
+alter table public.posts add constraint posts_type_check check (type in
+  ('individual','group','dynamic','relax','fellowship','snack','evangelism','checkin','poll','adjust',
+   'verse','encourage','devotional','prayer','fasting','testimony','streak'));
+
+create table if not exists public.streak_awards (
+  group_id   uuid not null references public.groups(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  level      int  not null check (level in (7, 14, 21, 28)),
+  local_date date not null,
+  post_id    uuid references public.posts(id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (group_id, user_id, level)
+);
+alter table public.streak_awards enable row level security;
+drop policy if exists streak_awards_select on public.streak_awards;
+create policy streak_awards_select on public.streak_awards for select to authenticated using (is_member(group_id));
+revoke insert, update, delete on public.streak_awards from authenticated, anon;
+
+-- dias seguidos com post terminando em p_date (0 se não postou em p_date)
+create or replace function public._streak(p_group uuid, p_user uuid, p_date date)
+returns int language sql stable security definer set search_path = public as $$
+  with d as (
+    select distinct local_date from posts
+     where group_id = p_group and user_id = p_user and local_date <= p_date
+       and status not in ('cancelled','archived','removed') and type not in ('poll','adjust','streak')
+  ), o as (
+    select local_date, (p_date - local_date) as off, (row_number() over (order by local_date desc) - 1)::int as rn from d
+  )
+  select count(*)::int from o where off = rn;
+$$;
+
+-- o limite semanal não conta os bônus do intensivo nem a parte dobrada
+create or replace function public._award(
+  g public.groups, p_user uuid, p_week int, p_base int, p_bonus int,
+  out o_points int, out o_bonus int)
+language plpgsql security definer set search_path = public as $$
+declare u_used int;
+begin
+  perform pg_advisory_xact_lock(hashtext(g.id::text || p_user::text));
+  select coalesce(sum(points - boost), 0) into u_used
+    from posts where group_id = g.id and user_id = p_user and week = p_week
+     and status not in ('cancelled','archived','removed') and type not in ('adjust','streak');
+  o_points := greatest(least(p_base, g.weekly_user_cap - u_used), 0);
+  o_bonus  := greatest(p_bonus, 0);
+end $$;
+
+-- antes de gravar: pontos em dobro se a pessoa está na janela de 7 dias de um nível 14/21/28
+create or replace function public.streak_boost()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_today int;
+begin
+  if new.type in ('poll','adjust','streak') or new.points <= 0 then return new; end if;
+  if exists (select 1 from posts where group_id = new.group_id and user_id = new.user_id and local_date = new.local_date
+               and status not in ('cancelled','archived','removed') and type not in ('poll','adjust','streak')) then
+    v_today := _streak(new.group_id, new.user_id, new.local_date);
+  else
+    v_today := _streak(new.group_id, new.user_id, new.local_date - 1) + 1;
+  end if;
+  if exists (select 1 from streak_awards a join posts p on p.id = a.post_id
+              where a.group_id = new.group_id and a.user_id = new.user_id and a.level in (14, 21, 28)
+                and p.status not in ('cancelled','archived','removed')
+                and new.local_date > a.local_date and new.local_date <= a.local_date + 7
+                and v_today >= a.level + (new.local_date - a.local_date)) then
+    new.boost := new.points;
+    new.points := new.points * 2;
+  end if;
+  return new;
+end $$;
+drop trigger if exists posts_streak_boost on public.posts;
+create trigger posts_streak_boost before insert on public.posts
+  for each row execute function public.streak_boost();
+
+-- depois de gravar: chegou a 7/14/21/28 dias seguidos? credita o bônus (1 vez por nível na temporada)
+create or replace function public.streak_milestone()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_s int; v_bonus int; v_post uuid;
+begin
+  if new.type in ('poll','adjust','streak') then return new; end if;
+  v_s := _streak(new.group_id, new.user_id, new.local_date);
+  if v_s not in (7, 14, 21, 28) then return new; end if;
+  -- já ganhou este nível nesta temporada (bônus válido)? então não repete
+  if exists (select 1 from streak_awards a join posts p on p.id = a.post_id
+              where a.group_id = new.group_id and a.user_id = new.user_id and a.level = v_s
+                and p.status not in ('cancelled','archived','removed')) then return new; end if;
+  v_bonus := case v_s when 7 then 150 when 14 then 150 else 210 end;
+  insert into posts (group_id, user_id, type, description, base_points, points, local_date, week)
+  values (new.group_id, new.user_id, 'streak', 'Intensivo: ' || v_s || ' dias seguidos 🔥', v_bonus, v_bonus, new.local_date, new.week)
+  returning id into v_post;
+  insert into streak_awards (group_id, user_id, level, local_date, post_id) values (new.group_id, new.user_id, v_s, new.local_date, v_post)
+    on conflict (group_id, user_id, level) do update set local_date = excluded.local_date, post_id = excluded.post_id, created_at = now();
+  return new;
+end $$;
+drop trigger if exists posts_streak_milestone on public.posts;
+create trigger posts_streak_milestone after insert on public.posts
+  for each row execute function public.streak_milestone();
+
+revoke execute on function public._streak(uuid, uuid, date) from public, anon, authenticated;
+revoke execute on function public.streak_boost() from public, anon, authenticated;
+revoke execute on function public.streak_milestone() from public, anon, authenticated;

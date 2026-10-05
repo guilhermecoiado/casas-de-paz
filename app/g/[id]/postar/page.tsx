@@ -101,6 +101,7 @@ export default function Postar() {
           <p className="text-xs font-black uppercase tracking-[0.2em] text-terra">Registrado!</p>
           <p className="mt-1 font-display text-6xl font-extrabold text-ink">+{p.points}</p>
           <p className="font-bold text-[#8A6F57]">pontos{p.group_bonus ? ` · +${p.group_bonus} bônus para a equipe` : ''}</p>
+          {!!p.boost && <p className="mx-auto mt-2 w-fit rounded-full bg-amber/25 px-3 py-1 text-sm font-extrabold text-[#9a5b00]">⚡ Em dobro pelo intensivo</p>}
           {p.capped && (
             <p className="mx-auto mt-2 max-w-xs rounded-2xl bg-amber/20 px-3 py-2 text-sm font-bold text-[#9a5b00]">
               Limite semanal atingido: parte dos pontos ficou para a próxima semana.

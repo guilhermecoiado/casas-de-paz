@@ -30,7 +30,7 @@ export default function Feed() {
     () =>
       posts.filter((p) => {
         // enquetes e ajustes aparecem só quando estão em votação ou no filtro "Meus"
-        if ((p.type === 'poll' || p.type === 'adjust') && f !== 'voting' && f !== 'mine') return false;
+        if ((p.type === 'poll' || p.type === 'adjust' || p.type === 'streak') && f !== 'voting' && f !== 'mine') return false;
         if (f === 'voting') return p.status === 'voting';
         if (f === 'checkin' || f === 'evangelism') return p.type === f;
         if (f === 'mine') return p.user_id === me;

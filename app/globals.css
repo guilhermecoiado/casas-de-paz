@@ -316,3 +316,21 @@ select {
 .rays { background: repeating-conic-gradient(from 0deg, rgba(255,214,107,.35) 0deg 10deg, transparent 10deg 20deg); animation: spin 12s linear infinite; }
 .scan-line { animation: scanLine 2s ease-in-out infinite; }
 @keyframes scanLine { 0%, 100% { top: 8%; } 50% { top: 88%; } }
+
+/* ===================== Intensivo: aura de fogo ao redor do tile ===================== */
+/* fica ATRÁS do tile, só a borda aparece; não mexe nas animações de dentro */
+.aura { position: absolute; z-index: 0; overflow: hidden; pointer-events: none; border-radius: 26px; animation: auraGlow 1.3s ease-in-out infinite alternate; }
+.aura::before { content: ''; position: absolute; inset: -60%; background: conic-gradient(from 0deg, var(--c1), var(--c2), var(--c3), var(--c2), var(--c1)); animation: spin 2.2s linear infinite; }
+.aura-red { inset: -3px; --c1: #ff2d1a; --c2: #ff7a1a; --c3: #ffd36b; --g: rgba(255, 60, 30, .55); }
+.aura-yellow { inset: -3.5px; --c1: #ffb800; --c2: #ffe14d; --c3: #fff6c2; --g: rgba(255, 200, 40, .6); }
+.aura-purple { inset: -5px; --c1: #7a2bff; --c2: #c04bff; --c3: #ff8af0; --g: rgba(160, 70, 255, .65); border-radius: 28px; }
+.aura-blue { inset: -6px; --c1: #1a6bff; --c2: #3ad0ff; --c3: #e0f7ff; --g: rgba(50, 160, 255, .75); border-radius: 29px; }
+@keyframes auraGlow {
+  from { box-shadow: 0 0 8px 1px var(--g), 0 -3px 12px var(--g); }
+  to   { box-shadow: 0 0 16px 3px var(--g), 0 -8px 22px var(--g); }
+}
+.aura-purple, .aura-blue { animation-duration: .9s; }
+.aura-blue::after { content: ''; position: absolute; inset: 0; background: radial-gradient(60% 40% at 50% 0%, rgba(255,255,255,.45), transparent 70%); animation: flicker .6s ease-in-out infinite alternate; }
+/* ainda não postou hoje: chama baixa */
+.aura-off { animation: none; opacity: .35; box-shadow: none; }
+.aura-off::before { animation-duration: 8s; }

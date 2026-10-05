@@ -41,7 +41,7 @@ export async function GET(req: Request) {
       .select('user_id,local_date')
       .eq('group_id', g.id)
       .gte('local_date', addDays(today, -60))
-      .not('type', 'in', '(adjust,poll)')
+      .not('type', 'in', '(adjust,poll,streak)')
       .not('status', 'in', '(cancelled,archived,removed)');
     if (pe) { report.push({ group: g.name, status: `erro: ${pe.message}` }); continue; }
 

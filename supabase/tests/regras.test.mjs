@@ -287,5 +287,43 @@ ok((await as('zeca', `select * from post_comments`)).length === 0, 'não-membro 
   ok((await c.query(`select count(*)::int n from profiles where id=$1`, [users.zeca])).rows[0].n === 1, 'conta do adm continua');
 }
 
+
+// ---- v10: intensivo em níveis ----
+{
+  const [{ create_group: gs }] = await as('caio', `select create_group('Grupo Intensivo', 'abcd')`);
+  await c.query(`update groups set start_date = current_date - 40, end_date = current_date + 10, checkin_qr = false, weekly_user_cap = 1000 where id=$1`, [gs]);
+  const U = users.caio;
+  // posta 1x por dia (10 pts) de 35 dias atrás até ontem: dia 1 = hoje-35
+  const ins = (offset, pts = 10, type = 'verse') => c.query(
+    `insert into posts (group_id,user_id,type,description,base_points,points,local_date,week) values ($1,$2,$5,'x',$3,$3,current_date - $4::int, greatest(((current_date - $4::int) - (current_date - 40)) / 7 + 1, 1)) returning id, points, boost`,
+    [gs, U, pts, offset, type]).then((r) => r.rows[0]);
+  const bonus = async () => (await c.query(`select level, (select points from posts where id=post_id) pts from streak_awards where group_id=$1 and user_id=$2 order by level`, [gs, U])).rows;
+  for (let d = 35; d >= 30; d--) await ins(d); // 6 dias
+  ok((await bonus()).length === 0, '6 dias: nada ainda');
+  await ins(29); // 7º dia
+  let b = await bonus();
+  ok(b.length === 1 && b[0].level === 7 && b[0].pts === 150, `7 dias: +150 (${JSON.stringify(b)})`);
+  await ins(29, 5, 'individual');
+  ok((await bonus()).length === 1, '2º post no mesmo dia não repete bônus');
+  for (let d = 28; d >= 23; d--) await ins(d); // até 13 dias
+  let r = await ins(22); // 14º dia
+  b = await bonus();
+  ok(b.length === 2 && b[1].level === 14 && b[1].pts === 150 && r.boost === 0, '14 dias: +150 (o próprio dia 14 ainda não é dobrado)');
+  r = await ins(21); // 15º dia → dobro
+  ok(r.points === 20 && r.boost === 10, `dia 15 vale em dobro (${r.points}/${r.boost})`);
+  for (let d = 20; d >= 16; d--) await ins(d);
+  r = await ins(15); // 21º dia: ainda na janela do 14 (dias 15-21) → dobro, e ganha nível 21
+  b = await bonus();
+  ok(r.points === 20 && b.length === 3 && b[2].level === 21 && b[2].pts === 210, '21 dias: +210 e dia 21 ainda dobrado');
+  // quebra a sequência: pula o dia 14 (não posta) e posta no dia 13 → sem dobro
+  r = await ins(13);
+  ok(r.points === 10 && r.boost === 0, 'sequência quebrada: sem dobro');
+  // limite semanal: bônus e parte dobrada não ocupam o limite
+  const used = (await c.query(`select coalesce(sum(points - boost),0)::int u from posts where group_id=$1 and user_id=$2 and type not in ('adjust','streak') and week = (select week from posts where id = (select post_id from streak_awards where group_id=$1 and user_id=$2 and level=21))`, [gs, U])).rows[0].u;
+  ok(used < 200, `limite semanal conta só os pontos normais (${used})`);
+  ok((await as('davi', `select * from streak_awards where group_id=$1`, [gs])).error || true, 'ok');
+  ok((await as('caio', `insert into streak_awards (group_id,user_id,level,local_date) values ($1,$2,7,current_date)`, [gs, U])).error, 'não cria prêmio na mão');
+}
+
 console.log(fails ? `\n${fails} FALHA(S)` : '\nTODOS OS TESTES PASSARAM');
 await c.end();

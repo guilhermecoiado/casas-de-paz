@@ -12,7 +12,7 @@ export function MemberSheet({ userId, onClose }: { userId: string | null; onClos
   const { profiles, stats, look, posts, group, isAdmin, me, today } = useGroup();
   const { canRemove, remove, removing } = useRemovePost();
   if (!userId) return null;
-  const todays = posts.filter((x) => x.user_id === userId && x.local_date === today && x.type !== 'adjust');
+  const todays = posts.filter((x) => x.user_id === userId && x.local_date === today && x.type !== 'adjust' && x.type !== 'streak');
   const canManage = userId === me || isAdmin;
   const p = profiles[userId];
   const s = stats.byUser[userId];

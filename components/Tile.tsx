@@ -7,6 +7,7 @@ import { StreakBadge, TileFx, TileOrnaments } from './Cosmetics';
 import type { Profile } from '@/lib/types';
 import type { UserStats } from '@/lib/game';
 import type { PathId } from '@/lib/rewards';
+import { tierOf } from '@/lib/streak';
 
 export interface TileLook {
   title: string;
@@ -38,7 +39,9 @@ export function MemberTile({
     alive ? 'tile-alive' : '',
   ].join(' ');
 
-  return (
+  // intensivo: aura de fogo ao redor do tile (7, 14, 21 e 28 dias seguidos)
+  const tier = tierOf(stats?.streak ?? 0);
+  const tile = (
     <button onClick={onClick} className={cls}>
       {posted && photo ? (
         <>
@@ -86,5 +89,12 @@ export function MemberTile({
         )}
       </div>
     </button>
+  );
+  if (!tier) return tile;
+  return (
+    <div className="relative">
+      <span className={`aura ${tier.aura} ${posted ? '' : 'aura-off'}`} aria-hidden />
+      <div className="relative z-[1]">{tile}</div>
+    </div>
   );
 }

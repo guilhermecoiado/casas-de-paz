@@ -143,8 +143,17 @@ Depois de cada post com foto, o app gera a imagem com a moldura "Casa de Paz" em
 - Cada check-in sorteia **1 item surpresa** que só sai assim. São 14 itens: 7 comuns (títulos e frases), 5 raros (cores e molduras) e 2 lendários (animações). O sorteio nunca repete um item que a pessoa já tem. Se o check-in for cancelado ou removido, o item volta para o sorteio.
 - A surpresa abre numa caixa de presente logo depois do check-in. As que faltam aparecem como "?" em Meu perfil → Surpresas do check-in.
 
-### Sequência de dias 🔥
-O número no tile mostra quantos dias seguidos a pessoa está postando, e o fogo cresce com a sequência (3, 7 e 14 dias mudam o visual). Se a pessoa ainda não postou hoje, o fogo fica cinza até ela postar. **Intensivo:** 7 dias seguidos liberam o título *Intensivo* e a animação exclusiva *Fogo do Intensivo*. Com 14 dias vem a *Moldura Brasa Viva*, com 21 a *Cor Brasa* e com 28 o título *Fogo que Não se Apaga*.
+### Sequência de dias 🔥 e intensivo
+O número no tile mostra quantos dias seguidos a pessoa está postando (cinza enquanto ela não posta no dia). O intensivo tem 4 níveis, cada um vale 1 vez na temporada:
+
+| Dias seguidos | Chama ao redor do tile | Prêmio |
+|---|---|---|
+| 7 | vermelha | +150 pts |
+| 14 | amarela | +150 pts e pontos em dobro por 7 dias |
+| 21 | roxa (maior) | +210 pts, dobro por 7 dias e título *Discípulo de Daniel* |
+| 28 | azul (maior) | +210 pts, dobro por 7 dias e título *Sede meus Imitadores* |
+
+O bônus e a parte em dobro ficam fora do limite semanal. O dobro só vale enquanto a sequência continuar. Tudo é calculado no servidor (`streak_boost` e `streak_milestone` em `schema.sql`).
 
 ### Fechamento da semana, destaques, convidados e oração
 - **Fechamento:** no 1º dia de cada semana, às 8h20, chega um push com o resumo da semana anterior, e o início mostra um card com uma imagem compartilhável.

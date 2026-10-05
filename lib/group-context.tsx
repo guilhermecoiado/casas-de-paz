@@ -5,7 +5,7 @@ import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { computeStats, groupUnlocked, maxGroup, maxIndividual, todayIn, type Stats } from './game';
 import { emptyProgress, equipped, type Look, type Progress } from './rewards';
-import type { AppNotification, Comment, Group, Member, MemberItem, Poll, PollAnswer, Post, Profile, Reaction, Vote } from './types';
+import type { AppNotification, Comment, Group, Member, MemberItem, Poll, PollAnswer, Post, Profile, Reaction, StreakAward, Vote } from './types';
 
 export interface GroupData {
   group: Group;
@@ -19,6 +19,7 @@ export interface GroupData {
   comments: Comment[];
   notifications: AppNotification[];
   items: MemberItem[];
+  awards: StreakAward[];
   unread: number;
   setNotifications: React.Dispatch<React.SetStateAction<AppNotification[]>>;
   today: string;
@@ -79,6 +80,7 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [items, setItems] = useState<MemberItem[]>([]);
+  const [awards, setAwards] = useState<StreakAward[]>([]);
   const [today, setToday] = useState('');
 
   const reloadProfiles = useCallback(async () => {
@@ -92,7 +94,7 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
   }, [groupId]);
 
   const reload = useCallback(async () => {
-    const [g, m, p, v, pl, a, rx, cm, nt, it] = await Promise.all([
+    const [g, m, p, v, pl, a, rx, cm, nt, it, aw] = await Promise.all([
       supabase.from('groups').select('*').eq('id', groupId).maybeSingle(),
       supabase.from('group_members').select('*').eq('group_id', groupId),
       supabase.from('posts').select('*').eq('group_id', groupId).not('status', 'in', '(archived,removed)').order('created_at', { ascending: false }).limit(5000),
@@ -103,6 +105,7 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
       supabase.from('post_comments').select('*').eq('group_id', groupId).order('created_at').limit(5000),
       supabase.from('notifications').select('*').eq('group_id', groupId).eq('user_id', userId).order('created_at', { ascending: false }).limit(60),
       supabase.from('member_items').select('*').eq('group_id', groupId),
+      supabase.from('streak_awards').select('*').eq('group_id', groupId),
     ]);
     if (!g.data) return onMissing();
     setGroup(g.data as Group);
@@ -115,6 +118,7 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
     setComments((cm.data ?? []) as Comment[]);
     setNotifications((nt.data ?? []) as AppNotification[]);
     setItems((it.data ?? []) as MemberItem[]);
+    setAwards((aw.data ?? []) as StreakAward[]);
     await reloadProfiles();
   }, [groupId, userId, onMissing, reloadProfiles]);
 
@@ -128,6 +132,8 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
         // removidos e arquivados (temporada zerada) saem da tela na hora
         if (st === 'removed' || st === 'archived') setPosts((l) => l.filter((x) => x.id !== (pl.new as Post).id));
         else setPosts((l) => applyChange(l, pl, (r) => r.id, true));
+        if ((pl.new as Post | undefined)?.type === 'streak')
+          supabase.from('streak_awards').select('*').eq('group_id', groupId).then(({ data }) => setAwards((data ?? []) as StreakAward[]));
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'post_votes', filter: f }, (pl) =>
         setVotes((l) => applyChange(l, pl, (r) => `${r.post_id}:${r.user_id}`)))
@@ -204,7 +210,7 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
     });
     const prog = (uid: string) => ({ ...(stats.byUser[uid] ?? emptyProgress()), owned: ownedBy.get(uid) ?? [] });
     return {
-      group, members, profiles, posts, votes, polls, answers, reactions, comments, notifications, items, unread, setNotifications, today, stats,
+      group, members, profiles, posts, votes, polls, answers, reactions, comments, notifications, items, awards, unread, setNotifications, today, stats,
       unlocked: groupUnlocked(maxGroup(group, members.length), stats.groupPoints),
       isAdmin: group.admin_id === userId,
       me: userId,
@@ -215,7 +221,7 @@ export function GroupProvider({ groupId, userId, children, fallback, onMissing }
       progress: prog,
       reload, reloadProfiles,
     };
-  }, [group, members, profiles, posts, votes, polls, answers, reactions, comments, notifications, items, unread, today, userId, reload, reloadProfiles]);
+  }, [group, members, profiles, posts, votes, polls, answers, reactions, comments, notifications, items, awards, unread, today, userId, reload, reloadProfiles]);
 
   if (!value) return <>{fallback}</>;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
