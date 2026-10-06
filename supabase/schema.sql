@@ -1509,3 +1509,296 @@ returns setof uuid language sql stable security definer set search_path = public
 $$;
 revoke execute on function public.admin_push_members(uuid) from public, anon;
 grant execute on function public.admin_push_members(uuid) to authenticated;
+
+-- =====================================================================
+-- v12: DOM DE LÍNGUAS (chat só de emojis) + DESAFIOS EM EMOJÊS
+--   Quem acerta primeiro: +10. Quem lançou: 5 (acertaram de primeira),
+--   10 (1 pessoa errou antes), 15 (2+ pessoas erraram antes), 5 (teve palpite e ninguém acertou),
+--   0 (ninguém respondeu: expira). 1 desafio por pessoa por dia, até 3 palpites por desafio.
+-- =====================================================================
+alter table public.posts drop constraint if exists posts_type_check;
+alter table public.posts add constraint posts_type_check check (type in
+  ('individual','group','dynamic','relax','fellowship','snack','evangelism','checkin','poll','adjust',
+   'verse','encourage','devotional','prayer','fasting','testimony','streak','challenge','riddle'));
+
+alter table public.notifications drop constraint if exists notifications_kind_check;
+alter table public.notifications add constraint notifications_kind_check
+  check (kind in ('comment', 'digest', 'reminder', 'manual', 'nudge', 'recap', 'prayer', 'reset', 'challenge', 'guess', 'solved'));
+
+-- chat: só emojis (sem letras); "not valid" não reavalia mensagens antigas
+alter table public.messages drop constraint if exists messages_emoji_only;
+alter table public.messages add constraint messages_emoji_only check (body !~ '[[:alpha:]]') not valid;
+
+create table if not exists public.challenges (
+  id           bigint generated always as identity primary key,
+  group_id     uuid not null references public.groups(id) on delete cascade,
+  user_id      uuid not null references public.profiles(id) on delete cascade,
+  emojis       text not null check (length(trim(emojis)) between 1 and 160 and emojis !~ '[[:alpha:]]'),
+  local_date   date not null,
+  week         int  not null,
+  status       text not null default 'open' check (status in ('open', 'review', 'solved', 'missed', 'expired')),
+  answer       text,               -- só aparece quando o desafio fecha
+  solved_by    uuid references public.profiles(id) on delete set null,
+  wrong_people int  not null default 0,
+  owner_points int  not null default 0,
+  archived     boolean not null default false,
+  created_at   timestamptz not null default now(),
+  closed_at    timestamptz
+);
+create index if not exists challenges_group_created on public.challenges (group_id, created_at desc);
+create unique index if not exists challenges_one_per_day on public.challenges (group_id, user_id, local_date) where not archived;
+
+-- a resposta fica guardada à parte, sem acesso direto (nem para o adm)
+create table if not exists public.challenge_secrets (
+  challenge_id bigint primary key references public.challenges(id) on delete cascade,
+  answer       text not null
+);
+
+create table if not exists public.challenge_guesses (
+  id           bigint generated always as identity primary key,
+  challenge_id bigint not null references public.challenges(id) on delete cascade,
+  group_id     uuid not null references public.groups(id) on delete cascade,
+  user_id      uuid not null references public.profiles(id) on delete cascade,
+  guess        text not null check (length(trim(guess)) between 1 and 80),
+  status       text not null default 'pending' check (status in ('pending', 'right', 'wrong')),
+  auto         boolean not null default false,
+  created_at   timestamptz not null default now(),
+  judged_at    timestamptz
+);
+create index if not exists challenge_guesses_ch on public.challenge_guesses (challenge_id, created_at);
+
+alter table public.challenges        enable row level security;
+alter table public.challenge_secrets enable row level security;
+alter table public.challenge_guesses enable row level security;
+
+create or replace function public._challenge_visible(p_challenge bigint)
+returns boolean language sql stable security definer set search_path = public as $$
+  -- o palpite dos outros só aparece para quem lançou, ou depois que o desafio fecha
+  select exists (select 1 from challenges c where c.id = p_challenge
+                  and (c.user_id = auth.uid() or c.status not in ('open') or (c.status = 'review' and is_admin(c.group_id))));
+$$;
+
+drop policy if exists challenges_select on public.challenges;
+create policy challenges_select on public.challenges for select to authenticated using (is_member(group_id));
+drop policy if exists challenge_guesses_select on public.challenge_guesses;
+create policy challenge_guesses_select on public.challenge_guesses for select to authenticated
+  using (is_member(group_id) and (user_id = auth.uid() or _challenge_visible(challenge_id)));
+
+-- compara palpite e resposta sem acento, maiúsculas, pontuação e artigo no começo
+create or replace function public._norm(t text)
+returns text language sql immutable as $$
+  select regexp_replace(
+           btrim(regexp_replace(regexp_replace(
+             translate(lower(coalesce(t, '')), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn'),
+             '[^a-z0-9]+', ' ', 'g'), '\s+', ' ', 'g')),
+           '^(o|a|os|as|um|uma|uns|umas) ', '');
+$$;
+
+-- credita pontos (respeita o limite da semana) num post do tipo 'challenge' ou 'riddle'
+create or replace function public._challenge_award(g public.groups, p_user uuid, p_type text, p_base int, p_date date, p_week int, p_desc text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_pts int; v_b int;
+begin
+  if p_base <= 0 then return; end if;
+  select a.o_points, a.o_bonus into v_pts, v_b from _award(g, p_user, p_week, p_base, 0) a;
+  insert into posts (group_id, user_id, type, description, base_points, points, group_bonus, capped, local_date, week)
+  values (g.id, p_user, p_type, p_desc, p_base, v_pts, 0, v_pts < p_base, p_date, p_week);
+end $$;
+
+-- alguém acertou: fecha, revela e paga
+create or replace function public._challenge_solve(p_guess bigint)
+returns void language plpgsql security definer set search_path = public as $$
+declare gu public.challenge_guesses; c public.challenges; g public.groups; v_wrong int; v_owner int; v_ans text; v_solver text; v_owner_name text;
+begin
+  select * into gu from challenge_guesses where id = p_guess;
+  select * into c from challenges where id = gu.challenge_id for update;
+  if c.status not in ('open', 'review') then raise exception 'Este desafio já foi encerrado'; end if;
+  select * into g from groups where id = c.group_id;
+  select answer into v_ans from challenge_secrets where challenge_id = c.id;
+  update challenge_guesses set status = 'right', judged_at = now() where id = gu.id;
+  -- quem errou antes do acerto (pessoas diferentes, fora quem acertou) mede a dificuldade
+  select count(distinct user_id) into v_wrong from challenge_guesses
+   where challenge_id = c.id and user_id <> gu.user_id and id < gu.id and status in ('wrong', 'pending');
+  update challenge_guesses set status = 'wrong', judged_at = now() where challenge_id = c.id and status = 'pending';
+  v_owner := case when v_wrong >= 2 then 15 when v_wrong = 1 then 10 else 5 end;
+  update challenges set status = 'solved', answer = v_ans, solved_by = gu.user_id, wrong_people = v_wrong,
+         owner_points = v_owner, closed_at = now() where id = c.id;
+  select username into v_solver from profiles where id = gu.user_id;
+  select username into v_owner_name from profiles where id = c.user_id;
+  perform _challenge_award(g, gu.user_id, 'riddle', 10, c.local_date, c.week, 'Decifrou o desafio de @' || v_owner_name || ': ' || c.emojis || ' = ' || v_ans);
+  perform _challenge_award(g, c.user_id, 'challenge', v_owner, c.local_date, c.week, 'Desafio em emojês: ' || c.emojis || ' = ' || v_ans);
+  insert into notifications (user_id, group_id, kind, title, body, url, actor_id)
+  values (c.user_id, c.group_id, 'solved', '🧩 Decifraram seu desafio!', '@' || v_solver || ' acertou "' || v_ans || '". Você ganhou ' || v_owner || ' pts.',
+          '/g/' || c.group_id || '/chat?c=' || c.id, gu.user_id);
+  if not gu.auto then
+    insert into notifications (user_id, group_id, kind, title, body, url, actor_id)
+    values (gu.user_id, c.group_id, 'solved', '✅ Você decifrou o desafio!', '"' || v_ans || '" estava certo. +10 pts!',
+            '/g/' || c.group_id || '/chat?c=' || c.id, c.user_id);
+  end if;
+end $$;
+
+-- fecha os desafios de dias anteriores (chamado ao abrir o app e pelo cron)
+--   aberto sem palpites → expira (0) · todos errados → 5 · palpite sem julgar → revisão por mais 1 dia (dono ou adm)
+create or replace function public.close_challenges(p_group uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare g public.groups; v_today date; c record; v_ans text;
+begin
+  if auth.uid() is not null and not is_member(p_group) then raise exception 'Você não faz parte deste grupo'; end if;
+  select * into g from groups where id = p_group;
+  if g.id is null then return; end if;
+  v_today := (now() at time zone g.timezone)::date;
+  for c in select * from challenges where group_id = p_group and not archived
+             and ((status = 'open' and local_date < v_today) or (status = 'review' and local_date < v_today - 1)) for update loop
+    select answer into v_ans from challenge_secrets where challenge_id = c.id;
+    if not exists (select 1 from challenge_guesses where challenge_id = c.id) then
+      update challenges set status = 'expired', answer = v_ans, closed_at = now() where id = c.id;
+    elsif c.status = 'open' and exists (select 1 from challenge_guesses where challenge_id = c.id and status = 'pending') then
+      update challenges set status = 'review', answer = v_ans where id = c.id;
+    else
+      update challenge_guesses set status = 'wrong', judged_at = now() where challenge_id = c.id and status = 'pending';
+      update challenges set status = 'missed', answer = v_ans, owner_points = 5, closed_at = now() where id = c.id;
+      perform _challenge_award(g, c.user_id, 'challenge', 5, c.local_date, c.week, 'Desafio em emojês (ninguém acertou): ' || c.emojis || ' = ' || v_ans);
+    end if;
+  end loop;
+end $$;
+
+create or replace function public.create_challenge(p_group uuid, p_emojis text, p_answer text)
+returns public.challenges language plpgsql security definer set search_path = public as $$
+declare g public.groups; v_today date; r public.challenges; v_me text;
+begin
+  if not is_member(p_group) then raise exception 'Você não faz parte deste grupo'; end if;
+  select * into g from groups where id = p_group;
+  v_today := (now() at time zone g.timezone)::date;
+  if v_today < g.start_date then raise exception 'A Casa de Paz ainda não começou'; end if;
+  p_emojis := btrim(coalesce(p_emojis, ''));
+  p_answer := btrim(coalesce(p_answer, ''));
+  if p_emojis = '' then raise exception 'Escreva o desafio em emojis'; end if;
+  if p_emojis ~ '[[:alpha:]]' then raise exception 'O desafio é só em emojês 🤐'; end if;
+  if length(p_answer) < 2 or length(p_answer) > 80 then raise exception 'Escreva a resposta (2 a 80 letras)'; end if;
+  if _norm(p_answer) = '' then raise exception 'A resposta precisa ter letras ou números'; end if;
+  perform pg_advisory_xact_lock(hashtext(p_group::text || auth.uid()::text));
+  if exists (select 1 from challenges where group_id = p_group and user_id = auth.uid() and local_date = v_today and not archived) then
+    raise exception 'Você já lançou o seu desafio de hoje. Volte amanhã!';
+  end if;
+  insert into challenges (group_id, user_id, emojis, local_date, week)
+  values (p_group, auth.uid(), p_emojis, v_today, _week(g, v_today)) returning * into r;
+  insert into challenge_secrets (challenge_id, answer) values (r.id, p_answer);
+  select username into v_me from profiles where id = auth.uid();
+  insert into notifications (user_id, group_id, kind, title, body, url, actor_id)
+  select m.user_id, p_group, 'challenge', '🧩 Novo desafio em emojês', '@' || v_me || ' lançou: ' || p_emojis || ' Decifra aí!',
+         '/g/' || p_group || '/chat?c=' || r.id, auth.uid()
+    from group_members m where m.group_id = p_group and m.user_id <> auth.uid();
+  return r;
+end $$;
+
+create or replace function public.guess_challenge(p_challenge bigint, p_guess text)
+returns public.challenge_guesses language plpgsql security definer set search_path = public as $$
+declare c public.challenges; g public.groups; v_today date; v_n int; r public.challenge_guesses; v_ans text; v_me text;
+begin
+  select * into c from challenges where id = p_challenge;
+  if c.id is null or not is_member(c.group_id) then raise exception 'Desafio não encontrado'; end if;
+  select * into g from groups where id = c.group_id;
+  v_today := (now() at time zone g.timezone)::date;
+  if c.status <> 'open' or c.local_date <> v_today or c.archived then raise exception 'Este desafio já foi encerrado'; end if;
+  if c.user_id = auth.uid() then raise exception 'Você não pode responder o próprio desafio 😅'; end if;
+  p_guess := btrim(coalesce(p_guess, ''));
+  if length(p_guess) < 1 or length(p_guess) > 80 then raise exception 'Escreva o seu palpite'; end if;
+  perform pg_advisory_xact_lock(hashtext('ch' || c.id::text));
+  select count(*) into v_n from challenge_guesses where challenge_id = c.id and user_id = auth.uid();
+  if v_n >= 3 then raise exception 'Você já usou os 3 palpites deste desafio'; end if;
+  if exists (select 1 from challenge_guesses where challenge_id = c.id and user_id = auth.uid() and status = 'pending') then
+    raise exception 'Espere o seu palpite anterior ser julgado';
+  end if;
+  insert into challenge_guesses (challenge_id, group_id, user_id, guess) values (c.id, c.group_id, auth.uid(), p_guess) returning * into r;
+  select answer into v_ans from challenge_secrets where challenge_id = c.id;
+  if _norm(p_guess) = _norm(v_ans) then
+    update challenge_guesses set auto = true where id = r.id;
+    perform _challenge_solve(r.id);
+  else
+    select username into v_me from profiles where id = auth.uid();
+    insert into notifications (user_id, group_id, kind, title, body, url, actor_id)
+    values (c.user_id, c.group_id, 'guess', '🧩 Palpite no seu desafio', '@' || v_me || ' chutou "' || p_guess || '". Certo ou errado?',
+            '/g/' || c.group_id || '/chat?c=' || c.id, auth.uid());
+  end if;
+  select * into r from challenge_guesses where id = r.id;
+  return r;
+end $$;
+
+create or replace function public.judge_guess(p_guess bigint, p_right boolean)
+returns public.challenge_guesses language plpgsql security definer set search_path = public as $$
+declare gu public.challenge_guesses; c public.challenges;
+begin
+  select * into gu from challenge_guesses where id = p_guess;
+  select * into c from challenges where id = gu.challenge_id;
+  if c.id is null or not is_member(c.group_id) then raise exception 'Palpite não encontrado'; end if;
+  perform close_challenges(c.group_id);
+  select * into c from challenges where id = gu.challenge_id;
+  if not (c.user_id = auth.uid() or (c.status = 'review' and is_admin(c.group_id))) then
+    raise exception 'Só quem lançou o desafio pode julgar';
+  end if;
+  if c.status not in ('open', 'review') then raise exception 'Este desafio já foi encerrado'; end if;
+  perform pg_advisory_xact_lock(hashtext('ch' || c.id::text));
+  select * into gu from challenge_guesses where id = p_guess;
+  if gu.status <> 'pending' then raise exception 'Este palpite já foi julgado'; end if;
+  if p_right then
+    perform _challenge_solve(gu.id);
+  else
+    update challenge_guesses set status = 'wrong', judged_at = now() where id = gu.id;
+    if c.status = 'review' and not exists (select 1 from challenge_guesses where challenge_id = c.id and status = 'pending') then
+      perform close_challenges(c.group_id);
+      -- em revisão e sem pendentes: fecha já como "ninguém acertou"
+      update challenges set status = 'missed', owner_points = 5, closed_at = now() where id = c.id and status = 'review';
+      if found then
+        perform _challenge_award((select g from groups g where g.id = c.group_id), c.user_id, 'challenge', 5, c.local_date, c.week,
+          'Desafio em emojês (ninguém acertou): ' || c.emojis || ' = ' || c.answer);
+      end if;
+    end if;
+  end if;
+  select * into gu from challenge_guesses where id = p_guess;
+  return gu;
+end $$;
+
+-- quem lançou pode rever a própria resposta enquanto o desafio está aberto
+create or replace function public.my_challenge_answer(p_challenge bigint)
+returns text language sql stable security definer set search_path = public as $$
+  select s.answer from challenge_secrets s join challenges c on c.id = s.challenge_id
+   where c.id = p_challenge and c.user_id = auth.uid();
+$$;
+
+revoke execute on function public._challenge_award(public.groups, uuid, text, int, date, int, text) from public, anon, authenticated;
+revoke execute on function public._challenge_solve(bigint) from public, anon, authenticated;
+revoke execute on function public.close_challenges(uuid) from public, anon;
+revoke execute on function public.create_challenge(uuid, text, text) from public, anon;
+revoke execute on function public.guess_challenge(bigint, text) from public, anon;
+revoke execute on function public.judge_guess(bigint, boolean) from public, anon;
+revoke execute on function public.my_challenge_answer(bigint) from public, anon;
+grant execute on function public.close_challenges(uuid) to authenticated, service_role;
+grant execute on function public.create_challenge(uuid, text, text) to authenticated;
+grant execute on function public.guess_challenge(bigint, text) to authenticated;
+grant execute on function public.judge_guess(bigint, boolean) to authenticated;
+grant execute on function public.my_challenge_answer(bigint) to authenticated;
+
+-- push das notificações dos desafios (enviado logo após a ação, uma vez só)
+alter table public.notifications add column if not exists pushed_at timestamptz;
+
+-- zerar temporada também arquiva os desafios
+create or replace function public.admin_reset_group(p_group uuid, p_confirm text)
+returns void language plpgsql security definer set search_path = public as $$
+declare g public.groups; v_today date;
+begin
+  if not is_admin(p_group) then raise exception 'Apenas o administrador'; end if;
+  select * into g from groups where id = p_group;
+  if lower(trim(coalesce(p_confirm, ''))) <> lower(g.name) then raise exception 'Digite o nome do grupo para confirmar'; end if;
+  v_today := (now() at time zone g.timezone)::date;
+  update posts set status = 'archived' where group_id = p_group and status <> 'archived';
+  update polls set archived = true where group_id = p_group and not archived;
+  update challenges set archived = true where group_id = p_group and not archived;
+  update group_members set title = null, avatar_frame = null, tile_frame = null, tile_color = null, tile_anim = null
+   where group_id = p_group;
+  update groups set start_date = v_today, end_date = v_today + 27, last_recap_week = null, last_nudge_date = null where id = p_group;
+end $$;
+
+do $$ begin
+  begin alter publication supabase_realtime add table public.challenges; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.challenge_guesses; exception when duplicate_object then null; end;
+end $$;

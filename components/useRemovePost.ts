@@ -14,7 +14,7 @@ export function useRemovePost() {
   const [removing, setRemoving] = useState<string | null>(null);
 
   const canRemove = useCallback(
-    (p: Post) => isAdmin || (p.user_id === me && p.type !== 'adjust' && p.type !== 'streak'),
+    (p: Post) => isAdmin || (p.user_id === me && p.type !== 'adjust' && p.type !== 'streak' && p.type !== 'challenge' && p.type !== 'riddle'),
     [isAdmin, me],
   );
 

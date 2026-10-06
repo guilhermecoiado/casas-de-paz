@@ -15,9 +15,11 @@ export type PostType =
   | 'devotional'
   | 'prayer'
   | 'fasting'
-  | 'testimony';
+  | 'testimony'
+  | 'challenge'
+  | 'riddle';
 
-export type ActionType = Exclude<PostType, 'poll' | 'adjust' | 'streak'>;
+export type ActionType = Exclude<PostType, 'poll' | 'adjust' | 'streak' | 'challenge' | 'riddle'>;
 
 export interface Profile {
   id: string;
@@ -176,7 +178,7 @@ export interface AppNotification {
   id: number;
   user_id: string;
   group_id: string;
-  kind: 'comment' | 'digest' | 'reminder' | 'manual' | 'nudge' | 'recap' | 'prayer' | 'reset';
+  kind: 'comment' | 'digest' | 'reminder' | 'manual' | 'nudge' | 'recap' | 'prayer' | 'reset' | 'challenge' | 'guess' | 'solved';
   title: string;
   body: string;
   url: string;
@@ -217,4 +219,35 @@ export interface StreakAward {
   local_date: string;
   post_id: string | null;
   created_at: string;
+}
+
+export type ChallengeStatus = 'open' | 'review' | 'solved' | 'missed' | 'expired';
+
+export interface Challenge {
+  id: number;
+  group_id: string;
+  user_id: string;
+  emojis: string;
+  local_date: string;
+  week: number;
+  status: ChallengeStatus;
+  answer: string | null;
+  solved_by: string | null;
+  wrong_people: number;
+  owner_points: number;
+  archived: boolean;
+  created_at: string;
+  closed_at: string | null;
+}
+
+export interface ChallengeGuess {
+  id: number;
+  challenge_id: number;
+  group_id: string;
+  user_id: string;
+  guess: string;
+  status: 'pending' | 'right' | 'wrong';
+  auto: boolean;
+  created_at: string;
+  judged_at: string | null;
 }

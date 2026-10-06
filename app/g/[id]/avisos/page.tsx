@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, BellOff, BellRing, CalendarCheck, CalendarClock, CheckCheck, Flame, HandHeart, Images, KeyRound, Megaphone, MessageCircle, X } from 'lucide-react';
+import { ArrowLeft, BellOff, BellRing, CalendarCheck, CalendarClock, CheckCheck, Flame, HandHeart, Images, KeyRound, Megaphone, MessageCircle, PartyPopper, Puzzle, X } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { timeAgo } from '@/lib/game';
 import { errMsg, supabase } from '@/lib/supabase';
@@ -11,7 +11,7 @@ import { Avatar } from '@/components/ui';
 import { PushToggle } from '@/components/PushToggle';
 import type { AppNotification } from '@/lib/types';
 
-const ICON = { comment: MessageCircle, digest: Images, reminder: CalendarClock, manual: Megaphone, nudge: Flame, recap: CalendarCheck, prayer: HandHeart, reset: KeyRound } as const;
+const ICON = { comment: MessageCircle, digest: Images, reminder: CalendarClock, manual: Megaphone, nudge: Flame, recap: CalendarCheck, prayer: HandHeart, reset: KeyRound, challenge: Puzzle, guess: Puzzle, solved: PartyPopper } as const;
 const TONE = {
   comment: 'bg-terra/10 text-terra',
   digest: 'bg-olive/15 text-olive',
@@ -21,6 +21,9 @@ const TONE = {
   recap: 'bg-[#2F8FD0]/10 text-[#2F8FD0]',
   prayer: 'bg-olive/15 text-olive',
   reset: 'bg-amber/20 text-[#9a5b00]',
+  challenge: 'bg-[#7B3FA0]/10 text-[#7B3FA0]',
+  guess: 'bg-[#7B3FA0]/10 text-[#7B3FA0]',
+  solved: 'bg-olive/15 text-olive',
 } as const;
 
 export default function Avisos() {

@@ -95,7 +95,22 @@ export default function ComoFunciona() {
 
         <Topic icon="🧱" title="A casa da equipe">
           <p>Os pontos de todo mundo somam para construir a <b>Casa de Paz</b>: fundação, paredes, porta, janelas, telhado… até a casa completa, com festa e imagem para compartilhar.</p>
-          <p>No caminho a equipe libera o <b>chat</b>, os <b>tiles animados</b> e a <b>foto de fundo</b> do início. A casa avança no máximo um tanto por semana, então a constância de todos conta.</p>
+          <p>No caminho a equipe libera o <b>Dom de Línguas</b> (chat só de emojis), os <b>tiles animados</b> e a <b>foto de fundo</b> do início. A casa avança no máximo um tanto por semana, então a constância de todos conta.</p>
+        </Topic>
+
+        <Topic icon="🧩" title="Dom de Línguas e desafios em emojês">
+          <p>O chat do grupo tem uma regra só: <b>aqui só se fala emojês</b>. O teclado do celular nem abre, só o teclado de emojis do app.</p>
+          <p><b>Desafio do dia:</b> 1 vez por dia, conte uma história, passagem ou frase só com emojis (toque no + → Desafiar no chat, ou no botão Desafiar do chat). Você escreve a resposta certa na hora, e ela fica escondida até o fim.</p>
+          <p>Cada pessoa tem <b>até 3 palpites</b> por desafio. Se o palpite for igual à resposta, o app aprova sozinho; os outros quem lançou julga com ✓ ou ✗.</p>
+          <div>
+            <Row label="Quem decifrar primeiro" pts="+10" />
+            <Row label="Quem lançou: acertaram de primeira" pts="+5" note="fácil demais 😅" />
+            <Row label="Quem lançou: 1 pessoa errou antes" pts="+10" />
+            <Row label="Quem lançou: 2 ou mais erraram antes" pts="+15" note="na medida 🎯" />
+            <Row label="Quem lançou: teve palpite e ninguém acertou" pts="+5" note="difícil demais 🤯" />
+            <Row label="Ninguém respondeu até o dia virar" pts="0" note="o desafio expira" />
+          </div>
+          <p>Quando fecha, todo mundo vê o desafio, a resposta e todos os palpites. Os pontos contam no limite da semana como qualquer ação.</p>
         </Topic>
 
         <Topic icon="🏆" title="Ranking e destaques">

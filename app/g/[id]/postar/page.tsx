@@ -7,6 +7,7 @@ import {
   Smile, Sparkles, Sun, User, Users, UtensilsCrossed,
 } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
+import { Puzzle } from 'lucide-react';
 import { ACTIONS, WEEKDAYS, actionAvailability, actionPoints, dailyMax, formatDate, weekdayOf, type ActionInfo } from '@/lib/game';
 import { ProgressBar } from '@/components/ui';
 import { compressImage } from '@/lib/image';
@@ -31,7 +32,12 @@ const MIN_TEXT: Partial<Record<ActionType, number>> = { evangelism: 10, encourag
 export default function Postar() {
   const router = useRouter();
   const toast = useToast();
-  const { group, posts, me, today, profiles, reload, stats } = useGroup();
+  const { group, posts, me, today, profiles, reload, stats, unlocked } = useGroup();
+  const [challenged, setChallenged] = useState<boolean | null>(null);
+  useEffect(() => {
+    supabase.from('challenges').select('id').eq('group_id', group.id).eq('user_id', me).eq('local_date', today).eq('archived', false).limit(1)
+      .then(({ data }) => setChallenged(!!data?.length));
+  }, [group.id, me, today]);
   const [action, setAction] = useState<ActionInfo | null>(null);
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [text, setText] = useState('');
@@ -201,6 +207,24 @@ export default function Postar() {
                     );
                   })}
                 </div>
+                {when === 'daily' && (
+                  <button
+                    disabled={!unlocked.has('chat') || !!challenged}
+                    onClick={() => router.push(`/g/${group.id}/chat?novo=1`)}
+                    className="card mt-3 flex w-full items-center gap-3 bg-gradient-to-br from-white to-[#efe2fb] p-4 text-left transition active:scale-[0.98] disabled:opacity-60"
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#7B3FA0] text-white"><Puzzle size={22} /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-extrabold leading-tight">Desafiar no chat 🧩</span>
+                      <span className="mt-0.5 block text-[13px] leading-snug text-[#6b5643]">Escreva algo em emojês para o grupo decifrar. Quem acertar ganha 10, você até 15.</span>
+                      <span className="mt-1 block text-[11px] font-bold">
+                        {!unlocked.has('chat')
+                          ? <span className="text-[#8A6F57]">🔒 Libera junto com o Dom de Línguas</span>
+                          : challenged ? <span className="text-olive">✓ Desafio de hoje lançado</span> : <span className="text-olive">Disponível hoje</span>}
+                      </span>
+                    </span>
+                  </button>
+                )}
               </section>
             );
           })}

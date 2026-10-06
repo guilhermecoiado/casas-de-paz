@@ -29,6 +29,7 @@ const DID: Partial<Record<PostType, string>> = {
   prayer: 'orou pela Casa de Paz',
   fasting: 'registrou o jejum',
   testimony: 'compartilhou um testemunho',
+  riddle: 'decifrou um desafio em emojês',
 };
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
@@ -63,6 +64,8 @@ export async function GET(req: Request) {
   const now = Date.now();
   const report: { group: string; status: string; devices?: number }[] = [];
   for (const g of groups ?? []) {
+    // fecha os desafios em emojês de dias anteriores (credita os pontos mesmo se ninguém abrir o chat)
+    await db.rpc('close_challenges', { p_group: g.id });
     if (!g.digest_enabled) { report.push({ group: g.name, status: 'desativado' }); continue; }
     if (todayIn(g.timezone) < g.start_date) { report.push({ group: g.name, status: 'ainda não começou' }); continue; }
     const h = hourIn(g.timezone);

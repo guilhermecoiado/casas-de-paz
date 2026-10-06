@@ -170,7 +170,7 @@ ok((await as('zeca', `select * from posts`)).length === 0, 'não-membro não vê
 ok((await as('zeca', `select * from submit_post($1,'prayer',null,null)`, [gid])).error?.includes('não faz parte'), 'não-membro não posta');
 ok((await as('ana', `select claim_reminder($1, current_date, 't', 'b')`, [gid])).error, 'membro não dispara lembrete');
 ok(!(await as('bia', `select save_push_subscription('https://push/1','k','a','Android')`)).error, 'salva inscrição push');
-ok(!(await as('bia', `insert into messages (group_id,user_id,body) values ($1,$2,'oi')`, [gid, users.bia])).error, 'membro envia mensagem');
+ok(!(await as('bia', `insert into messages (group_id,user_id,body) values ($1,$2,'👋')`, [gid, users.bia])).error, 'membro envia mensagem');
 
 
 // ---- reações, comentários e central de notificações ----
@@ -336,6 +336,74 @@ ok((await as('zeca', `select * from post_comments`)).length === 0, 'não-membro 
   const second = (await as('davi', `select * from submit_post($1,'checkin','http://x/b.jpg',null,0)`, [gq]))[0];
   const item2 = (await c.query(`select item_id from member_items where post_id=$1`, [second?.id])).rows[0]?.item_id;
   ok(!!item1 && item1 === item2, `mesmo item ao refazer (${item1} / ${item2})`);
+}
+
+// ---- v12: chat só de emojis + desafios em emojês ----
+{
+  const [{ create_group: gc }] = await as('ana', `select create_group('Grupo Emojês', 'emoj')`);
+  for (const u of ['bia', 'caio', 'davi']) await as(u, `select join_group('Grupo Emojês', 'emoj')`);
+  await c.query(`update groups set start_date = current_date - 3, end_date = current_date + 20 where id=$1`, [gc]);
+  ok((await as('bia', `insert into messages (group_id,user_id,body) values ($1,$2,'oi gente') returning id`, [gc, users.bia])).error, 'chat bloqueia letras');
+  ok(!(await as('bia', `insert into messages (group_id,user_id,body) values ($1,$2,'🙏🔥 3️⃣ 👨‍👩‍👧 🇧🇷') returning id`, [gc, users.bia])).error, 'chat aceita emojis');
+  ok((await as('ana', `select * from create_challenge($1,'🐋 jonas','Jonas')`, [gc])).error?.includes('emojês'), 'desafio só em emojis');
+  ok((await as('ana', `select * from create_challenge($1,'🐋👨🌊','')`, [gc])).error?.includes('resposta'), 'desafio exige resposta');
+  const ch = (await as('ana', `select * from create_challenge($1,'🐋👨🌊3️⃣🌙','Jonas e a baleia')`, [gc]))[0];
+  ok(ch?.status === 'open' && !ch.answer, 'cria desafio, resposta escondida');
+  ok((await as('ana', `select * from create_challenge($1,'🦁','Daniel')`, [gc])).error?.includes('Volte amanhã'), '1 desafio por dia');
+  ok((await as('bia', `select * from challenge_secrets`)).length === 0, 'resposta invisível para membros');
+  ok((await as('ana', `select * from challenge_secrets`)).length === 0, 'resposta invisível até para o adm/dono direto');
+  ok((await as('ana', `select my_challenge_answer($1) a`, [ch.id]))[0].a === 'Jonas e a baleia', 'dono revê a própria resposta');
+  ok((await as('bia', `select my_challenge_answer($1) a`, [ch.id]))[0].a === null, 'outros não veem a resposta');
+  ok((await as('bia', `select count(*)::int n from notifications where kind='challenge' and user_id=$1`, [users.bia]))[0].n === 1, 'grupo é avisado do desafio');
+  ok((await as('ana', `select * from guess_challenge($1,'Jonas')`, [ch.id])).error?.includes('próprio'), 'dono não responde');
+  let g1 = (await as('bia', `select * from guess_challenge($1,'Noé')`, [ch.id]))[0];
+  ok(g1?.status === 'pending', 'palpite fica pendente');
+  ok((await as('bia', `select * from guess_challenge($1,'Moisés')`, [ch.id])).error?.includes('Espere'), 'espera julgar antes do próximo');
+  ok((await as('caio', `select * from challenge_guesses where challenge_id=$1`, [ch.id])).length === 0, 'palpite dos outros escondido enquanto aberto');
+  ok((await as('ana', `select * from challenge_guesses where challenge_id=$1`, [ch.id])).length === 1, 'dono vê os palpites');
+  ok((await as('caio', `select * from judge_guess($1,true)`, [g1.id])).error?.includes('Só quem lançou'), 'só o dono julga');
+  ok((await as('ana', `select * from judge_guess($1,false)`, [g1.id]))[0].status === 'wrong', 'dono marca errado');
+  await as('caio', `select * from guess_challenge($1,'Pedro')`, [ch.id]);
+  const gcai = (await c.query(`select id from challenge_guesses where user_id=$1 and challenge_id=$2`, [users.caio, ch.id])).rows[0].id;
+  await as('ana', `select * from judge_guess($1,false)`, [gcai]);
+  for (const x of ['Moisés', 'Elias']) { const gg = (await as('bia', `select * from guess_challenge($1,$2)`, [ch.id, x]))[0]; await as('ana', `select * from judge_guess($1,false)`, [gg.id]); }
+  ok((await as('bia', `select * from guess_challenge($1,'Jonas e a baleia')`, [ch.id])).error?.includes('3 palpites'), 'máximo 3 palpites');
+  const win = (await as('davi', `select * from guess_challenge($1,'jonas E A Baleia!!')`, [ch.id]))[0];
+  ok(win?.status === 'right' && win.auto, 'acerto automático (sem maiúscula/pontuação)');
+  const done = (await as('caio', `select * from challenges where id=$1`, [ch.id]))[0];
+  ok(done.status === 'solved' && done.answer === 'Jonas e a baleia' && done.solved_by === users.davi, 'fecha e revela a resposta');
+  ok(done.wrong_people === 2 && done.owner_points === 15, `2 pessoas erraram antes → dono 15 (${done.wrong_people}/${done.owner_points})`);
+  const pts = (await c.query(`select user_id, type, points from posts where group_id=$1 and type in ('challenge','riddle')`, [gc])).rows;
+  ok(pts.some((p) => p.user_id === users.davi && p.type === 'riddle' && p.points === 10) && pts.some((p) => p.user_id === users.ana && p.type === 'challenge' && p.points === 15), 'pontos: quem acertou 10, dono 15');
+  ok((await as('caio', `select * from challenge_guesses where challenge_id=$1`, [ch.id])).length === 5, 'depois de fechar, todos veem os palpites');
+  ok((await as('caio', `select * from guess_challenge($1,'Jonas')`, [ch.id])).error?.includes('encerrado'), 'fechado não aceita palpite');
+
+  // fácil demais: acerta de primeira → dono 5
+  const ch2 = (await as('bia', `select * from create_challenge($1,'🦁🕳️','Daniel na cova dos leões')`, [gc]))[0];
+  const gd = (await as('caio', `select * from guess_challenge($1,'Daniel')`, [ch2.id]))[0];
+  await as('bia', `select * from judge_guess($1,true)`, [gd.id]);
+  ok((await as('bia', `select owner_points o, status s from challenges where id=$1`, [ch2.id]))[0].o === 5, 'acertou de primeira (julgado pelo dono) → dono 5');
+
+  // dias anteriores: sem palpites expira; com errados → 5; pendente → revisão
+  const mk = async (u, emo, ans, back) => { const x = (await as(u, `select * from create_challenge($1,$2,$3)`, [gc, emo, ans]))[0]; await c.query(`update challenges set local_date = current_date - $2::int where id=$1`, [x.id, back]); return x; };
+  const e1 = await mk('caio', '🌊🚶', 'Pedro andando sobre as águas', 2);
+  const e2 = await mk('davi', '🍞🐟', 'Multiplicação dos pães', 1);
+  await c.query(`insert into challenge_guesses (challenge_id, group_id, user_id, guess, status) values ($1,$2,$3,'Santa ceia','wrong')`, [e2.id, gc, users.bia]);
+  const e3 = await mk('caio', '🌈🚢', 'Arca de Noé', 1);
+  await c.query(`insert into challenge_guesses (challenge_id, group_id, user_id, guess) values ($1,$2,$3,'Noé e o dilúvio')`, [e3.id, gc, users.bia]);
+  await as('bia', `select close_challenges($1)`, [gc]);
+  const st = Object.fromEntries((await c.query(`select id, status, owner_points from challenges where id = any($1)`, [[e1.id, e2.id, e3.id]])).rows.map((x) => [x.id, x]));
+  ok(st[e1.id].status === 'expired' && st[e1.id].owner_points === 0, 'sem palpites: expira (0)');
+  ok(st[e2.id].status === 'missed' && st[e2.id].owner_points === 5, 'teve palpite e ninguém acertou: dono 5');
+  ok(st[e3.id].status === 'review', 'palpite sem julgamento: vai para revisão');
+  const pend = (await c.query(`select id from challenge_guesses where challenge_id=$1`, [e3.id])).rows[0].id;
+  ok((await as('davi', `select * from judge_guess($1,true)`, [pend])).error, 'membro comum não julga a revisão');
+  ok((await as('ana', `select * from judge_guess($1,true)`, [pend]))[0]?.status === 'right', 'adm julga na revisão');
+  const e3b = (await c.query(`select status, local_date from challenges where id=$1`, [e3.id])).rows[0];
+  const rid = (await c.query(`select local_date from posts where type='riddle' and user_id=$1 and group_id=$2 order by created_at desc limit 1`, [users.bia, gc])).rows[0];
+  ok(e3b.status === 'solved' && String(rid.local_date) === String(e3b.local_date), 'pontos ficam no dia do desafio');
+  await as('ana', `select admin_reset_group($1,'Grupo Emojês')`, [gc]);
+  ok(!(await as('ana', `select * from create_challenge($1,'🔥','Pentecostes')`, [gc])).error, 'depois de zerar, pode lançar de novo');
 }
 
 console.log(fails ? `\n${fails} FALHA(S)` : '\nTODOS OS TESTES PASSARAM');

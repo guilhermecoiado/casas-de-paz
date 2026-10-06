@@ -110,6 +110,8 @@ export const TYPE_LABEL: Record<PostType, string> = {
   poll: 'Enquete',
   adjust: 'Ajuste do adm',
   streak: 'Intensivo',
+  challenge: 'Desafio em emojês',
+  riddle: 'Decifrou um desafio',
 };
 
 export const POINT_LABELS: { key: keyof Group['points']; label: string; when: ActionWhen | 'other' }[] = [
@@ -313,8 +315,9 @@ export interface GroupUnlock {
 
 export const GROUP_UNLOCKS: GroupUnlock[] = [
   { id: 'frame', name: 'Moldura Casa de Paz', desc: 'Aplique a moldura nas fotos e compartilhe no Instagram', pct: 0, feature: 'frame' },
+  // 3% = 600 pts com a meta atual (10 pessoas, 4 semanas)
+  { id: 'chat', name: 'Dom de Línguas', desc: 'Chat só de emojis liberado, com desafios em emojês valendo pontos', pct: 3, feature: 'chat' },
   { id: 'foundation', name: 'Fundação', desc: 'A base da nossa casa', pct: 5, part: 'foundation' },
-  { id: 'chat', name: 'Chat do grupo', desc: 'Conversa liberada para todos', pct: 10, feature: 'chat' },
   { id: 'walls', name: 'Paredes', desc: 'A casa começa a ganhar forma', pct: 18, part: 'walls' },
   { id: 'tile_anim', name: 'Tiles animados', desc: 'Todos os tiles ganham vida', pct: 25, feature: 'tile_anim' },
   { id: 'door', name: 'Porta', desc: 'Porta aberta para os convidados', pct: 30, part: 'door' },
