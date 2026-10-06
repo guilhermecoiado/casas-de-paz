@@ -19,7 +19,7 @@ export interface TileLook {
 }
 
 export function MemberTile({
-  profile, stats, look, alive, isAdmin, onClick, forcePosted, compact,
+  profile, stats, look, alive, isAdmin, onClick, forcePosted, compact, view = 'posts',
 }: {
   profile?: Profile;
   stats?: UserStats;
@@ -29,9 +29,10 @@ export function MemberTile({
   onClick?: () => void;
   forcePosted?: boolean; // prévia no perfil: mostra o tile "aceso"
   compact?: boolean;     // miniatura (prévia no perfil)
+  view?: 'posts' | 'cards'; // posts: foto do dia no tile · cards: tile decorado
 }) {
   const posted = forcePosted || !!stats?.postedToday;
-  const photo = forcePosted ? null : stats?.todayPhoto;
+  const photo = forcePosted || view === 'cards' ? null : stats?.todayPhoto;
   const cls = [
     'relative flex aspect-[3/4] w-full flex-col overflow-hidden rounded-[22px] text-left transition active:scale-[0.97]',
     'shadow-[0_2px_0_rgba(43,33,24,0.06),0_10px_24px_-14px_rgba(43,33,24,0.3)]',
@@ -54,6 +55,10 @@ export function MemberTile({
             onError={(e) => { if (e.currentTarget.src !== photo) e.currentTarget.src = photo; }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+          {/* mesmo com a foto do dia, a pessoa continua reconhecível: foto de perfil com o anel no canto */}
+          <div className="absolute left-1.5 top-1.5 z-[3] rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.35)]">
+            <Avatar url={profile?.avatar_url} name={profile?.name} size={compact ? 20 : 26} frame={look.avatarFrame} />
+          </div>
         </>
       ) : null}
 

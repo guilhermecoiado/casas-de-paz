@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Bell, CalendarDays, CircleHelp, HandHeart, Lock, MessageCircle, Settings, UserPlus } from 'lucide-react';
+import { Bell, CalendarDays, Image as ImageIcon, Sparkles, CircleHelp, HandHeart, Lock, MessageCircle, Settings, UserPlus } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { GROUP_UNLOCKS, WEEKDAYS, daysLeft, formatDate, groupThreshold, nextGroupUnlock, totalWeeks, weekdayOf } from '@/lib/game';
 import { Avatar, ProgressBar } from '@/components/ui';
@@ -19,6 +19,10 @@ export default function GroupHome() {
   const { group, members, profiles, stats, unlocked, today, me, isAdmin, polls, look, maxGrp, unread } = g;
   const [sel, setSel] = useState<string | null>(null);
   const houseRef = useRef<HTMLAnchorElement>(null);
+  // Posts (foto do dia no tile) x Cards (tile decorado); lembra a escolha neste aparelho
+  const [view, setView] = useState<'posts' | 'cards'>('posts');
+  useEffect(() => { try { if (localStorage.getItem('tileView') === 'cards') setView('cards'); } catch {} }, []);
+  const pickView = (v: 'posts' | 'cards') => { setView(v); try { localStorage.setItem('tileView', v); } catch {} };
 
   const parts = useMemo(() => new Set(GROUP_UNLOCKS.filter((u) => unlocked.has(u.id)).map((u) => u.part ?? u.id)), [unlocked]);
   const next = nextGroupUnlock(maxGrp, stats.groupPoints);
@@ -138,11 +142,21 @@ export default function GroupHome() {
 
         {/* tiles */}
         <section>
-          <div className="mb-2.5 mt-2 flex items-end justify-between px-1">
-            <h2 className="font-display text-xl font-bold">Hoje</h2>
-            <p className="text-sm font-extrabold text-[#8A6F57]">
-              <span className="text-olive">{postedCount}</span> de {members.length} postaram
-            </p>
+          <div className="mb-2.5 mt-2 flex items-center justify-between gap-2 px-1">
+            <div className="min-w-0">
+              <h2 className="font-display text-xl font-bold leading-tight">Hoje</h2>
+              <p className="text-[13px] font-extrabold text-[#8A6F57]">
+                <span className="text-olive">{postedCount}</span> de {members.length} postaram
+              </p>
+            </div>
+            <div role="tablist" aria-label="Como mostrar os tiles" className="flex shrink-0 rounded-full bg-sand p-1">
+              {([['posts', ImageIcon, 'Posts'], ['cards', Sparkles, 'Cards']] as const).map(([v, Icon, label]) => (
+                <button key={v} role="tab" aria-selected={view === v} onClick={() => pickView(v)}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-[13px] font-extrabold transition ${view === v ? 'bg-white text-terra shadow-sm' : 'text-[#8A6F57]'}`}>
+                  <Icon size={15} /> {label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-2.5">
             {sorted.map((m) => (
@@ -154,6 +168,7 @@ export default function GroupHome() {
                 alive={unlocked.has('tile_anim')}
                 isAdmin={group.admin_id === m.user_id}
                 onClick={() => setSel(m.user_id)}
+                view={view}
               />
             ))}
           </div>
