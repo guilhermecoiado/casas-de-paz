@@ -334,3 +334,7 @@ select {
 /* ainda não postou hoje: chama baixa */
 .aura-off { animation: none; opacity: .35; box-shadow: none; }
 .aura-off::before { animation-duration: 8s; }
+/* intensivo: chama do card do perfil */
+.flame-flicker { transform-origin: 50% 90%; animation: flicker .9s ease-in-out infinite alternate; }
+.flame-pulse { animation: flamePulse 2.4s ease-in-out infinite; }
+@keyframes flamePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }

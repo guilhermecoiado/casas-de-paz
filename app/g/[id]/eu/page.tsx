@@ -11,7 +11,8 @@ import { MemberTile } from '@/components/Tile';
 import { PushToggle } from '@/components/PushToggle';
 import { StreakCard } from '@/components/StreakCard';
 import { ChangePassword } from '@/components/ChangePassword';
-import { KIND_LABEL, fieldOf, rewardById, kitItems, nextPathReward, rewardThreshold, type PathInfo, type Reward } from '@/lib/rewards';
+import { rewardById, nextPathReward, rewardThreshold, type PathInfo } from '@/lib/rewards';
+import { useEquip } from '@/lib/use-equip';
 import { Collection, EvolutionLine, Phrases } from '@/components/Evolution';
 import { errMsg, supabase, uploadImage } from '@/lib/supabase';
 import { squareAvatar } from '@/lib/image';
@@ -25,7 +26,6 @@ export default function Eu() {
   const member = members.find((m) => m.user_id === me);
   const prof = profiles[me];
   const l = look(me);
-  const [saving, setSaving] = useState<string | null>(null);
   const [edit, setEdit] = useState(false);
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
@@ -34,31 +34,8 @@ export default function Eu() {
 
   const nextReward = useMemo(() => nextPathReward(group, progress(me)), [group, progress, me]);
 
-  const save = async (patch: Partial<Record<'title' | 'avatar_frame' | 'tile_frame' | 'tile_color' | 'tile_anim', string | null>>, key: string) => {
-    if (!member) return;
-    const cur = { title: member.title, avatar_frame: member.avatar_frame, tile_frame: member.tile_frame, tile_color: member.tile_color, tile_anim: member.tile_anim, ...patch };
-    setSaving(key);
-    const { error } = await supabase.rpc('set_cosmetics', {
-      p_group: group.id, p_title: cur.title, p_avatar_frame: cur.avatar_frame, p_tile_frame: cur.tile_frame,
-      p_tile_color: cur.tile_color, p_tile_anim: cur.tile_anim,
-    });
-    setSaving(null);
-    if (error) toast(errMsg(error), 'error');
-  };
-
-  /** Toca para usar; toca de novo para tirar. */
-  const equip = async (r: Reward) => {
-    if (r.kind === 'phrase' || !member) return;
-    const field = fieldOf(r.kind);
-    const worn = r.kind === 'title' ? l.titleId === r.id : member[field] === r.id;
-    await save({ [field]: worn ? null : r.id }, r.id);
-  };
-
-  const equipKit = async (path: PathInfo) => {
-    const patch: Record<string, string> = {};
-    kitItems(path.id).forEach((r) => { if (r.kind !== 'phrase') patch[fieldOf(r.kind)] = r.id; });
-    await save(patch, `kit:${path.id}`);
-  };
+  const { saving, equip, equipKit: wearKit } = useEquip();
+  const equipKit = async (path: PathInfo) => { await wearKit(path.id); };
 
   const saveProfile = async () => {
     setBusy(true);

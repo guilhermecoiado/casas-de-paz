@@ -47,7 +47,7 @@ interface Props {
   member: Member | undefined;
   titleId: string;
   kit: string | null;
-  onEquip: (r: Reward) => Promise<void>;
+  onEquip: (r: Reward) => Promise<unknown>;
   onEquipKit: (path: PathInfo) => Promise<void>;
   saving: string | null;
 }

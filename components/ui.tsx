@@ -24,9 +24,11 @@ export function Avatar({
     </div>
   );
   if (!frame) return inner;
+  const pad = Math.max(2, size * 0.06);
   return (
-    <div className="relative shrink-0">
-      <div className={`af-ring ${frame}`} style={{ padding: Math.max(2, size * 0.06) }}>
+    // tamanho fixo: dentro de linhas flex (ex.: comentários) o wrapper não estica e os enfeites ficam colados na foto
+    <div className="relative shrink-0" style={{ width: size + 2 * pad + 4, height: size + 2 * pad + 4 }}>
+      <div className={`af-ring ${frame}`} style={{ padding: pad }}>
         <div className="af-inner rounded-full bg-white p-[2px]">{inner}</div>
       </div>
       <AvatarOrnaments frame={frame} size={size} />
