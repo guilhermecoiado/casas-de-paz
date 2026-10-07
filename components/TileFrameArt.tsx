@@ -61,10 +61,10 @@ const star = (cx: number, cy: number, r: number, inner = 0.45, n = 5, rot = -Mat
 
 function Pedras() {
   const r = rng(11);
-  const pts = perimeter(12, 12);
+  const pts = perimeter(10, 11);
   const tones = ['#d3cdc2', '#bdb7ac', '#a9a398', '#e2ddd2', '#9a948a'];
   const stones = pts.map((p) => {
-    const size = 11 + r() * 7, n = 5 + Math.floor(r() * 3), rot = r() * Math.PI;
+    const size = 9 + r() * 6, n = 5 + Math.floor(r() * 3), rot = r() * Math.PI;
     // cristais alongados, apontando para fora, como pedras empilhadas
     const stretch = 1.2 + r() * 0.7, tilt = (r() - 0.5) * 0.9;
     const ca = Math.cos(p.a + Math.PI / 2 + tilt), sa = Math.sin(p.a + Math.PI / 2 + tilt);
@@ -95,7 +95,7 @@ function Pedras() {
           </g>
         );
       })}
-      <rect {...rr(25)} fill="none" stroke="#1f1b18" strokeWidth={3.6} />
+      <rect {...rr(21)} fill="none" stroke="#1f1b18" strokeWidth={3.2} />
     </g>
   );
 }
