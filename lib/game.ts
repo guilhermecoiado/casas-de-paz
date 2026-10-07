@@ -183,7 +183,7 @@ export function actionAvailability(g: Group, type: ActionType, today: string, my
 export interface UserStats {
   points: number;
   weekPoints: number;
-  weekCapUsed: number; // o que conta no limite semanal (sem bônus do intensivo, sem parte dobrada, sem ajustes)
+  weekCapUsed: number; // o que conta no limite semanal (sem bônus do intensivo, sem parte dobrada, sem ajustes, sem desafios)
   checkins: number;
   guests: number;
   evangelism: number;
@@ -250,7 +250,7 @@ export function computeStats(g: Group, members: Member[], posts: Post[], today: 
     if (p.status === 'voting') s.pending += p.points;
     if (p.week === week) {
       s.weekPoints += p.points;
-      if (p.type !== 'adjust' && p.type !== 'streak') s.weekCapUsed += p.points - (p.boost ?? 0);
+      if (p.type !== 'adjust' && p.type !== 'streak' && p.type !== 'challenge' && p.type !== 'riddle') s.weekCapUsed += p.points - (p.boost ?? 0);
     }
     if (p.type === 'checkin') {
       s.checkins += 1;

@@ -110,7 +110,7 @@ export default function ComoFunciona() {
             <Row label="Quem lançou: teve palpite e ninguém acertou" pts="+5" note="difícil demais 🤯" />
             <Row label="Ninguém respondeu até o dia virar" pts="0" note="o desafio expira" />
           </div>
-          <p>Quando fecha, todo mundo vê o desafio, a resposta e todos os palpites. Os pontos contam no limite da semana como qualquer ação.</p>
+          <p>Quando fecha, todo mundo vê o desafio, a resposta e todos os palpites. Os pontos dos desafios são <b>extras</b>: não contam no limite do dia nem da semana (o limite é 1 desafio por dia).</p>
         </Topic>
 
         <Topic icon="🏆" title="Ranking e destaques">

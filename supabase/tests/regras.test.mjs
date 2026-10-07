@@ -406,5 +406,19 @@ ok((await as('zeca', `select * from post_comments`)).length === 0, 'não-membro 
   ok(!(await as('ana', `select * from create_challenge($1,'🔥','Pentecostes')`, [gc])).error, 'depois de zerar, pode lançar de novo');
 }
 
+// ---- v13: desafios pontuam além do limite semanal ----
+{
+  const [{ create_group: gl }] = await as('bia', `select create_group('Grupo Limite', 'lim1')`);
+  await as('caio', `select join_group('Grupo Limite', 'lim1')`);
+  await c.query(`update groups set start_date = current_date - 3, end_date = current_date + 20, weekly_user_cap = 10 where id=$1`, [gl]);
+  await as('caio', `select * from submit_post($1,'prayer',null,null)`, [gl]); // caio já usa o limite (10)
+  const x = (await as('bia', `select * from create_challenge($1,'🐑💯','Ovelha perdida')`, [gl]))[0];
+  await as('caio', `select * from guess_challenge($1,'ovelha perdida')`, [x.id]);
+  const r = (await c.query(`select points, capped from posts where group_id=$1 and type='riddle'`, [gl])).rows[0];
+  ok(r?.points === 10 && !r.capped, `desafio paga inteiro mesmo com o limite cheio (${r?.points})`);
+  const nx = (await as('caio', `select * from submit_post($1,'verse',null,'João 3:16')`, [gl]))[0];
+  ok(nx?.points === 0, 'pontos do desafio não ocupam o limite (e o limite segue valendo para o resto)');
+}
+
 console.log(fails ? `\n${fails} FALHA(S)` : '\nTODOS OS TESTES PASSARAM');
 await c.end();

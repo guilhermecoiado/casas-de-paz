@@ -1802,3 +1802,30 @@ do $$ begin
   begin alter publication supabase_realtime add table public.challenges; exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.challenge_guesses; exception when duplicate_object then null; end;
 end $$;
+
+-- =====================================================================
+-- v13: desafios em emojês pontuam ALÉM do limite (o limite é 1 desafio por dia)
+-- =====================================================================
+create or replace function public._award(
+  g public.groups, p_user uuid, p_week int, p_base int, p_bonus int,
+  out o_points int, out o_bonus int)
+language plpgsql security definer set search_path = public as $$
+declare u_used int;
+begin
+  perform pg_advisory_xact_lock(hashtext(g.id::text || p_user::text));
+  select coalesce(sum(points - boost), 0) into u_used
+    from posts where group_id = g.id and user_id = p_user and week = p_week
+     and status not in ('cancelled','archived','removed') and type not in ('adjust','streak','challenge','riddle');
+  o_points := greatest(least(p_base, g.weekly_user_cap - u_used), 0);
+  o_bonus  := greatest(p_bonus, 0);
+end $$;
+revoke execute on function public._award(public.groups, uuid, int, int, int) from public, anon, authenticated;
+
+create or replace function public._challenge_award(g public.groups, p_user uuid, p_type text, p_base int, p_date date, p_week int, p_desc text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_base <= 0 then return; end if;
+  insert into posts (group_id, user_id, type, description, base_points, points, group_bonus, capped, local_date, week)
+  values (g.id, p_user, p_type, p_desc, p_base, p_base, 0, false, p_date, p_week);
+end $$;
+revoke execute on function public._challenge_award(public.groups, uuid, text, int, date, int, text) from public, anon, authenticated;
