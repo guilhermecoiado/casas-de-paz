@@ -201,7 +201,7 @@ function Chat() {
 
       {!mineToday && !kb && (
         <button onClick={() => setCreating(true)} className="mx-3 mb-2 flex items-center gap-2 rounded-2xl bg-[#f3eafb] px-3 py-2.5 text-left text-[13px] font-extrabold text-[#5b2a86]">
-          <Puzzle size={18} className="shrink-0" /> Lance o seu desafio de hoje: quem decifrar ganha {CHALLENGE_RULES.solver} pts, você até {CHALLENGE_RULES.fair}.
+          <Puzzle size={18} className="shrink-0" /> <span className="truncate">Lance seu desafio · vale até {CHALLENGE_RULES.fair} pts</span>
         </button>
       )}
 
@@ -302,7 +302,7 @@ function ChallengeCard({ c, guesses, highlight, onGuess, onChanged, isAdmin }: {
         </p>
       )}
       {c.status === 'review' && (
-        <p className="mt-2 text-center text-[13px] font-bold text-[#9a5b00]">O dia acabou com palpite sem julgar. {isOwner ? 'Julgue abaixo' : 'Quem lançou ou o adm julga'} até amanhã.</p>
+        <p className="mt-2 truncate text-center text-[13px] font-bold text-[#9a5b00]">{isOwner ? 'Palpite sem julgar: julgue abaixo' : 'Aguardando julgamento ⏳'}</p>
       )}
 
       {/* palpites: o dono vê todos; depois de fechar, todo mundo vê */}
@@ -342,7 +342,7 @@ function ChallengeCard({ c, guesses, highlight, onGuess, onChanged, isAdmin }: {
           )}
           {live && (
             myPending ? (
-              <p className="text-center text-[13px] font-bold text-[#9a5b00]">Seu palpite está esperando {owner?.name?.split(' ')[0]} julgar ⏳</p>
+              <p className="truncate text-center text-[13px] font-bold text-[#9a5b00]">Esperando {owner?.name?.split(' ')[0]} julgar ⏳</p>
             ) : left > 0 ? (
               <button onClick={onGuess} className="btn w-full !min-h-[46px] bg-[#7B3FA0] text-white">
                 Decifrar · {left} {left === 1 ? 'palpite' : 'palpites'}
@@ -351,12 +351,12 @@ function ChallengeCard({ c, guesses, highlight, onGuess, onChanged, isAdmin }: {
               <p className="text-center text-[13px] font-bold text-[#a8927a]">Seus 3 palpites acabaram 😬</p>
             )
           )}
-          {!live && c.status === 'open' && <p className="text-center text-[12px] font-bold text-[#a8927a]">Encerrando… a resposta aparece já já.</p>}
+          {!live && c.status === 'open' && <p className="truncate text-center text-[12px] font-bold text-[#a8927a]">Encerrando… resposta já já</p>}
         </div>
       )}
 
       {!closed && guesses.length > 0 && !isOwner && (
-        <p className="mt-2 text-center text-[11px] font-bold text-[#b9a690]">os palpites aparecem quando o desafio fechar</p>
+        <p className="mt-2 truncate text-center text-[11px] font-bold text-[#b9a690]">palpites aparecem no fim</p>
       )}
       <p className="mt-2 text-right text-[10px] text-[#a8927a]">{hhmm(c.created_at)}</p>
     </div>
@@ -393,14 +393,13 @@ function CreateChallenge({ open, onClose, onCreated, already }: { open: boolean;
       {already ? (
         <div className="py-6 text-center">
           <p className="text-4xl">✅🧩</p>
-          <p className="mt-3 font-bold text-[#6b5643]">Você já lançou o seu desafio de hoje. Amanhã tem mais!</p>
+          <p className="mt-3 whitespace-nowrap font-extrabold text-ink">Desafio de hoje já lançado!</p>
+          <p className="whitespace-nowrap font-bold text-[#6b5643]">Amanhã tem mais 😉</p>
         </div>
       ) : (
         <>
-          <p className="text-[14px] leading-snug text-[#6b5643]">
-            Conte uma história, passagem ou frase <b>só com emojis</b>. Quem acertar primeiro ganha {CHALLENGE_RULES.solver} pts. Você ganha
-            até {CHALLENGE_RULES.fair} pts se o grupo suar um pouquinho para descobrir 😉
-          </p>
+          <p className="truncate text-[14px] font-bold text-[#6b5643]">Conte uma história <b>só com emojis</b></p>
+          <p className="truncate text-[13px] text-[#8A6F57]">Quem decifrar ganha {CHALLENGE_RULES.solver} pts · você até {CHALLENGE_RULES.fair}</p>
           <EmojiField input={emoIn} active={!typing} size={32} onActivate={() => { (document.activeElement as HTMLElement | null)?.blur(); setTyping(false); }}
             placeholder="Ex.: 🐋👨🌊3️⃣🌙"
             className={`mt-3 flex min-h-[72px] w-full items-center justify-center rounded-3xl border-2 bg-white px-3 py-2 text-center ${typing ? 'border-sand' : 'border-[#7B3FA0]'}`} />
@@ -412,9 +411,8 @@ function CreateChallenge({ open, onClose, onCreated, already }: { open: boolean;
           <label className="label mt-3">Resposta certa (fica escondida até o fim)</label>
           <input className="input" value={ans} onChange={(e) => setAns(e.target.value)} onFocus={() => setTyping(true)} maxLength={80}
             placeholder="Ex.: Jonas e a baleia" />
-          <p className="mt-1.5 text-[12px] font-bold leading-snug text-[#a8927a]">
-            Se alguém escrever igual à resposta, o app aprova sozinho. Os outros palpites você julga com ✓ ou ✗. No fim todo mundo vê a resposta e os palpites.
-          </p>
+          <p className="mt-1.5 truncate text-[12px] font-bold text-[#a8927a]">Palpite igual à resposta é aprovado sozinho</p>
+          <p className="truncate text-[12px] font-bold text-[#a8927a]">Os outros você julga com ✓ ou ✗</p>
           <button className="btn mt-4 w-full bg-[#7B3FA0] text-white" onClick={submit} disabled={busy}>{busy ? <Spinner /> : 'Lançar desafio'}</button>
         </>
       )}
@@ -448,12 +446,12 @@ function GuessSheet({ c, mine, onClose, onDone }: { c: Challenge | null; mine: C
         <>
           <p className="break-words rounded-3xl bg-white py-4 text-center text-[40px] leading-tight">{c.emojis}</p>
           {mine.length > 0 && (
-            <p className="mt-2 text-center text-[13px] font-bold text-[#a8927a]">Você já tentou: {mine.map((x) => x.guess).join(', ')}</p>
+            <p className="mt-2 truncate text-center text-[13px] font-bold text-[#a8927a]">Já tentou: {mine.map((x) => x.guess).join(', ')}</p>
           )}
           <label className="label mt-4">Seu palpite</label>
           <input className="input" value={g} onChange={(e) => setG(e.target.value)} maxLength={80} autoFocus placeholder="O que esses emojis querem dizer?"
             onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} enterKeyHint="send" />
-          <p className="mt-1.5 text-[12px] font-bold text-[#a8927a]">Você tem {left} {left === 1 ? 'palpite' : 'palpites'} neste desafio. Só o palpite usa letras 😉</p>
+          <p className="mt-1.5 truncate text-[12px] font-bold text-[#a8927a]">{left} {left === 1 ? 'palpite restante' : 'palpites restantes'} · aqui pode usar letras 😉</p>
           <button className="btn mt-4 w-full bg-[#7B3FA0] text-white" onClick={submit} disabled={busy || !g.trim()}>{busy ? <Spinner /> : 'Enviar palpite'}</button>
         </>
       )}
