@@ -59,9 +59,10 @@ export function ResetPasswordSheet({ userId, onClose }: { userId: string | null;
     <Sheet open={!!userId} onClose={onClose} title="Redefinir senha">
       {!done ? (
         <div className="space-y-4">
-          <p className="text-sm leading-snug text-[#6b5643]">
-            Crie uma senha nova para <b>{p?.name}</b> (@{p?.username}). A senha antiga deixa de funcionar na hora.
-          </p>
+          <div className="text-sm leading-snug text-[#6b5643] [&>p]:truncate">
+            <p>Senha nova para <b>{p?.name}</b> (@{p?.username})</p>
+            <p>A antiga para de funcionar na hora.</p>
+          </div>
           <div>
             <label className="label">Nova senha</label>
             <div className="flex gap-2">

@@ -24,7 +24,7 @@ export function MemberSheet({ userId, onClose }: { userId: string | null; onClos
       <div className="flex flex-col items-center text-center">
         <Avatar url={p?.avatar_url} name={p?.name} size={96} frame={l.avatarFrame} />
         <h3 className="mt-3 font-display text-2xl font-extrabold">{p?.name}</h3>
-        <p className="text-sm font-bold text-[#8A6F57]">@{p?.username} · {l.title}{group.admin_id === userId ? ' · Adm' : ''}</p>
+        <p className="max-w-full truncate text-sm font-bold text-[#8A6F57]">@{p?.username} · {l.title}{group.admin_id === userId ? ' · Adm' : ''}</p>
         {p?.bio && <p className="mt-2 max-w-xs text-[15px] text-[#6b5643]">{p.bio}</p>}
       </div>
       <div className="mt-5 grid grid-cols-4 gap-2 text-center">
@@ -69,7 +69,7 @@ export function MemberSheet({ userId, onClose }: { userId: string | null; onClos
               </div>
             ))}
           </div>
-          <p className="mt-1.5 text-[11px] text-[#a8927a]">Removeu sem querer? É só postar de novo: a vaga do dia volta.</p>
+          <p className="mt-1.5 truncate text-[11px] text-[#a8927a]">Removeu sem querer? É só postar de novo.</p>
         </section>
       )}
 

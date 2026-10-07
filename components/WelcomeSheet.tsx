@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useGroup } from '@/lib/group-context';
-import { dailyMax } from '@/lib/game';
+import { WEEKDAYS, dailyMax } from '@/lib/game';
 import { Sheet } from './ui';
 
 /** Primeiro acesso ao grupo: convite para ver o guia "Como funciona". */
@@ -18,16 +18,19 @@ export function WelcomeSheet() {
 
   return (
     <Sheet open={open} onClose={close} title="Bem-vindo à Casa de Paz! 🏠">
-      <div className="space-y-3 text-[15px] leading-snug text-[#4a3a2c]">
-        {[
-          ['📅', <>Todo dia tem ações que valem pontos (até <b>{dailyMaxPts} pts</b>). Toque no <b>+</b> para postar.</>],
-          ['🏠', <>No dia do encontro abrem os bônus: check-in, foto em grupo, lanche… e <b>cada convidado vale o dobro</b>.</>],
-          ['🔥', <>Poste todo dia para manter a <b>sequência</b>. 7 dias seguidos liberam um prêmio exclusivo.</>],
-          ['🧱', <>Os pontos de todos constroem a <b>casa da equipe</b> e liberam prêmios para você.</>],
-        ].map(([icon, text], i) => (
-          <div key={i} className="flex gap-3 rounded-2xl bg-white p-3 shadow-sm">
-            <span className="text-2xl">{icon}</span>
-            <p>{text}</p>
+      <div className="space-y-3 text-[#4a3a2c]">
+        {([
+          ['📅', 'Poste todo dia', `até ${dailyMaxPts} pts por dia · toque no +`],
+          ['🏠', `${WEEKDAYS[group.house_weekday]} tem bônus`, 'e cada convidado vale o dobro!'],
+          ['🔥', 'Mantenha a sequência', '7 dias seguidos liberam prêmios'],
+          ['🧱', 'Juntos constroem a casa', 'e liberam prêmios para você'],
+        ] as const).map(([icon, title, sub], i) => (
+          <div key={i} className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm">
+            <span className="shrink-0 text-2xl">{icon}</span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-extrabold leading-tight text-ink">{title}</p>
+              <p className="truncate text-[14px] leading-snug text-[#6b5643]">{sub}</p>
+            </div>
           </div>
         ))}
         <Link href={`/g/${group.id}/como-funciona`} onClick={close} className="btn-primary w-full">Ver o guia completo</Link>

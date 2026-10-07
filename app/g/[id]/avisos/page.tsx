@@ -53,7 +53,7 @@ export default function Avisos() {
   };
 
   const clearAll = async () => {
-    if (!(await ask({ title: 'Limpar todas as notificações?', message: 'Elas saem da sua central. Isso não afeta os outros membros.', confirmLabel: 'Limpar' }))) return;
+    if (!(await ask({ title: 'Limpar todas as notificações?', message: 'Elas saem só da sua central.\nOs outros não são afetados.', confirmLabel: 'Limpar' }))) return;
     remove(notifications.map((n) => n.id));
   };
 

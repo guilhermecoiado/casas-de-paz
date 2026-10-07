@@ -53,10 +53,10 @@ export interface PathInfo {
 }
 
 export const PATHS: PathInfo[] = [
-  { id: 'semeador', name: 'Caminho do Semeador', icon: '🌱', week: 1, kit: { name: 'Campo Fértil', desc: 'O trigo cresce e o sol nasce no seu tile' } },
-  { id: 'pescador', name: 'Caminho do Pescador', icon: '🐟', week: 2, kit: { name: 'Rede Cheia', desc: 'Ondas e peixes saltando no seu tile' } },
-  { id: 'mensageiro', name: 'Caminho do Mensageiro', icon: '🔥', week: 3, kit: { name: 'Línguas de Fogo', desc: 'A pomba desce e o fogo se acende no seu tile' } },
-  { id: 'reino', name: 'Caminho do Reino', icon: '👑', week: 4, kit: { name: 'Glória do Reino', desc: 'Raios dourados e a coroa descendo sobre o seu tile' } },
+  { id: 'semeador', name: 'Caminho do Semeador', icon: '🌱', week: 1, kit: { name: 'Campo Fértil', desc: 'O trigo cresce e o sol nasce' } },
+  { id: 'pescador', name: 'Caminho do Pescador', icon: '🐟', week: 2, kit: { name: 'Rede Cheia', desc: 'Ondas e peixes saltando' } },
+  { id: 'mensageiro', name: 'Caminho do Mensageiro', icon: '🔥', week: 3, kit: { name: 'Línguas de Fogo', desc: 'A pomba desce e o fogo acende' } },
+  { id: 'reino', name: 'Caminho do Reino', icon: '👑', week: 4, kit: { name: 'Glória do Reino', desc: 'Raios dourados e a coroa' } },
 ];
 
 export const REWARDS: Reward[] = [

@@ -116,28 +116,27 @@ export function StreakCard({ userId, celebrate = false }: { userId?: string; cel
 export function IntensivoHelp({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
     <Sheet open={open} onClose={onClose} title="Intensivo 🔥">
-      <p className="text-[15px] leading-snug text-[#6b5643]">
-        Poste <b>pelo menos uma coisa por dia</b> para manter o fogo aceso. A cada nível o seu tile ganha uma chama ao redor e você recebe prêmios:
-      </p>
+      <p className="truncate text-[15px] font-bold text-ink">Poste pelo menos 1 coisa por dia 🔥</p>
+      <p className="truncate text-[14px] text-[#6b5643]">Cada nível acende uma chama no tile e dá prêmios:</p>
       <div className="mt-3 space-y-2">
         {STREAK_TIERS.map((t) => (
           <div key={t.days} className="flex items-center gap-3 rounded-2xl bg-white p-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-display text-lg font-extrabold text-white"
               style={{ background: t.swatch, boxShadow: `0 0 12px ${t.swatch}`, color: t.days === 14 ? '#2b2118' : '#fff' }}>{t.days}</span>
             <div className="min-w-0 flex-1">
-              <p className="font-extrabold leading-tight">{t.name}</p>
-              <p className="text-[13px] leading-snug text-[#6b5643]">
-                +{t.bonus} pts{t.double ? ' · pontos em dobro por 7 dias' : ''}{t.title ? ` · título ${t.title}` : ''}
-              </p>
+              <p className="truncate font-extrabold leading-tight">{t.name}</p>
+              <p className="truncate text-[13px] leading-snug text-[#6b5643]">+{t.bonus} pts{t.double ? ' · dobro por 7 dias' : ''}</p>
+              {t.title && <p className="truncate text-[13px] font-bold leading-snug text-[#7b3fa0]">título {t.title}</p>}
             </div>
           </div>
         ))}
       </div>
-      <ul className="mt-4 space-y-1.5 text-[13px] leading-snug text-[#6b5643]">
-        <li>• O <b>bônus</b> e a parte <b>em dobro</b> não ocupam o limite da semana.</li>
-        <li>• O dobro vale nos 7 dias depois de cada nível, enquanto a sequência continuar.</li>
-        <li>• Cada nível vale 1 vez na temporada. Se a sequência quebrar, o fogo apaga e recomeça do zero.</li>
-        <li>• Ainda não postou hoje? A chama fica fraquinha até você postar.</li>
+      <ul className="mt-4 space-y-1.5 text-[13px] leading-snug text-[#6b5643] [&>li]:truncate">
+        <li>• Bônus e dobro <b>não contam</b> no limite da semana</li>
+        <li>• O dobro vale 7 dias depois de cada nível</li>
+        <li>• Cada nível vale 1 vez na temporada</li>
+        <li>• Quebrou a sequência? O fogo recomeça do zero</li>
+        <li>• A chama fica fraquinha até você postar hoje</li>
       </ul>
     </Sheet>
   );

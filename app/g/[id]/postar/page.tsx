@@ -217,20 +217,20 @@ export default function Postar() {
                   <button
                     disabled={!unlocked.has('chat') || !!challenged}
                     onClick={() => router.push(`/g/${group.id}/chat?novo=1`)}
-                    className="card mt-3 flex w-full items-center gap-3 bg-gradient-to-br from-white to-[#efe2fb] p-4 text-left transition active:scale-[0.98] disabled:opacity-60"
+                    className="card mt-3 flex w-full flex-col items-start bg-gradient-to-br from-white to-[#efe2fb] p-4 text-left transition active:scale-[0.98] disabled:opacity-60"
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#7B3FA0] text-white"><Puzzle size={22} /></span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-extrabold leading-tight">Desafiar no chat 🧩</span>
-                      <span className="mt-0.5 block text-[13px] leading-snug text-[#6b5643]">Escreva algo em emojês para o grupo decifrar. Quem acertar ganha 10, você até 15.</span>
-                      <span className="mt-1 block text-[11px] font-bold">
-                        {!unlocked.has('chat')
-                          ? <span className="text-[#8A6F57]">🔒 Libera junto com o Dom de Línguas</span>
-                          : challenged ? <span className="text-olive">✓ Desafio de hoje lançado</span> : <span className="text-olive">Disponível hoje</span>}
-                      </span>
-                    </span>
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#7B3FA0] text-white"><Puzzle size={22} /></span>
+                    <p className="mt-3 w-full truncate whitespace-nowrap font-extrabold leading-tight">Desafiar no chat</p>
+                    <p className="mt-1 w-full truncate whitespace-nowrap text-sm text-[#6b5643]">Conte algo em emojês para o grupo decifrar</p>
+                    <p className="mt-2 w-full truncate whitespace-nowrap text-[13px] font-black text-[#7B3FA0]">até +15 pts · extra, fora do limite</p>
+                    <p className="mt-1 w-full truncate whitespace-nowrap text-[11px] font-bold">
+                      {!unlocked.has('chat')
+                        ? <span className="text-[#8A6F57]">🔒 Libera junto com o Dom de Línguas</span>
+                        : challenged ? <span className="text-olive">✓ Desafio de hoje lançado</span> : <span className="text-olive">Disponível hoje</span>}
+                    </p>
                   </button>
                 )}
+
               </section>
             );
           })}

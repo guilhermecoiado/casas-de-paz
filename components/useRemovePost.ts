@@ -22,8 +22,8 @@ export function useRemovePost() {
     async (p: Post) => {
       const mine = p.user_id === me;
       const msg = mine
-        ? 'Remover este post? Os pontos dele saem da sua pontuação e você pode postar de novo.'
-        : 'Remover este post do membro? Os pontos dele saem da pontuação.';
+        ? 'Os pontos dele saem da sua conta.\nVocê pode postar de novo.'
+        : 'Os pontos saem da conta do membro.\nNão dá para desfazer.';
       if (!(await ask({ title: 'Remover este post?', message: msg, confirmLabel: 'Remover', danger: true }))) return false;
       setRemoving(p.id);
       const { error } = await supabase.rpc('remove_post', { p_post: p.id });

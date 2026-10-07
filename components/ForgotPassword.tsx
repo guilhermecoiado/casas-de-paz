@@ -36,9 +36,10 @@ export function ForgotPassword({ initial = '' }: { initial?: string }) {
       <Sheet open={open} onClose={() => setOpen(false)} title="Esqueci minha senha">
         {!sent ? (
           <div className="space-y-4">
-            <p className="text-[15px] leading-snug text-[#6b5643]">
-              Digite o seu @usuário. O administrador do seu grupo recebe um aviso, cria uma senha nova e manda para você (pelo WhatsApp, por exemplo).
-            </p>
+            <div className="text-[15px] leading-snug text-[#6b5643] [&>p]:truncate">
+              <p>Digite o seu @usuário.</p>
+              <p>O adm cria uma senha nova e te manda.</p>
+            </div>
             <div className="relative">
               <AtSign size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#a8927a]" />
               <input
@@ -58,7 +59,7 @@ export function ForgotPassword({ initial = '' }: { initial?: string }) {
           <div className="space-y-3 text-center">
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-olive text-white"><Check size={28} strokeWidth={3} /></span>
             <p className="font-display text-xl font-bold">Pedido enviado!</p>
-            <p className="text-[15px] leading-snug text-[#6b5643]">O administrador vai criar uma senha nova e mandar para você. Depois de entrar, troque a senha em <b>Meu perfil → Trocar senha</b>.</p>
+            <div className="text-[15px] leading-snug text-[#6b5643] [&>p]:truncate"><p>O adm vai te mandar uma senha nova.</p><p>Depois troque em <b>Meu perfil</b>.</p></div>
             <button className="btn-soft w-full" onClick={() => setOpen(false)}>Ok</button>
           </div>
         )}

@@ -31,7 +31,7 @@ export function UnlockWatcher() {
         keys.push({
           key: `g:${u.id}`,
           title: u.id === 'complete' ? 'A Casa de Paz está completa!' : u.name,
-          subtitle: u.desc + (TEAM_PHRASES.find((t) => t.unlock === u.id) ? ` · Nova frase para todos: ${TEAM_PHRASES.find((t) => t.unlock === u.id)!.text}` : ''),
+          subtitle: u.desc + (TEAM_PHRASES.find((t) => t.unlock === u.id) ? ` · Nova frase: ${TEAM_PHRASES.find((t) => t.unlock === u.id)!.text}` : ''),
           kind: u.id === 'complete' ? 'house' : 'group',
         });
     });
@@ -42,14 +42,14 @@ export function UnlockWatcher() {
     });
     PATHS.forEach((path) => {
       if (REWARDS.filter((r) => r.path === path.id).every((r) => isUnlocked(group, r, prog)))
-        keys.push({ key: `p:${path.id}`, title: `${path.name} completo!`, subtitle: 'Use todos os itens do caminho juntos para revelar o kit secreto ✨', kind: 'path', icon: path.icon, path: path.id });
+        keys.push({ key: `p:${path.id}`, title: `${path.name} completo!`, subtitle: 'Use todos os itens juntos · e revele o kit secreto ✨', kind: 'path', icon: path.icon, path: path.id });
     });
     if (myKit) {
       const k = PATHS.find((x) => x.id === myKit)!;
-      keys.push({ key: `k:${k.id}`, title: `Kit secreto: ${k.kit.name}`, subtitle: `${k.kit.desc}. Você descobriu um segredo!`, kind: 'kit', kit: k.id });
+      keys.push({ key: `k:${k.id}`, title: `Kit secreto: ${k.kit.name}`, subtitle: `${k.kit.desc} · Você descobriu um segredo!`, kind: 'kit', kit: k.id });
     }
     if (myPoints >= maxInd && maxInd > 0)
-      keys.push({ key: 'max', title: 'Pontuação máxima!', subtitle: 'Você alcançou todos os pontos possíveis. Todos os prêmios liberados!', kind: 'max' });
+      keys.push({ key: 'max', title: 'Pontuação máxima!', subtitle: 'Você fez todos os pontos possíveis · Todos os prêmios liberados!', kind: 'max' });
     return keys;
   }, [group, unlocked, myPoints, maxInd, prog, myKit]);
 
@@ -135,7 +135,7 @@ export function UnlockWatcher() {
           )}
         </div>
         <h2 className="font-display text-2xl font-extrabold">{top.title}</h2>
-        <p className="mt-2 text-[#6b5643]">{top.subtitle}</p>
+        <div className="mt-2 text-[#6b5643]">{top.subtitle.split(' · ').map((l, i) => <p key={i} className="truncate">{l}</p>)}</div>
         {preview && !(r ? worn : pathOn) ? (
           <>
             <button className="btn-primary mt-6 w-full" onClick={use} disabled={busy}>

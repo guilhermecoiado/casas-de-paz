@@ -77,7 +77,7 @@ export function AdminCheckinQR() {
   };
 
   const rotate = async () => {
-    if (!(await ask({ title: 'Gerar um QR novo?', message: 'O cartaz impresso atual deixa de funcionar e você vai precisar imprimir de novo.', confirmLabel: 'Gerar novo', danger: true }))) return;
+    if (!(await ask({ title: 'Gerar um QR novo?', message: 'O cartaz atual para de funcionar.\nVai precisar imprimir de novo.', confirmLabel: 'Gerar novo', danger: true }))) return;
     await load(true);
     toast('QR novo gerado. Imprima o cartaz de novo.');
   };

@@ -111,7 +111,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <div className="fixed inset-0 z-[110] flex items-end justify-center bg-ink/55 px-4 pb-[calc(var(--safe-bottom,0px)+16px)] anim-fade sm:items-center" onClick={() => answer(false)}>
             <div role="alertdialog" aria-modal="true" aria-labelledby="cdp-confirm-title" className="w-full max-w-sm rounded-[28px] bg-cream p-5 shadow-2xl anim-rise" onClick={(e) => e.stopPropagation()}>
               <p id="cdp-confirm-title" className={`font-display text-xl font-bold leading-tight ${ask.danger ? 'text-[#7a2618]' : 'text-ink'}`}>{ask.title}</p>
-              {ask.message && <p className="mt-2 text-[15px] leading-snug text-[#6b5643]">{ask.message}</p>}
+              {ask.message && (ask.message.includes('\n')
+                ? <div className="mt-2 text-[15px] leading-snug text-[#6b5643]">{ask.message.split('\n').map((l, i) => <p key={i} className="truncate">{l}</p>)}</div>
+                : <p className="mt-2 text-[15px] leading-snug text-[#6b5643]">{ask.message}</p>)}
               <div className="mt-5 grid grid-cols-2 gap-2">
                 <button className="btn-soft w-full !px-3 outline-none" onClick={() => answer(false)}>{ask.cancelLabel ?? 'Cancelar'}</button>
                 <button className={`btn w-full whitespace-nowrap !px-3 text-white ${ask.danger ? 'bg-[#7a2618]' : 'bg-terra'}`} onClick={() => answer(true)}>{ask.confirmLabel ?? 'Confirmar'}</button>
