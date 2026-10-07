@@ -341,3 +341,8 @@ select {
 /* cursor do campo de emojis */
 .emoji-caret { animation: caretBlink 1s steps(1) infinite; }
 @keyframes caretBlink { 50% { opacity: 0; } }
+/* molduras de perfil desenhadas */
+.af-art-spin { transform-box: view-box; transform-origin: 50px 50px; animation: spin 14s linear infinite; }
+.af-art-glow { animation: afGlow 1.6s ease-in-out infinite alternate; }
+.af-art-flicker { transform-box: fill-box; transform-origin: 50% 100%; animation: flicker .9s ease-in-out infinite alternate; }
+@keyframes afGlow { from { opacity: .55; } to { opacity: 1; } }

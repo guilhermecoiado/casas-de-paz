@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, ImagePlus, Loader2, X } from 'lucide-react';
 import { AvatarOrnaments } from './Cosmetics';
+import { AvatarFrameArt, hasAvatarArt } from './AvatarFrameArt';
 
 /* ---------------- Avatar com moldura ---------------- */
 
@@ -25,9 +26,19 @@ export function Avatar({
   );
   if (!frame) return inner;
   const pad = Math.max(2, size * 0.06);
+  const total = size + 2 * pad + 4;
+  if (hasAvatarArt(frame)) {
+    // moldura desenhada: mesmo tamanho externo de antes, foto no centro e o desenho em volta
+    return (
+      <div className="relative shrink-0" style={{ width: total, height: total }}>
+        <div className="absolute" style={{ left: pad + 2, top: pad + 2 }}>{inner}</div>
+        <AvatarFrameArt frame={frame} pr={(size / 2 / total) * 100} />
+      </div>
+    );
+  }
   return (
     // tamanho fixo: dentro de linhas flex (ex.: comentários) o wrapper não estica e os enfeites ficam colados na foto
-    <div className="relative shrink-0" style={{ width: size + 2 * pad + 4, height: size + 2 * pad + 4 }}>
+    <div className="relative shrink-0" style={{ width: total, height: total }}>
       <div className={`af-ring ${frame}`} style={{ padding: pad }}>
         <div className="af-inner rounded-full bg-white p-[2px]">{inner}</div>
       </div>
