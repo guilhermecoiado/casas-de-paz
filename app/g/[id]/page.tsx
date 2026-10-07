@@ -13,11 +13,13 @@ import { MemberSheet } from '@/components/MemberSheet';
 import { PushToggle } from '@/components/PushToggle';
 import { WeekRecap } from '@/components/WeekRecap';
 import { WelcomeSheet } from '@/components/WelcomeSheet';
+import { useChatUnread } from '@/lib/use-chat-unread';
 
 export default function GroupHome() {
   const g = useGroup();
   const { group, members, profiles, stats, unlocked, today, me, isAdmin, polls, look, maxGrp, unread } = g;
   const [sel, setSel] = useState<string | null>(null);
+  const chatUnread = useChatUnread(group.id, me, unlocked.has('chat'));
   const houseRef = useRef<HTMLAnchorElement>(null);
   // Posts (foto do dia no tile) x Cards (tile decorado); lembra a escolha neste aparelho
   const [view, setView] = useState<'posts' | 'cards'>('posts');
@@ -65,10 +67,15 @@ export default function GroupHome() {
               href={unlocked.has('chat') ? `/g/${group.id}/chat` : '#'}
               onClick={(e) => { if (!unlocked.has('chat')) e.preventDefault(); }}
               className={`relative rounded-full p-2.5 ${bg ? 'bg-white/20 backdrop-blur' : 'bg-sand'} ${unlocked.has('chat') ? '' : 'opacity-60'}`}
-              aria-label="Chat"
+              aria-label={chatUnread ? `Chat, ${chatUnread} novas` : 'Chat'}
             >
               <MessageCircle size={20} />
               {!unlocked.has('chat') && <Lock size={11} className="absolute bottom-1.5 right-1.5" />}
+              {chatUnread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#7B3FA0] px-1 text-[10px] font-extrabold text-white ring-2 ring-cream">
+                  {chatUnread > 9 ? '9+' : chatUnread}
+                </span>
+              )}
             </Link>
             <Link href={`/g/${group.id}/avisos`} className={`relative rounded-full p-2.5 ${bg ? 'bg-white/20 backdrop-blur' : 'bg-sand'}`} aria-label={unread ? `Notificações, ${unread} não lidas` : 'Notificações'}>
               <Bell size={20} />

@@ -8,7 +8,7 @@ import { useGroup } from '@/lib/group-context';
 import { errMsg, supabase } from '@/lib/supabase';
 import { Avatar, Sheet, Spinner } from '@/components/ui';
 import { useToast } from '@/components/Providers';
-import { EmojiKeyboard, dropLast } from '@/components/EmojiKeyboard';
+import { EmojiField, EmojiKeyboard, useEmojiInput } from '@/components/EmojiKeyboard';
 import { Confetti } from '@/components/Confetti';
 import { GROUP_UNLOCKS, groupThreshold } from '@/lib/game';
 import { CHALLENGE_RULES, challengeSeal } from '@/lib/challenge';
@@ -38,7 +38,8 @@ function Chat() {
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [chs, setChs] = useState<Challenge[]>([]);
   const [guesses, setGuesses] = useState<ChallengeGuess[]>([]);
-  const [text, setText] = useState('');
+  const input = useEmojiInput(200);
+  const text = input.text;
   const [kb, setKb] = useState(false);
   const [creating, setCreating] = useState(false);
   const [guessing, setGuessing] = useState<Challenge | null>(null);
@@ -80,6 +81,13 @@ function Chat() {
     if (c) setFocus(c);
   }, [params, open]);
 
+  // tudo o que está na tela conta como lido (zera o contador do início)
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => { supabase.rpc('mark_chat_read', { p_group: group.id }).then(() => window.dispatchEvent(new Event('chat-read'))); }, 400);
+    return () => clearTimeout(t);
+  }, [open, group.id, msgs.length, chs.length]);
+
   const items = useMemo(() => {
     const all: ({ k: 'm'; at: string; m: Message } | { k: 'c'; at: string; c: Challenge })[] = [
       ...msgs.map((m) => ({ k: 'm' as const, at: m.created_at, m })),
@@ -104,9 +112,9 @@ function Chat() {
     const body = text.trim();
     if (!body) return;
     if (hasLetters(body)) return toast('Aqui só se fala emojês 🤐', 'error');
-    setText('');
+    input.set('');
     const { data, error } = await supabase.from('messages').insert({ group_id: group.id, user_id: me, body }).select().single();
-    if (error) { setText(body); return toast(errMsg(error), 'error'); }
+    if (error) { input.set(body); return toast(errMsg(error), 'error'); }
     setMsgs((l) => (l.some((m) => m.id === (data as Message).id) ? l : [...l, data as Message]));
   };
 
@@ -117,7 +125,7 @@ function Chat() {
     <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-sand bg-cream/95 px-4 py-3 backdrop-blur pt-safe">
       <Link href={`/g/${group.id}`} className="rounded-full bg-sand p-2.5" aria-label="Voltar"><ArrowLeft size={20} /></Link>
       <div className="min-w-0 flex-1">
-        <h1 className="font-display text-xl font-bold leading-tight">Dom de Línguas 🔥</h1>
+        <h1 className="truncate whitespace-nowrap font-display text-[19px] font-bold leading-tight">Dom de Línguas 🔥</h1>
         <p className="truncate text-xs font-bold text-[#a8927a]">aqui só se fala emojês</p>
       </div>
       {open && (
@@ -202,18 +210,15 @@ function Chat() {
         <button onClick={() => setKb((v) => !v)} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sand text-[#6b5643]" aria-label={kb ? 'Fechar emojis' : 'Abrir emojis'}>
           {kb ? <ChevronDown size={22} /> : <Smile size={22} />}
         </button>
-        <button onClick={() => setKb(true)} className="flex min-h-[48px] flex-1 items-center rounded-3xl border-2 border-sand bg-white px-4 py-1.5 text-left">
-          {text ? <span className="break-all text-[24px] leading-snug">{text}</span> : <span className="text-[15px] font-bold text-[#b9a690]">Fale em emojês 😃</span>}
-        </button>
+        <EmojiField input={input} active={kb} onActivate={() => setKb(true)} placeholder="Fale em emojês 😃"
+          className={`flex max-h-32 min-h-[48px] flex-1 items-center overflow-y-auto rounded-3xl border-2 bg-white px-4 py-1.5 text-left ${kb ? 'border-terra/40' : 'border-sand'}`} />
         <button onClick={send} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-terra text-white disabled:opacity-50" disabled={!text.trim()} aria-label="Enviar">
           <Send size={20} />
         </button>
       </div>
       {kb && (
         <EmojiKeyboard
-          onPick={(e) => setText((t) => (t + e).slice(0, 400))}
-          onBackspace={() => setText((t) => dropLast(t))}
-          onSpace={() => setText((t) => (t && !t.endsWith(' ') ? `${t} ` : t))}
+          {...input.keys}
         />
       )}
 
@@ -262,7 +267,8 @@ function ChallengeCard({ c, guesses, highlight, onGuess, onChanged, isAdmin }: {
     const { error } = await supabase.rpc('judge_guess', { p_guess: g.id, p_right: right });
     setBusy(null);
     if (error) return toast(errMsg(error), 'error');
-    if (right) { toast('Desafio decifrado! Pontos creditados 🎉'); pushPending(group.id); }
+    if (right) toast('Desafio decifrado! Pontos creditados 🎉');
+    pushPending(group.id);
     onChanged();
   };
 
@@ -362,12 +368,14 @@ function ChallengeCard({ c, guesses, highlight, onGuess, onChanged, isAdmin }: {
 function CreateChallenge({ open, onClose, onCreated, already }: { open: boolean; onClose: () => void; onCreated: (c: Challenge) => void; already: boolean }) {
   const { group } = useGroup();
   const toast = useToast();
-  const [emo, setEmo] = useState('');
+  const emoIn = useEmojiInput(60);
+  const emo = emoIn.text;
   const [ans, setAns] = useState('');
   const [typing, setTyping] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (open) { setEmo(''); setAns(''); setTyping(false); } }, [open]);
+  useEffect(() => { if (open) { emoIn.set(''); setAns(''); setTyping(false); } // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const submit = async () => {
     if (!emo.trim()) return toast('Monte o desafio com emojis', 'error');
@@ -393,13 +401,12 @@ function CreateChallenge({ open, onClose, onCreated, already }: { open: boolean;
             Conte uma história, passagem ou frase <b>só com emojis</b>. Quem acertar primeiro ganha {CHALLENGE_RULES.solver} pts. Você ganha
             até {CHALLENGE_RULES.fair} pts se o grupo suar um pouquinho para descobrir 😉
           </p>
-          <button onClick={() => setTyping(false)} className={`mt-3 flex min-h-[72px] w-full items-center justify-center rounded-3xl border-2 bg-white px-3 py-2 ${typing ? 'border-sand' : 'border-[#7B3FA0]'}`}>
-            {emo ? <span className="break-all text-center text-[34px] leading-tight">{emo}</span> : <span className="font-bold text-[#b9a690]">Ex.: 🐋👨🌊3️⃣🌙</span>}
-          </button>
+          <EmojiField input={emoIn} active={!typing} size={32} onActivate={() => { (document.activeElement as HTMLElement | null)?.blur(); setTyping(false); }}
+            placeholder="Ex.: 🐋👨🌊3️⃣🌙"
+            className={`mt-3 flex min-h-[72px] w-full items-center justify-center rounded-3xl border-2 bg-white px-3 py-2 text-center ${typing ? 'border-sand' : 'border-[#7B3FA0]'}`} />
           {!typing && (
             <div className="-mx-5 mt-2">
-              <EmojiKeyboard height={250} onPick={(e) => setEmo((t) => (t + e).slice(0, 120))} onBackspace={() => setEmo((t) => dropLast(t))}
-                onSpace={() => setEmo((t) => (t && !t.endsWith(' ') ? `${t} ` : t))} />
+              <EmojiKeyboard height={250} {...emoIn.keys} />
             </div>
           )}
           <label className="label mt-3">Resposta certa (fica escondida até o fim)</label>

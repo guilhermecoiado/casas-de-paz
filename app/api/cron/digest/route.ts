@@ -77,7 +77,7 @@ export async function GET(req: Request) {
 
     // posts e comentários desde o último resumo (no primeiro, olha só a última janela)
     const since = new Date(last || now - every).toISOString();
-    const [{ data: posts, error: pe }, { data: comments, error: ce }] = await Promise.all([
+    const [{ data: posts, error: pe }, { data: comments, error: ce }, { data: chatMsgs }, { data: reads }] = await Promise.all([
       db.from('posts')
         .select('user_id,type,created_at')
         .eq('group_id', g.id)
@@ -90,9 +90,12 @@ export async function GET(req: Request) {
         .eq('group_id', g.id)
         .gt('created_at', since)
         .order('created_at', { ascending: false }),
+      // mensagens do Dom de Línguas desde o último resumo
+      db.from('messages').select('user_id,created_at').eq('group_id', g.id).gt('created_at', since),
+      db.from('chat_reads').select('user_id,last_read_at').eq('group_id', g.id),
     ]);
     if (pe || ce) { report.push({ group: g.name, status: `erro: ${(pe ?? ce)!.message}` }); continue; }
-    if (!posts?.length && !comments?.length) { report.push({ group: g.name, status: 'nada novo' }); continue; }
+    if (!posts?.length && !comments?.length && !chatMsgs?.length) { report.push({ group: g.name, status: 'nada novo' }); continue; }
 
     // reserva o envio (evita duplicar se duas execuções coincidirem)
     const stamp = new Date(now).toISOString();
@@ -138,6 +141,13 @@ export async function GET(req: Request) {
       return `${joinNames(who.map((c) => nameOf.get(c)!))} ${who.length === 1 ? 'comentou' : 'comentaram'} no seu post`;
     };
 
+    // quantas mensagens do chat a pessoa ainda não viu (de outras pessoas, depois da última leitura)
+    const lastRead = new Map((reads ?? []).map((r) => [r.user_id as string, r.last_read_at as string]));
+    const chatLine = (uid: string) => {
+      const seen = lastRead.get(uid) ?? '';
+      const n = (chatMsgs ?? []).filter((m) => m.user_id !== uid && (m.created_at as string) > seen).length;
+      return n ? `💬 ${n === 1 ? '1 mensagem nova' : `${n} mensagens novas`} no Dom de Línguas` : null;
+    };
     const title = `Casa de Paz · ${g.name}`;
     const feed = `/g/${g.id}/feed`;
     try {
@@ -148,7 +158,11 @@ export async function GET(req: Request) {
       }));
       const r = await sendToUsers(db, members, (uid) => {
         const parts = [commentsLine(uid), postsLine(uid)].filter(Boolean) as string[];
-        if (!parts.length) return null;
+        const chat = chatLine(uid);
+        if (!parts.length && !chat) return null;
+        // só o chat tem novidade: abre direto no chat
+        if (!parts.length) return { title, body: `${chat} — vem ver!`, url: `/g/${g.id}/chat`, tag: `digest-${g.id}` };
+        if (chat) parts.push(chat);
         // só comentários: abre direto no post comentado
         const url = nids.get(uid) ? withNotification(feed, nids.get(uid)) : `${feed}?post=${commentedPost.get(uid)}`;
         return { title, body: `${parts.join(' · ')} — venha conferir!`, url, tag: `digest-${g.id}` };

@@ -338,3 +338,6 @@ select {
 .flame-flicker { transform-origin: 50% 90%; animation: flicker .9s ease-in-out infinite alternate; }
 .flame-pulse { animation: flamePulse 2.4s ease-in-out infinite; }
 @keyframes flamePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+/* cursor do campo de emojis */
+.emoji-caret { animation: caretBlink 1s steps(1) infinite; }
+@keyframes caretBlink { 50% { opacity: 0; } }

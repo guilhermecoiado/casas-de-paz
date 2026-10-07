@@ -420,5 +420,24 @@ ok((await as('zeca', `select * from post_comments`)).length === 0, 'não-membro 
   ok(nx?.points === 0, 'pontos do desafio não ocupam o limite (e o limite segue valendo para o resto)');
 }
 
+// ---- v14: leitura do chat e avisos dos palpites ----
+{
+  const [{ create_group: gr }] = await as('davi', `select create_group('Grupo Leitura', 'leit')`);
+  for (const u of ['ana', 'bia']) await as(u, `select join_group('Grupo Leitura', 'leit')`);
+  await c.query(`update groups set start_date = current_date - 3, end_date = current_date + 20 where id=$1`, [gr]);
+  ok(!!(await as('ana', `select mark_chat_read($1) t`, [gr]))[0]?.t, 'marca o chat como lido');
+  ok((await as('bia', `select * from chat_reads where group_id=$1`, [gr])).length === 0, 'cada um só vê a própria leitura');
+  ok((await as('zeca', `select mark_chat_read($1)`, [gr])).error, 'não-membro não marca');
+  const x = (await as('davi', `select * from create_challenge($1,'🌊🔴🚶','Mar vermelho')`, [gr]))[0];
+  const g1 = (await as('ana', `select * from guess_challenge($1,'Noé')`, [x.id]))[0];
+  await as('davi', `select * from judge_guess($1,false)`, [g1.id]);
+  ok((await as('ana', `select count(*)::int n from notifications where user_id=$1 and group_id=$2 and kind='guess' and title like '❌%'`, [users.ana, gr]))[0].n === 1, 'quem chutou é avisado do erro');
+  await as('ana', `select * from guess_challenge($1,'travessia do mar vermelho')`, [x.id]);
+  const g2 = (await c.query(`select id from challenge_guesses where challenge_id=$1 and status='pending'`, [x.id])).rows[0].id;
+  await as('davi', `select * from judge_guess($1,true)`, [g2]);
+  ok((await as('bia', `select count(*)::int n from notifications where user_id=$1 and group_id=$2 and kind='challenge' and title like '🎉%'`, [users.bia, gr]))[0].n === 1, 'o grupo é avisado de quem decifrou');
+  ok((await as('ana', `select count(*)::int n from notifications where user_id=$1 and group_id=$2 and kind='solved'`, [users.ana, gr]))[0].n === 1, 'quem acertou recebe o aviso');
+}
+
 console.log(fails ? `\n${fails} FALHA(S)` : '\nTODOS OS TESTES PASSARAM');
 await c.end();

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock, Delete, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Delete, Search, X } from 'lucide-react';
 
 /* Teclado de emojis do Dom de Línguas: substitui o teclado do celular (aqui só se fala emojês). */
 
@@ -52,8 +52,8 @@ export const dropLast = (s: string) => graphemes(s).slice(0, -1).join('');
 const norm = (t: string) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export function EmojiKeyboard({
-  onPick, onBackspace, onSpace, height = 280,
-}: { onPick: (e: string) => void; onBackspace: () => void; onSpace?: () => void; height?: number }) {
+  onPick, onBackspace, onSpace, onLeft, onRight, height = 280,
+}: { onPick: (e: string) => void; onBackspace: () => void; onSpace?: () => void; onLeft?: () => void; onRight?: () => void; height?: number }) {
   const [data, setData] = useState<Data | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
   const [tab, setTab] = useState('bib');
@@ -137,20 +137,78 @@ export function EmojiKeyboard({
       </div>
 
       <div className="flex items-center gap-2 px-3 pb-2 pt-1" style={{ paddingBottom: 'max(var(--safe-bottom), 8px)' }}>
-        <p className="min-w-0 flex-1 truncate text-[12px] font-extrabold text-[#a8927a]">
-          {q !== null ? 'Busca' : TABS.find((t) => t.id === tab)?.label}
-        </p>
-        {onSpace && (
-          <button onClick={onSpace} className="h-10 w-24 rounded-xl bg-white text-xs font-extrabold text-[#a8927a] shadow-sm active:scale-95" aria-label="Espaço">espaço</button>
+        {onLeft && (
+          <button onClick={onLeft} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-[#6b5643] shadow-sm active:scale-95" aria-label="Mover o cursor para a esquerda"><ChevronLeft size={20} /></button>
+        )}
+        {onSpace ? (
+          <button onClick={onSpace} className="h-11 min-w-0 flex-1 rounded-xl bg-white text-xs font-extrabold text-[#a8927a] shadow-sm active:scale-[0.98]" aria-label="Espaço">espaço</button>
+        ) : <span className="flex-1" />}
+        {onRight && (
+          <button onClick={onRight} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-[#6b5643] shadow-sm active:scale-95" aria-label="Mover o cursor para a direita"><ChevronRight size={20} /></button>
         )}
         <button
           onClick={onBackspace}
           onPointerDown={startHold}
           onPointerUp={stopHold} onPointerLeave={stopHold} onPointerCancel={stopHold}
-          className="flex h-10 w-14 items-center justify-center rounded-xl bg-white text-ink shadow-sm active:scale-95" aria-label="Apagar">
+          className="flex h-11 w-14 shrink-0 items-center justify-center rounded-xl bg-white text-ink shadow-sm active:scale-95" aria-label="Apagar">
           <Delete size={20} />
         </button>
       </div>
+    </div>
+  );
+}
+
+/* ---------------- Campo de emojis com cursor ---------------- */
+
+/** Texto em emojis com cursor: inserir, apagar e mover o cursor (o teclado do celular não abre). */
+export function useEmojiInput(max = 200) {
+  const [st, setSt] = useState<{ g: string[]; c: number }>({ g: [], c: 0 });
+  const insert = (e: string) => setSt(({ g, c }) => {
+    const add = graphemes(e);
+    if (g.length + add.length > max) return { g, c };
+    if (e === ' ' && (c === 0 || g[c - 1] === ' ' || g[c] === ' ')) return { g, c }; // sem espaços repetidos
+    return { g: [...g.slice(0, c), ...add, ...g.slice(c)], c: c + add.length };
+  });
+  const back = () => setSt(({ g, c }) => (c === 0 ? { g, c } : { g: [...g.slice(0, c - 1), ...g.slice(c)], c: c - 1 }));
+  const move = (d: number) => setSt(({ g, c }) => ({ g, c: Math.min(g.length, Math.max(0, c + d)) }));
+  const setCaret = (c: number) => setSt(({ g }) => ({ g, c: Math.min(g.length, Math.max(0, c)) }));
+  const set = (t: string) => { const g = graphemes(t); setSt({ g, c: g.length }); };
+  return {
+    text: st.g.join(''), parts: st.g, caret: st.c, set, setCaret,
+    keys: { onPick: insert, onBackspace: back, onSpace: () => insert(' '), onLeft: () => move(-1), onRight: () => move(1) },
+  };
+}
+
+/** Mostra o texto com o cursor piscando; tocar num emoji coloca o cursor ali. */
+export function EmojiField({
+  input, active, onActivate, placeholder, className = '', size = 24,
+}: { input: ReturnType<typeof useEmojiInput>; active: boolean; onActivate: () => void; placeholder: string; className?: string; size?: number }) {
+  const { parts, caret, setCaret } = input;
+  const caretEl = <span className="emoji-caret mx-[1px] inline-block w-[2px] rounded-full bg-terra align-middle" style={{ height: size * 1.05 }} />;
+  return (
+    <div role="textbox" tabIndex={0} onClick={() => { if (!active) setCaret(parts.length); onActivate(); }}
+      className={`cursor-text select-none ${className}`}>
+      {parts.length === 0 ? (
+        <span className="flex items-center">{active && caretEl}<span className="text-[15px] font-bold text-[#b9a690]">{placeholder}</span></span>
+      ) : (
+        <span className="break-all leading-snug" style={{ fontSize: size }}>
+          {parts.map((p, i) => (
+            <span key={i}>
+              {active && i === caret && caretEl}
+              <span
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+                  setCaret(ev.clientX < r.left + r.width / 2 ? i : i + 1);
+                  onActivate();
+                }}
+                className={p === ' ' ? 'inline-block w-[0.35em]' : ''}
+              >{p}</span>
+            </span>
+          ))}
+          {active && caret === parts.length && caretEl}
+        </span>
+      )}
     </div>
   );
 }

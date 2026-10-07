@@ -131,7 +131,7 @@ export default function ComoFunciona() {
 
         <Topic icon="🔔" title="Notificações">
           <p>Ative as notificações no início ou no perfil. No iPhone, o app precisa estar instalado na Tela de Início.</p>
-          <p>Você recebe o lembrete do dia do encontro, um resumo de quem postou, os comentários nos seus posts, o aviso das 20h se ainda não postou e o fechamento da semana. Tudo fica também no <b>sino 🔔</b> do início.</p>
+          <p>Você recebe o lembrete do dia do encontro, um resumo de quem postou, os comentários nos seus posts, o aviso das 20h se ainda não postou, o fechamento da semana, os desafios do Dom de Línguas (novo desafio, palpite pendente, acerto ou erro) e as mensagens novas do chat. Tudo fica também no <b>sino 🔔</b> do início.</p>
         </Topic>
 
         <Topic icon="⚖️" title="Regras e justiça">
