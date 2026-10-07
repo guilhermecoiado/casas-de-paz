@@ -11,6 +11,46 @@ import { errMsg, supabase } from '@/lib/supabase';
 import { Avatar, Sheet, Spinner } from './ui';
 import { useToast } from './Providers';
 import type { Post } from '@/lib/types';
+import Link from 'next/link';
+import { MessageCircle } from 'lucide-react';
+import { challengeOfPost, useGroupChallenges } from '@/lib/use-challenges';
+import { challengeSeal } from '@/lib/challenge';
+
+/** Card dos pontos do Dom de Línguas: não mostra o desafio nem a resposta, só o que aconteceu, com atalho para o chat. */
+function ChallengePost({ post }: { post: Post }) {
+  const { group, profiles } = useGroup();
+  const list = useGroupChallenges(group.id);
+  const c = challengeOfPost(list, post);
+  const first = (id?: string | null) => (id ? profiles[id]?.name?.split(' ')[0] : null) ?? 'alguém';
+  const href = `/g/${group.id}/chat${c ? `?c=${c.id}` : ''}`;
+  const riddle = post.type === 'riddle';
+  const seal = c ? challengeSeal(c) : null;
+  return (
+    <div className={`overflow-hidden rounded-2xl p-3.5 ${riddle ? 'bg-gradient-to-br from-[#e6f2dc] to-[#cfe6bd]' : 'bg-gradient-to-br from-[#f3eafb] to-[#e2cff3]'}`}>
+      <div className="flex items-center gap-3">
+        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-sm ${riddle ? 'bg-white' : 'bg-white'}`}>{riddle ? '🎉' : '🧩'}</span>
+        <div className="min-w-0 flex-1">
+          <p className={`text-[11px] font-black uppercase tracking-wider ${riddle ? 'text-olive' : 'text-[#7B3FA0]'}`}>Dom de Línguas</p>
+          <p className="font-display text-[17px] font-extrabold leading-tight">
+            {riddle ? `Decifrou o desafio de ${first(c?.user_id)}!` : 'Lançou um desafio em emojês'}
+          </p>
+          <p className="mt-0.5 text-[13px] font-bold leading-snug text-[#6b5643]">
+            {riddle
+              ? 'Acertou primeiro e levou os pontos 🙌'
+              : !c ? 'Desafio do dia'
+                : c.status === 'solved' ? `Decifrado por ${first(c.solved_by)} · ${seal?.emoji} ${seal?.label}`
+                  : c.status === 'missed' ? 'Ninguém acertou 🤯'
+                    : c.status === 'expired' ? 'Expirou sem palpites'
+                      : 'Valendo! Será que você decifra?'}
+          </p>
+        </div>
+      </div>
+      <Link href={href} className={`mt-3 flex h-11 items-center justify-center gap-2 rounded-xl text-[14px] font-extrabold text-white active:scale-[0.98] ${riddle ? 'bg-olive' : 'bg-[#7B3FA0]'}`}>
+        <MessageCircle size={17} /> Ver no chat
+      </Link>
+    </div>
+  );
+}
 
 export function PostCard({ post, openComments = false, highlight = false }: { post: Post; openComments?: boolean; highlight?: boolean }) {
   const { profiles, look, isAdmin, me, votes, members, group } = useGroup();
@@ -24,6 +64,7 @@ export function PostCard({ post, openComments = false, highlight = false }: { po
   const keep = votes.filter((v) => v.post_id === post.id && v.keep).length;
   const cancel = votes.filter((v) => v.post_id === post.id && !v.keep).length;
   const cancelled = post.status === 'cancelled';
+  const isChallenge = post.type === 'challenge' || post.type === 'riddle';
 
   const moderate = async (action: 'cancel' | 'vote' | 'close' | 'restore') => {
     setMenu(false);
@@ -60,7 +101,7 @@ export function PostCard({ post, openComments = false, highlight = false }: { po
       )}
 
       <div className="space-y-2 p-3">
-        {post.description && <p className={`whitespace-pre-wrap text-[15px] leading-snug ${cancelled ? 'line-through' : ''}`}>{post.description}</p>}
+        {isChallenge ? <ChallengePost post={post} /> : post.description && <p className={`whitespace-pre-wrap text-[15px] leading-snug ${cancelled ? 'line-through' : ''}`}>{post.description}</p>}
         <div className="flex flex-wrap items-center gap-2">
           <span className={`chip ${cancelled ? 'bg-sand text-[#8A6F57] line-through' : post.points < 0 ? 'bg-[#7a2618]/10 text-[#7a2618]' : 'bg-amber/20 text-[#9a5b00]'}`}>{post.points >= 0 ? '+' : ''}{post.points} pts</span>
           {post.group_bonus > 0 && <span className="chip bg-olive/15 text-olive"><Users size={12} /> +{post.group_bonus} equipe</span>}

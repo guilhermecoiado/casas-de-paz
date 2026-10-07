@@ -105,7 +105,7 @@ export function PointsLedger({ userId }: { userId: string }) {
                     {st.label && <span className={`chip !px-1.5 !py-0 !text-[10px] ${st.cls}`}>{st.label}</span>}
                   </p>
                   <p className="truncate text-xs text-[#8A6F57]">
-                    {formatDate(p.local_date)}{p.description ? ` · ${p.description}` : ''}{p.guests ? ` · ${p.guests} convidado(s)` : ''}
+                    {formatDate(p.local_date)}{p.description && p.type !== 'challenge' && p.type !== 'riddle' ? ` · ${p.description}` : ''}{p.guests ? ` · ${p.guests} convidado(s)` : ''}
                   </p>
                 </div>
                 <span className={`font-display text-base font-extrabold ${p.status === 'cancelled' ? 'text-[#b9a690] line-through' : p.points < 0 ? 'text-[#7a2618]' : 'text-terra'}`}>

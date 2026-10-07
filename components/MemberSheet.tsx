@@ -54,7 +54,7 @@ export function MemberSheet({ userId, onClose }: { userId: string | null; onClos
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-extrabold">{TYPE_LABEL[x.type]} <span className="text-terra">{x.points >= 0 ? '+' : ''}{x.points}</span></p>
-                  {x.description && <p className="truncate text-xs text-[#8A6F57]">{x.description}</p>}
+                  {x.description && x.type !== 'challenge' && x.type !== 'riddle' && <p className="truncate text-xs text-[#8A6F57]">{x.description}</p>}
                 </div>
                 {canRemove(x) && (
                   <button
