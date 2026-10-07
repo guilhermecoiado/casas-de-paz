@@ -8,6 +8,7 @@ import type { Profile } from '@/lib/types';
 import type { UserStats } from '@/lib/game';
 import type { PathId } from '@/lib/rewards';
 import { tierOf } from '@/lib/streak';
+import { TileFrameArt, hasFrameArt } from './TileFrameArt';
 
 export interface TileLook {
   title: string;
@@ -42,6 +43,7 @@ export function MemberTile({
 
   // intensivo: aura de fogo ao redor do tile (7, 14, 21 e 28 dias seguidos)
   const tier = tierOf(stats?.streak ?? 0);
+  const art = hasFrameArt(look.tileFrame); // moldura desenhada: conteúdo um pouco mais para dentro
   const tile = (
     <button onClick={onClick} className={cls}>
       {posted && photo ? (
@@ -72,7 +74,7 @@ export function MemberTile({
         )}
       </div>
 
-      <div className={`relative z-[1] ${compact ? 'px-2 pb-2 [&_p]:!text-[10px]' : 'px-2.5 pb-2.5'} ${posted && photo ? 'text-white' : ''}`}>
+      <div className={`relative z-[1] ${compact ? (art ? 'px-[11%] pb-[9%]' : 'px-2 pb-2') + ' [&_p]:!text-[10px]' : art ? 'px-[11%] pb-[9%]' : 'px-2.5 pb-2.5'} ${posted && photo ? 'text-white' : ''}`}>
         <p className="flex items-center gap-1 truncate text-[13px] font-extrabold leading-tight">
           {isAdmin && <Crown size={12} className="shrink-0 text-amber" />}
           <span className="truncate">{profile?.name?.split(' ')[0] ?? '…'}</span>
@@ -82,10 +84,14 @@ export function MemberTile({
       </div>
 
       {/* moldura do tile por cima de tudo (inclusive da foto do dia) */}
-      {look.tileFrame && <div className={`pointer-events-none absolute inset-0 z-[2] rounded-[22px] ${look.tileFrame}`} />}
-      <TileOrnaments frame={look.tileFrame} />
+      {art ? <TileFrameArt frame={look.tileFrame!} /> : (
+        <>
+          {look.tileFrame && <div className={`pointer-events-none absolute inset-0 z-[2] rounded-[22px] ${look.tileFrame}`} />}
+          <TileOrnaments frame={look.tileFrame} />
+        </>
+      )}
 
-      <div className={`absolute right-2 top-2 z-[3] flex items-center gap-1 ${compact ? 'origin-top-right scale-75' : ''}`}>
+      <div className={`absolute ${art ? 'right-[8%] top-[6%]' : 'right-2 top-2'} z-[3] flex items-center gap-1 ${compact ? 'origin-top-right scale-75' : ''}`}>
         {!forcePosted && <StreakBadge streak={stats?.streak ?? 0} postedToday={!!stats?.postedToday} />}
         {posted ? (
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-olive text-white shadow"><Check size={14} strokeWidth={3} /></span>
