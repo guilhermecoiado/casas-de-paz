@@ -93,11 +93,15 @@ export function StreakCard({ userId, celebrate = false }: { userId?: string; cel
       </div>
 
       {next && (
-        <p className="relative mt-3 rounded-2xl bg-cream px-3 py-2 text-[13px] font-bold leading-snug text-[#6b5643]">
-          Faltam <b className="text-ink">{next.days - streak} {next.days - streak === 1 ? 'dia' : 'dias'}</b> para a{' '}
-          <b style={{ color: next.days === 14 ? '#c99400' : next.swatch }}>{next.name.toLowerCase()}</b>: +{next.bonus} pts
-          {next.double ? ' e pontos em dobro' : ''}{next.title ? ` e o título “${next.title}”` : ''}
-                  </p>
+        <div className="relative mt-3 rounded-2xl bg-cream px-3 py-2 leading-snug">
+          <p className="truncate whitespace-nowrap text-[13px] font-bold text-[#6b5643]">
+            Faltam <b className="text-ink">{next.days - streak} {next.days - streak === 1 ? 'dia' : 'dias'}</b> ·{' '}
+            <b style={{ color: next.days === 14 ? '#c99400' : next.swatch }}>{next.name}</b>
+          </p>
+          <p className="truncate whitespace-nowrap text-[12px] font-bold text-[#8A6F57]">
+            +{next.bonus} pts{next.double ? ' · pontos em dobro' : ''}{next.title ? ` · título ${next.title}` : ''}
+          </p>
+        </div>
       )}
 
       <button onClick={() => setHelp(true)} className="relative mt-2 flex items-center gap-1 text-[13px] font-extrabold text-terra">

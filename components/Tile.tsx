@@ -74,13 +74,13 @@ export function MemberTile({
         )}
       </div>
 
-      <div className={`relative z-[1] ${compact ? (art ? 'px-[11%] pb-[9%]' : 'px-2 pb-2') + ' [&_p]:!text-[10px]' : art ? 'px-[11%] pb-[9%]' : 'px-2.5 pb-2.5'} ${posted && photo ? 'text-white' : ''}`}>
-        <p className="flex items-center gap-1 truncate text-[13px] font-extrabold leading-tight">
-          {isAdmin && <Crown size={12} className="shrink-0 text-amber" />}
+      <div className={`relative z-[1] ${compact ? (art ? 'px-[10%] pb-[8%]' : 'px-2 pb-2') + ' [&_p]:!text-[10px]' : art ? 'px-[10%] pb-[8%]' : 'px-2.5 pb-2.5'} ${posted && photo ? 'text-white' : ''}`}>
+        <p className={`flex items-center gap-1 truncate font-extrabold leading-tight ${art ? 'text-[12px]' : 'text-[13px]'}`}>
+          {isAdmin && <Crown size={art ? 11 : 12} className="shrink-0 text-amber" />}
           <span className="truncate">{profile?.name?.split(' ')[0] ?? '…'}</span>
         </p>
-        <p className={`truncate text-[11px] font-bold ${posted && photo ? 'text-white/80' : 'text-[#8A6F57]'}`}>{look.title}</p>
-        <p className={`mt-0.5 text-[12px] font-black ${posted && photo ? 'text-amber' : 'text-terra'}`}>{stats?.points ?? 0} pts</p>
+        <p className={`truncate font-bold ${art ? 'text-[10px]' : 'text-[11px]'} ${posted && photo ? 'text-white/80' : 'text-[#8A6F57]'}`}>{look.title}</p>
+        <p className={`whitespace-nowrap font-black ${art ? 'text-[11px]' : 'mt-0.5 text-[12px]'} ${posted && photo ? 'text-amber' : 'text-terra'}`}>{stats?.points ?? 0} pts</p>
       </div>
 
       {/* moldura do tile por cima de tudo (inclusive da foto do dia) */}

@@ -31,14 +31,14 @@ function ChallengePost({ post }: { post: Post }) {
         <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-sm ${riddle ? 'bg-white' : 'bg-white'}`}>{riddle ? '🎉' : '🧩'}</span>
         <div className="min-w-0 flex-1">
           <p className={`text-[11px] font-black uppercase tracking-wider ${riddle ? 'text-olive' : 'text-[#7B3FA0]'}`}>Dom de Línguas</p>
-          <p className="font-display text-[17px] font-extrabold leading-tight">
+          <p className="truncate whitespace-nowrap font-display text-[16px] font-extrabold leading-tight">
             {riddle ? `Decifrou o desafio de ${first(c?.user_id)}!` : 'Lançou um desafio em emojês'}
           </p>
-          <p className="mt-0.5 text-[13px] font-bold leading-snug text-[#6b5643]">
+          <p className="mt-0.5 truncate whitespace-nowrap text-[12.5px] font-bold leading-snug text-[#6b5643]">
             {riddle
-              ? 'Acertou primeiro e levou os pontos 🙌'
+              ? 'Acertou primeiro e levou os pontos'
               : !c ? 'Desafio do dia'
-                : c.status === 'solved' ? `Decifrado por ${first(c.solved_by)} · ${seal?.emoji} ${seal?.label}`
+                : c.status === 'solved' ? `Decifrado por ${first(c.solved_by)} ${seal?.emoji}`
                   : c.status === 'missed' ? 'Ninguém acertou 🤯'
                     : c.status === 'expired' ? 'Expirou sem palpites'
                       : 'Valendo! Será que você decifra?'}

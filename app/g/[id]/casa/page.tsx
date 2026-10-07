@@ -80,8 +80,8 @@ export default function Casa() {
           <p className="font-display text-4xl font-extrabold text-terra">{pct}%</p>
         </div>
         <div className="mt-3"><ProgressBar value={stats.groupPoints} max={maxGrp} height={18} /></div>
-        <p className="mt-2 text-xs font-bold text-[#a8927a]">
-          Meta: {maxGrp.toLocaleString('pt-BR')} pts · até {stats.teamWeekCap.toLocaleString('pt-BR')}/semana em {totalWeeks(group)} semanas
+        <p className="mt-2 truncate whitespace-nowrap text-xs font-bold text-[#a8927a]">
+          Meta {maxGrp.toLocaleString('pt-BR')} pts · até {stats.teamWeekCap.toLocaleString('pt-BR')} por semana
         </p>
         {complete && (
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -117,10 +117,10 @@ export default function Casa() {
               </span>
               <div className={`rounded-2xl p-3 ${ok ? 'bg-white' : 'bg-white/50'}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <p className={`font-extrabold ${ok ? '' : 'text-[#8A6F57]'}`}>{u.name}</p>
+                  <p className={`truncate font-extrabold ${ok ? '' : 'text-[#8A6F57]'}`}>{u.name}</p>
                   <span className={`chip ${ok ? 'bg-olive/15 text-olive' : 'bg-sand text-[#8A6F57]'}`}>{need.toLocaleString('pt-BR')} pts</span>
                 </div>
-                <p className="text-sm text-[#8A6F57]">{u.desc}</p>
+                <p className="truncate text-sm text-[#8A6F57]">{u.desc}</p>
               </div>
             </li>
           );

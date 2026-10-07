@@ -68,7 +68,7 @@ export function EvolutionLine(props: Props) {
   return (
     <section className="mx-4 mt-6">
       <h2 className="font-display text-xl font-bold">Linha da evolução</h2>
-      <p className="mb-3 text-sm text-[#8A6F57]">Um caminho por semana. Equipe o caminho inteiro para revelar um kit secreto ✨</p>
+      <p className="mb-3 truncate text-sm text-[#8A6F57]">Um caminho por semana · kit secreto ✨</p>
       <div className="space-y-3">
         {PATHS.map((path) => {
           const items = REWARDS.filter((r) => r.path === path.id);
@@ -83,8 +83,8 @@ export function EvolutionLine(props: Props) {
               <button className="flex w-full items-center gap-3 p-4 text-left" onClick={() => setOpen(expanded ? '' : path.id)}>
                 <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl ${done ? 'bg-amber/25' : got ? 'bg-sand' : 'bg-sand grayscale'}`}>{path.icon}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-extrabold leading-tight">{path.name}</p>
-                  <p className="text-xs font-bold text-[#a8927a]">Semana {path.week} · {got}/{items.length} desbloqueados</p>
+                  <p className="truncate font-extrabold leading-tight">{path.name}</p>
+                  <p className="truncate text-xs font-bold text-[#a8927a]">Semana {path.week} · {got}/{items.length} desbloqueados</p>
                   <div className="mt-1.5"><ProgressBar value={Math.max(0, p.points - start)} max={Math.max(1, end - start)} height={8} color={done ? 'bg-olive' : 'bg-amber'} /></div>
                 </div>
               </button>
@@ -149,7 +149,7 @@ function KitRow({ path, unlockedAll, active, onEquipKit, saving }: { path: PathI
             Kit secreto: {unlockedAll ? path.kit.name : '???'}
           </p>
           <p className={`text-[11px] leading-snug ${active ? 'text-white/75' : 'text-[#8A6F57]'}`}>
-            {active ? `${path.kit.desc}. Ativo!` : unlockedAll ? `Use os ${n} itens juntos para ativar` : `Desbloqueie e use os ${n} itens do caminho juntos`}
+            {active ? `${path.kit.desc}. Ativo!` : unlockedAll ? `Use os ${n} itens juntos para ativar` : `Use os ${n} itens juntos`}
           </p>
         </div>
       </div>
@@ -163,6 +163,9 @@ function KitRow({ path, unlockedAll, active, onEquipKit, saving }: { path: PathI
 }
 
 /* ===================== Coleção ===================== */
+
+/** sem o prefixo repetido da categoria ("Moldura", "Animação"…), para caber numa linha */
+const shortName = (r: Reward) => r.name.replace(/^(Moldura|Animação|Tile|Cor) (?=\S)/, '');
 
 const BLOCKS: { kind: Reward['kind']; label: string }[] = [
   { kind: 'title', label: 'Títulos' },
@@ -187,7 +190,7 @@ export function Collection(props: Props) {
       <div className="mb-1 flex items-end justify-between">
         <div>
           <h2 className="font-display text-xl font-bold">Itens por categoria</h2>
-          <p className="text-sm text-[#8A6F57]">Liberados por pontos ou por ações: convide, evangelize, participe.</p>
+          <p className="truncate text-sm text-[#8A6F57]">Por pontos ou por ações no app</p>
         </div>
         <span className="chip bg-white text-[#6b5643]">{got}/{all.length}</span>
       </div>
@@ -207,11 +210,11 @@ export function Collection(props: Props) {
                 const cur = Math.min(r.req ? p[r.req.stat] : p.points, need);
                 return (
                   <div key={r.id} className={`flex flex-col rounded-2xl bg-white p-3 ${worn ? 'ring-2 ring-terra' : ''}`}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-1.5">
                       <div className={ok ? '' : 'opacity-55'}><RewardPreview r={r} url={prof?.avatar_url} name={prof?.name} /></div>
-                      <p className="min-w-0 flex-1 text-[13px] font-extrabold leading-tight">{r.name}</p>
+                      <p className="w-full truncate whitespace-nowrap text-[13px] font-extrabold leading-tight">{shortName(r)}</p>
                     </div>
-                    <p className="mt-2 text-[11px] leading-snug text-[#6b5643]">{r.req ? r.req.label : `Libera com ${need} pontos`}</p>
+                    <p className="mt-1 truncate whitespace-nowrap text-[11px] leading-snug text-[#6b5643]">{r.req ? r.req.label : `Libera com ${need} pontos`}</p>
                     {ok ? (
                       <button
                         onClick={() => props.onEquip(r)}
@@ -252,7 +255,7 @@ function Surprises(props: Props) {
       <div className="flex items-end justify-between">
         <div>
           <h3 className="flex items-center gap-1.5 font-display text-lg font-bold"><Gift size={18} className="text-amber" /> Surpresas do check-in</h3>
-          <p className="text-xs leading-snug text-white/70">Cada check-in com o QR code da Casa de Paz sorteia 1 item.</p>
+          <p className="truncate text-xs leading-snug text-white/70">Cada check-in sorteia 1 item</p>
         </div>
         <span className="chip bg-white/15 text-white">{got.length}/{pool.length}</span>
       </div>
@@ -296,16 +299,17 @@ export function Phrases() {
   return (
     <section className="mx-4 mt-8">
       <h2 className="font-display text-xl font-bold">Frases de sobrepor</h2>
-      <p className="mb-3 text-sm text-[#8A6F57]">Use sobre suas fotos ao compartilhar com a moldura.</p>
+      <p className="mb-3 truncate text-sm text-[#8A6F57]">Para usar nas fotos com a moldura</p>
       <div className="space-y-2">
         {own.map((r) => {
           const ok = isUnlocked(group, r, p);
           return (
             <div key={r.id} className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${ok ? 'bg-white' : 'bg-white/50'}`}>
-              <p className={`flex-1 font-display text-[17px] font-bold italic ${ok ? 'text-ink' : 'text-[#b9a690]'}`}>{r.name}</p>
-              {ok ? <Check size={16} className="text-olive" /> : (
-                <span className="chip bg-sand text-[#8A6F57]"><Lock size={10} /> {r.req ? r.req.label : `${rewardThreshold(group, r)} pts`}</span>
-              )}
+              <div className="min-w-0 flex-1">
+                <p className={`truncate font-display text-[16px] font-bold italic ${ok ? 'text-ink' : 'text-[#b9a690]'}`}>{r.name}</p>
+                {!ok && <p className="flex items-center gap-1 truncate text-[11px] font-bold text-[#8A6F57]"><Lock size={10} className="shrink-0" /> {r.req ? r.req.label : `${rewardThreshold(group, r)} pts`}</p>}
+              </div>
+              {ok && <Check size={16} className="shrink-0 text-olive" />}
             </div>
           );
         })}
@@ -314,8 +318,11 @@ export function Phrases() {
           const u = GROUP_UNLOCKS.find((x) => x.id === t.unlock);
           return (
             <div key={t.text} className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${ok ? 'bg-white' : 'bg-white/50'}`}>
-              <p className={`flex-1 font-display text-[17px] font-bold italic ${ok ? 'text-ink' : 'text-[#b9a690]'}`}>{t.text}</p>
-              {ok ? <Check size={16} className="text-olive" /> : <span className="chip bg-sand text-[#8A6F57]"><Lock size={10} /> Equipe: {u?.name}</span>}
+              <div className="min-w-0 flex-1">
+                <p className={`truncate font-display text-[16px] font-bold italic ${ok ? 'text-ink' : 'text-[#b9a690]'}`}>{t.text}</p>
+                {!ok && <p className="flex items-center gap-1 truncate text-[11px] font-bold text-[#8A6F57]"><Lock size={10} className="shrink-0" /> Equipe: {u?.name}</p>}
+              </div>
+              {ok && <Check size={16} className="shrink-0 text-olive" />}
             </div>
           );
         })}

@@ -107,15 +107,16 @@ export default function Eu() {
           <p className="font-display text-3xl font-extrabold leading-tight">{myPoints} <span className="text-base text-[#a8927a]">/ {maxInd}</span></p>
           <div className="mt-2"><ProgressBar value={myPoints} max={maxInd} color="bg-amber" /></div>
           {(stats.byUser[me]?.pending ?? 0) > 0 && <span className="chip mt-2 bg-amber/20 text-[#9a5b00]">{stats.byUser[me]!.pending} pts em votação</span>}
-          <p className="mt-2 text-[13px] font-bold leading-snug text-[#6b5643]">
-            {nextReward
-              ? <>Próximo: <span className="text-terra">{nextReward.icon} {nextReward.name}</span> em {rewardThreshold(group, nextReward) - myPoints} pts</>
-              : 'Linha da evolução completa! 👑'}
-          </p>
+          {nextReward ? (
+            <>
+              <p className="mt-2 truncate whitespace-nowrap text-[13px] font-bold text-[#6b5643]">Próximo: <span className="text-terra">{nextReward.icon} {nextReward.name}</span></p>
+              <p className="truncate whitespace-nowrap text-[12px] font-bold text-[#a8927a]">faltam {rewardThreshold(group, nextReward) - myPoints} pts</p>
+            </>
+          ) : <p className="mt-2 truncate whitespace-nowrap text-[13px] font-bold text-[#6b5643]">Linha da evolução completa! 👑</p>}
         </div>
         <div className="w-[92px] shrink-0">
           <MemberTile profile={prof} stats={stats.byUser[me]} look={l} alive={unlocked.has('tile_anim')} isAdmin={false} forcePosted compact />
-          <p className="mt-1.5 text-center text-[10px] font-bold leading-tight text-[#a8927a]">como o grupo vê</p>
+          <p className="mt-1.5 whitespace-nowrap text-center text-[10px] font-bold leading-tight text-[#a8927a]">como o grupo vê</p>
         </div>
       </section>
 

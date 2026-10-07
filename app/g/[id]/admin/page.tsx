@@ -207,7 +207,7 @@ export default function Admin() {
         <Section title="Dias de postagem">
           <div className="grid grid-cols-2 gap-2">
             {(['all', 'selected'] as const).map((m) => (
-              <button key={m} onClick={() => set('post_mode', m)} className={`btn !min-h-[44px] !text-sm ${form.post_mode === m ? 'bg-ink text-white' : 'bg-white'}`}>
+              <button key={m} onClick={() => set('post_mode', m)} className={`btn !min-h-[44px] whitespace-nowrap !text-sm ${form.post_mode === m ? 'bg-ink text-white' : 'bg-white'}`}>
                 {m === 'all' ? 'Todos os dias' : 'Dias escolhidos'}
               </button>
             ))}
@@ -232,7 +232,7 @@ export default function Admin() {
         </Section>
 
         <Section title="Limite de pontos por semana">
-          <Field label="Por pessoa (meta semanal de cada membro)">
+          <Field label="Meta semanal por pessoa">
             <NumberInput value={form.weekly_user_cap} onChange={(v) => set('weekly_user_cap', Math.max(1, v))} />
           </Field>
           <div className="rounded-2xl bg-cream p-3">
@@ -245,7 +245,7 @@ export default function Admin() {
             </div>
             {form.group_cap_auto ? (
               <div className="mt-3">
-                <label className="label">Meta da equipe: % do máximo de todos os membros</label>
+                <label className="label">Meta da equipe (% do máximo)</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="range" min={30} max={100} step={5} className="flex-1 accent-[#C8553D]"
@@ -285,7 +285,7 @@ export default function Admin() {
               </p>
               {POINT_LABELS.filter((x) => x.when === w).map(({ key, label }) => (
                 <div key={key} className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-bold text-[#6b5643]">{label}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-bold text-[#6b5643]">{label}</span>
                   <div className="w-24"><NumberInput value={form.points[key] ?? 0} onChange={(v) => setPoint(key, Math.max(0, v))} /></div>
                 </div>
               ))}

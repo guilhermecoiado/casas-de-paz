@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, LogOut, Plus, Users } from 'lucide-react';
+import { ChevronRight, LogOut, Plus, Users, LogIn } from 'lucide-react';
 import { useAuth, useToast } from '@/components/Providers';
 import { Avatar, FullLoader, Sheet, Spinner } from '@/components/ui';
 import { InstallHint } from '@/components/InstallHint';
@@ -87,7 +87,7 @@ export default function Grupos() {
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3">
-        <button className="btn-primary" onClick={() => { setMode('join'); setName(''); setPw(''); }}>Entrar em grupo</button>
+        <button className="btn-primary" onClick={() => { setMode('join'); setName(''); setPw(''); }}><LogIn size={18} /> Entrar</button>
         <button className="btn-soft" onClick={() => { setMode('create'); setName(''); setPw(''); setPw2(''); }}><Plus size={18} /> Criar grupo</button>
       </div>
 

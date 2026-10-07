@@ -368,7 +368,7 @@ export const TileFrameArt = memo(function TileFrameArt({ frame }: { frame: strin
   return (
     <svg className="pointer-events-none absolute inset-0 z-[2] h-full w-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden
       style={{ filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,.25))' }}>
-      <Art id={id} />
+      <g transform={`translate(${W / 2} ${H / 2}) scale(1.045) translate(${-W / 2} ${-H / 2})`}><Art id={id} /></g>
     </svg>
   );
 });

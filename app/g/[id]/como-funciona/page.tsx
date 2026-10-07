@@ -12,7 +12,7 @@ function Topic({ icon, title, children, open = false }: { icon: string; title: s
     <details open={open} className="group card overflow-hidden">
       <summary className="flex cursor-pointer list-none items-center gap-3 p-4 [&::-webkit-details-marker]:hidden">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sand text-xl">{icon}</span>
-        <span className="flex-1 font-display text-lg font-bold leading-tight">{title}</span>
+        <span className="min-w-0 flex-1 truncate font-display text-lg font-bold leading-tight">{title}</span>
         <ChevronDown size={20} className="shrink-0 text-[#a8927a] transition group-open:rotate-180" />
       </summary>
       <div className="space-y-2.5 px-4 pb-4 text-[15px] leading-snug text-[#4a3a2c] [&_b]:text-ink">{children}</div>
@@ -46,7 +46,8 @@ export default function ComoFunciona() {
       </header>
 
       <div className="mx-4 rounded-3xl bg-gradient-to-br from-terra to-[#e07a4f] p-5 text-white">
-        <p className="font-display text-2xl font-extrabold leading-tight">Uma gincana de {weeks} semanas para encher a Casa de Paz 🏠</p>
+        <p className="truncate font-display text-2xl font-extrabold leading-tight">Gincana de {weeks} semanas 🏠</p>
+        <p className="truncate text-[15px] font-bold text-[#6b5643]">para encher a Casa de Paz juntos</p>
         <p className="mt-2 text-sm font-bold leading-snug text-white/90">
           De {formatDate(group.start_date, { day: '2-digit', month: 'long' })} a {formatDate(group.end_date, { day: '2-digit', month: 'long' })}. Encontro toda {day}.
           Cada coisa que você faz pelo Reino vira pontos, que liberam prêmios para você e constroem a casa da equipe.
@@ -66,13 +67,13 @@ export default function ComoFunciona() {
           <p className="rounded-2xl bg-olive/15 p-3 font-bold text-[#3f5a24]">🙌 Cada convidado vale o dobro do check-in: <b>+{ck * 2} pts por pessoa</b>. Anote o nome dele para o grupo acompanhar depois.</p>
         </Topic>
 
-        <Topic icon="🎯" title="Limites e meta da semana">
+        <Topic icon="🎯" title="Limites e metas">
           <p>Cada pessoa pode somar até <b>{group.weekly_user_cap.toLocaleString('pt-BR')} pts por semana</b>. O que passa disso não conta, e o post fica com o selo “limite semanal”.</p>
           <p>A meta é chegar perto de <b>{maxIndividual(group).toLocaleString('pt-BR')} pts</b> no período: isso libera todos os prêmios individuais.</p>
           <p>A pontuação não zera sozinha no fim do período: só o adm pode começar uma temporada nova.</p>
         </Topic>
 
-        <Topic icon="🔥" title="Sequência de dias e intensivo">
+        <Topic icon="🔥" title="Sequência e intensivo">
           <p>Poste <b>pelo menos uma coisa por dia</b> para manter o fogo aceso. O número no seu tile mostra quantos dias seguidos você está postando, e o fogo cresce conforme a sequência aumenta.</p>
           <p>Se ainda não postou hoje, o fogo fica apagado (cinza), mas a sequência só se perde se o dia virar sem post.</p>
           <div className="space-y-1.5">
@@ -98,7 +99,7 @@ export default function ComoFunciona() {
           <p>No caminho a equipe libera o <b>Dom de Línguas</b> (chat só de emojis), os <b>tiles animados</b> e a <b>foto de fundo</b> do início. A casa avança no máximo um tanto por semana, então a constância de todos conta.</p>
         </Topic>
 
-        <Topic icon="🧩" title="Dom de Línguas e desafios em emojês">
+        <Topic icon="🧩" title="Dom de Línguas">
           <p>O chat do grupo tem uma regra só: <b>aqui só se fala emojês</b>. O teclado do celular nem abre, só o teclado de emojis do app.</p>
           <p><b>Desafio do dia:</b> 1 vez por dia, conte uma história, passagem ou frase só com emojis (toque no + → Desafiar no chat, ou no botão Desafiar do chat). Você escreve a resposta certa na hora, e ela fica escondida até o fim.</p>
           <p>Cada pessoa tem <b>até 3 palpites</b> por desafio. Se o palpite for igual à resposta, o app aprova sozinho; os outros quem lançou julga com ✓ ou ✗.</p>
@@ -119,12 +120,12 @@ export default function ComoFunciona() {
           <p>No 1º dia de cada semana sai o <b>fechamento</b> da semana anterior, com uma imagem para compartilhar.</p>
         </Topic>
 
-        <Topic icon="📸" title="Feed, moldura e Instagram">
+        <Topic icon="📸" title="Feed e moldura">
           <p>No feed, reaja com 🙏 ❤️ 🔥 🙌 😂 e comente os posts. Reações e comentários não valem pontos: é só carinho mesmo.</p>
           <p>Toda foto pode ser compartilhada com a <b>moldura Casa de Paz</b> e uma frase. Cada semana tem a sua moldura, liberada com o seu check-in naquela semana.</p>
         </Topic>
 
-        <Topic icon="🙏" title="Mural de oração e convidados">
+        <Topic icon="🙏" title="Oração e convidados">
           <p>No <b>Mural de oração</b> você deixa um pedido e o grupo toca em “Orar”. Quem pediu recebe o aviso e pode marcar “Respondido 🙌”.</p>
           <p>A lista de <b>Convidados</b> junta todo mundo que visitou a Casa de Paz, para orar, mandar mensagem e convidar de novo.</p>
         </Topic>

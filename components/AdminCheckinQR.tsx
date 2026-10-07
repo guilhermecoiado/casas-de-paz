@@ -121,7 +121,7 @@ export function AdminCheckinQR() {
         </div>
       </div>
       <button className="btn-primary w-full" onClick={download} disabled={!code || busy}>{busy ? <Spinner /> : <><Download size={18} /> Baixar cartaz para imprimir</>}</button>
-      <button className="btn-soft w-full !min-h-[42px] !text-sm" onClick={rotate}><RefreshCw size={15} /> Gerar QR novo (se o código vazar)</button>
+      <button className="btn-soft w-full !min-h-[42px] !text-sm" onClick={rotate}><RefreshCw size={15} /> Gerar QR novo</button>
     </section>
   );
 }

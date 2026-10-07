@@ -89,11 +89,13 @@ export default function GroupHome() {
               <Avatar url={profiles[me]?.avatar_url} name={profiles[me]?.name} size={40} frame={look(me).avatarFrame} />
             </Link>
           </div>
-          <p className={`mt-2 flex items-center gap-1.5 text-sm font-bold ${bg ? 'text-white/90' : 'text-[#8A6F57]'}`}>
-            <CalendarDays size={15} />
-            {before
-              ? `Começa ${formatDate(group.start_date)}`
-              : `${after ? `Semana ${stats.week} (extra)` : `Semana ${stats.week} de ${totalWeeks(group)} · ${left <= 1 ? 'último dia! 🏁' : `faltam ${left} dias`}`} · ${isHouseDay ? 'Hoje é dia de Casa de Paz! 🏠' : `Casa de Paz às ${WEEKDAYS[group.house_weekday].toLowerCase()}s`}`}
+          <p className={`mt-2 flex items-center gap-1.5 whitespace-nowrap text-[13px] font-bold ${bg ? 'text-white/90' : 'text-[#8A6F57]'}`}>
+            <CalendarDays size={15} className="shrink-0" />
+            <span className="truncate">
+              {before
+                ? `Começa ${formatDate(group.start_date)}`
+                : `${after ? `Semana ${stats.week} (extra)` : `Semana ${stats.week}/${totalWeeks(group)} · ${left <= 1 ? 'último dia! 🏁' : `${left} dias`}`} · ${isHouseDay ? 'Casa de Paz hoje 🏠' : `Casa de Paz: ${WEEKDAYS[group.house_weekday].toLowerCase()}`}`}
+            </span>
           </p>
         </div>
       </header>
@@ -110,8 +112,8 @@ export default function GroupHome() {
                 <span className="text-base font-bold text-[#a8927a]"> / {maxGrp.toLocaleString('pt-BR')}</span>
               </p>
               {next ? (
-                <p className="mt-1 text-sm font-bold leading-snug text-[#6b5643]">
-                  Próximo: <span className="text-terra">{next.name}</span> em {Math.max(0, groupThreshold(maxGrp, next) - stats.groupPoints)} pts
+                <p className="mt-1 truncate whitespace-nowrap text-[13px] font-bold leading-snug text-[#6b5643]">
+                  <Lock size={12} className="-mt-0.5 mr-1 inline" /><span className="text-terra">{next.name}</span> em {Math.max(0, groupThreshold(maxGrp, next) - stats.groupPoints)} pts
                 </p>
               ) : (
                 <p className="mt-1 text-sm font-extrabold text-olive">Casa completa! 🎉</p>
@@ -120,9 +122,9 @@ export default function GroupHome() {
           </div>
           <div className="px-4 pb-4">
             <ProgressBar value={stats.groupPoints} max={maxGrp} height={16} />
-            <div className="mt-2 flex justify-between text-[11px] font-bold text-[#a8927a]">
-              <span>Equipe na semana: {stats.groupWeekPoints}/{stats.teamWeekCap}</span>
-              <span>Você na semana: {myWeek}/{group.weekly_user_cap}</span>
+            <div className="mt-2 flex justify-between gap-2 text-[11px] font-bold text-[#a8927a]">
+              <span className="whitespace-nowrap">Equipe na semana {stats.groupWeekPoints}/{stats.teamWeekCap}</span>
+              <span className="whitespace-nowrap">Você {myWeek}/{group.weekly_user_cap}</span>
             </div>
           </div>
         </Link>
@@ -132,13 +134,13 @@ export default function GroupHome() {
         {/* atalhos */}
         <div className="grid grid-cols-3 gap-2">
           {[
-            { href: `/g/${group.id}/oracao`, Icon: HandHeart, label: 'Mural de oração', tone: 'text-olive' },
+            { href: `/g/${group.id}/oracao`, Icon: HandHeart, label: 'Oração', tone: 'text-olive' },
             { href: `/g/${group.id}/convidados`, Icon: UserPlus, label: 'Convidados', tone: 'text-[#2F8FD0]' },
             { href: `/g/${group.id}/como-funciona`, Icon: CircleHelp, label: 'Como funciona', tone: 'text-terra' },
           ].map(({ href, Icon, label, tone }) => (
-            <Link key={href} href={href} className="flex flex-col items-center gap-1 rounded-2xl bg-white px-2 py-3 text-center shadow-sm active:scale-95">
+            <Link key={href} href={href} className="flex flex-col items-center gap-1 rounded-2xl bg-white px-1 py-3 text-center shadow-sm active:scale-95">
               <Icon size={22} className={tone} />
-              <span className="text-[12px] font-extrabold leading-tight text-[#6b5643]">{label}</span>
+              <span className="whitespace-nowrap text-[12px] font-extrabold leading-tight text-[#6b5643]">{label}</span>
             </Link>
           ))}
         </div>

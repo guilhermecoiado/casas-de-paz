@@ -138,13 +138,13 @@ export function AdminPush() {
           </button>
         </div>
         {group.digest_enabled && (
-          <div className="mt-3 flex items-center gap-2 pl-8">
-            <span className="text-xs font-extrabold text-[#8A6F57]">A cada</span>
+          <div className="mt-3 flex items-center gap-1.5">
+            <span className="whitespace-nowrap text-xs font-extrabold text-[#8A6F57]">A cada</span>
             {[1, 2, 3, 4, 6].map((h) => (
               <button
                 key={h}
                 onClick={() => setDigest({ digest_hours: h })}
-                className={`chip !px-3 !py-1.5 ${group.digest_hours === h ? 'bg-terra text-white' : 'bg-white text-[#6b5643]'}`}
+                className={`chip whitespace-nowrap !px-2.5 !py-1.5 ${group.digest_hours === h ? 'bg-terra text-white' : 'bg-white text-[#6b5643]'}`}
               >
                 {h}h
               </button>
@@ -160,7 +160,7 @@ export function AdminPush() {
         <div key={key} className="flex items-start gap-3 rounded-2xl bg-cream p-3">
           <Icon size={20} className="mt-0.5 shrink-0 text-terra" />
           <div className="min-w-0 flex-1">
-            <p className="font-extrabold leading-tight">{t}</p>
+            <p className="truncate font-extrabold leading-tight">{t}</p>
             <p className="text-sm leading-snug text-[#8A6F57]">{desc}</p>
           </div>
           <button

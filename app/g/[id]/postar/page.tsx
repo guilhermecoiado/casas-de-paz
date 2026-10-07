@@ -26,6 +26,12 @@ const ICONS: Record<ActionType, React.ElementType> = {
   verse: BookOpen, encourage: MessageCircleHeart, devotional: Sun, prayer: HandHeart, fasting: UtensilsCrossed, testimony: Flame,
 };
 
+/** nome curto no card (cabe numa linha só) */
+const CARD_LABEL: Partial<Record<ActionType, string>> = {
+  individual: 'Foto individual', verse: 'Versículo', encourage: 'Encorajamento', devotional: 'TSD', prayer: 'Oração',
+  fasting: 'Jejum', testimony: 'Testemunho', group: 'Foto em grupo', snack: 'Lanche', dynamic: 'Dinâmica', fellowship: 'Comunhão', relax: 'Relax',
+};
+
 /** mínimo de caracteres exigido por tipo (o servidor confere de novo) */
 const MIN_TEXT: Partial<Record<ActionType, number>> = { evangelism: 10, encourage: 10, devotional: 10, testimony: 10, verse: 5, fasting: 5, snack: 2 };
 
@@ -184,24 +190,24 @@ export default function Postar() {
                         <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${featured ? 'bg-terra text-white' : 'bg-terra/10 text-terra'}`}>
                           <Icon size={22} />
                         </span>
-                        <p className="mt-3 font-extrabold leading-tight">{a.label}</p>
-                        {featured && <p className="mt-1 text-sm text-[#6b5643]">{a.hint}</p>}
-                        <p className="mt-2 text-sm font-black text-terra">
+                        <p className="mt-3 truncate whitespace-nowrap font-extrabold leading-tight">{featured ? a.label : CARD_LABEL[a.type] ?? a.short}</p>
+                        {featured && <p className="mt-1 truncate whitespace-nowrap text-sm text-[#6b5643]">{a.hint}</p>}
+                        <p className="mt-2 truncate whitespace-nowrap text-[13px] font-black text-terra">
                           {a.type === 'checkin' ? `${group.points.checkin} pts + ${group.points.checkin * 2}/convidado` : `+${pts} pts`}
                           {a.type === 'group' && <span className="font-bold text-olive"> +{group.points.group_bonus} equipe</span>}
                         </p>
                         {a.type === 'group' && groupPhotoBy && (
-                          <p className="mt-1 text-[11px] font-bold text-[#8A6F57]">Postada por @{profiles[groupPhotoBy.user_id]?.username ?? '…'}</p>
+                          <p className="mt-1 truncate whitespace-nowrap text-[11px] font-bold text-[#8A6F57]">Postada por @{profiles[groupPhotoBy.user_id]?.username ?? '…'}</p>
                         )}
                         {a.when === 'daily' && !av.blocked && (
-                          <p className="mt-1 text-[11px] font-bold text-olive">Disponível hoje</p>
+                          <p className="mt-1 truncate whitespace-nowrap text-[11px] font-bold text-olive">Disponível hoje</p>
                         )}
-                        {av.blocked === 'done' && <p className="mt-1 text-[11px] font-bold text-olive">✓ Feito hoje</p>}
+                        {av.blocked === 'done' && <p className="mt-1 truncate whitespace-nowrap text-[11px] font-bold text-olive">✓ Feito hoje</p>}
                         {av.blocked && av.blocked !== 'done' && !(a.when === 'meeting' && !isHouseDay) && (
-                          <p className="mt-1 text-[11px] font-bold text-[#8A6F57]">🔒 {av.blocked}</p>
+                          <p className="mt-1 truncate whitespace-nowrap text-[11px] font-bold text-[#8A6F57]">🔒 {av.blocked}</p>
                         )}
                         {a.when === 'meeting' && !isHouseDay && (
-                          <p className="mt-1 text-[11px] font-bold text-[#8A6F57]">🔒 Libera {WEEKDAYS[group.house_weekday].toLowerCase()}</p>
+                          <p className="mt-1 truncate whitespace-nowrap text-[11px] font-bold text-[#8A6F57]">🔒 Libera {WEEKDAYS[group.house_weekday].toLowerCase()}</p>
                         )}
                       </button>
                     );

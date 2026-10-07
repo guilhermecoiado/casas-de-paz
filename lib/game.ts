@@ -75,14 +75,14 @@ export interface ActionInfo {
 
 export const ACTIONS: ActionInfo[] = [
   /* dia do encontro: 1 vez cada */
-  { type: 'checkin', when: 'meeting', label: 'Check-in na Casa de Paz', short: 'Check-in', hint: 'Foto no local. Cada convidado vale o dobro do check-in!', photo: 'required', text: 'optional', textLabel: 'Como foi? (opcional)', maxPerDay: 1 },
+  { type: 'checkin', when: 'meeting', label: 'Check-in na Casa de Paz', short: 'Check-in', hint: 'Foto no local · convidado vale o dobro!', photo: 'required', text: 'optional', textLabel: 'Como foi? (opcional)', maxPerDay: 1 },
   { type: 'group', when: 'meeting', label: 'Foto em grupo', short: 'Em grupo', hint: 'Só 1 por grupo no dia: quem postar primeiro leva os pontos e o bônus da equipe.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
   { type: 'snack', when: 'meeting', label: 'Ajuda no lanche', short: 'Lanche', hint: 'Conte o que levou e tire uma foto.', photo: 'required', text: 'required', textLabel: 'O que você levou?', placeholder: 'Ex.: Bolo de cenoura', maxPerDay: 1 },
   { type: 'dynamic', when: 'meeting', label: 'Dinâmica', short: 'Dinâmica', hint: 'Registre a dinâmica do encontro.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
   { type: 'fellowship', when: 'meeting', label: 'Comunhão', short: 'Comunhão', hint: 'Momento de comunhão com o grupo.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
   { type: 'relax', when: 'meeting', label: 'Relax', short: 'Relax', hint: 'Um momento leve e descontraído do encontro.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
   /* dia a dia: 1 vez por dia cada (máximo do dia = soma destas ações) */
-  { type: 'evangelism', when: 'daily', label: 'Evangelizei / Convidei', short: 'Evangelismo', hint: 'Conte brevemente o que aconteceu. É a ação que mais vale no dia a dia!', photo: 'none', text: 'required', textLabel: 'O que aconteceu?', placeholder: 'Ex.: Convidei meu colega de trabalho para sexta.', maxPerDay: 1 },
+  { type: 'evangelism', when: 'daily', label: 'Evangelizei / Convidei', short: 'Evangelismo', hint: 'A ação que mais vale no dia a dia!', photo: 'none', text: 'required', textLabel: 'O que aconteceu?', placeholder: 'Ex.: Convidei meu colega de trabalho para sexta.', maxPerDay: 1 },
   { type: 'individual', when: 'daily', label: 'Foto individual', short: 'Individual', hint: 'Sua foto do dia.', photo: 'required', text: 'optional', textLabel: 'Legenda (opcional)', maxPerDay: 1 },
   { type: 'verse', when: 'daily', label: 'Versículo do dia', short: 'Versículo', hint: 'Compartilhe o versículo que falou com você.', photo: 'optional', text: 'required', textLabel: 'Versículo', placeholder: 'Ex.: “Tudo posso naquele que me fortalece” — Fp 4:13', maxPerDay: 1 },
   { type: 'encourage', when: 'daily', label: 'Encorajamento para o encontro', short: 'Encorajamento', hint: 'Anime o grupo para a próxima Casa de Paz.', photo: 'optional', text: 'required', textLabel: 'Mensagem', placeholder: 'Ex.: Sexta tem Casa de Paz! Traga alguém com você 🙌', maxPerDay: 1 },
@@ -115,9 +115,9 @@ export const TYPE_LABEL: Record<PostType, string> = {
 };
 
 export const POINT_LABELS: { key: keyof Group['points']; label: string; when: ActionWhen | 'other' }[] = [
-  { key: 'checkin', label: 'Check-in (convidado = 2× por pessoa)', when: 'meeting' },
-  { key: 'group', label: 'Foto em grupo (quem postar primeiro)', when: 'meeting' },
-  { key: 'group_bonus', label: 'Foto em grupo (bônus da equipe)', when: 'meeting' },
+  { key: 'checkin', label: 'Check-in (convidado vale 2×)', when: 'meeting' },
+  { key: 'group', label: 'Foto em grupo (1º a postar)', when: 'meeting' },
+  { key: 'group_bonus', label: 'Bônus da equipe (foto)', when: 'meeting' },
   { key: 'snack', label: 'Ajuda no lanche', when: 'meeting' },
   { key: 'dynamic', label: 'Dinâmica', when: 'meeting' },
   { key: 'fellowship', label: 'Comunhão', when: 'meeting' },
@@ -314,15 +314,15 @@ export interface GroupUnlock {
 }
 
 export const GROUP_UNLOCKS: GroupUnlock[] = [
-  { id: 'frame', name: 'Moldura Casa de Paz', desc: 'Aplique a moldura nas fotos e compartilhe no Instagram', pct: 0, feature: 'frame' },
+  { id: 'frame', name: 'Moldura Casa de Paz', desc: 'Moldura nas fotos para o Instagram', pct: 0, feature: 'frame' },
   // 3% = 600 pts com a meta atual (10 pessoas, 4 semanas)
-  { id: 'chat', name: 'Dom de Línguas', desc: 'Chat só de emojis liberado, com desafios em emojês valendo pontos', pct: 3, feature: 'chat' },
+  { id: 'chat', name: 'Dom de Línguas', desc: 'Chat só de emojis, com desafios', pct: 3, feature: 'chat' },
   { id: 'foundation', name: 'Fundação', desc: 'A base da nossa casa', pct: 5, part: 'foundation' },
   { id: 'walls', name: 'Paredes', desc: 'A casa começa a ganhar forma', pct: 18, part: 'walls' },
   { id: 'tile_anim', name: 'Tiles animados', desc: 'Todos os tiles ganham vida', pct: 25, feature: 'tile_anim' },
   { id: 'door', name: 'Porta', desc: 'Porta aberta para os convidados', pct: 30, part: 'door' },
   { id: 'windows', name: 'Janelas', desc: 'Luz entrando na casa', pct: 40, part: 'windows' },
-  { id: 'background', name: 'Foto de fundo', desc: 'O adm pode colocar uma foto de fundo no início', pct: 45, feature: 'background' },
+  { id: 'background', name: 'Foto de fundo', desc: 'O adm põe uma foto no início', pct: 45, feature: 'background' },
   { id: 'roof', name: 'Telhado', desc: 'Proteção para todos', pct: 55, part: 'roof' },
   { id: 'chimney', name: 'Chaminé', desc: 'Casa aquecida', pct: 65, part: 'chimney' },
   { id: 'garden', name: 'Jardim', desc: 'Flores e vida ao redor', pct: 75, part: 'garden' },
