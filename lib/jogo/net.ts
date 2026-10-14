@@ -50,9 +50,14 @@ export interface StateMsg {
   fin?: FinState;
   /** Desafio de toque (terremoto, goteiras): todos tocam rápido para ajudar a equipe. */
   ch?: ChState;
+  /** Poder guardado (o celular mostra o botão de usar). */
+  power?: PowerId;
+  /** O que está acontecendo com o bonequinho agora (congelado, turbo…). */
+  fx?: string;
 }
 export interface ChState { kind: 'quake' | 'leak'; title: string; emoji: string; prog: number; per: number; left: number }
 export type TaskId = 'paint' | 'light' | 'garden' | 'decor';
+export type PowerId = 'freeze' | 'speed' | 'giant' | 'shrink' | 'fire' | 'magnet' | 'shield';
 export interface FinState {
   task: TaskId;
   helping: boolean;   // já terminou a própria parte e está ajudando outra equipe
@@ -61,7 +66,7 @@ export interface FinState {
   done: boolean;      // casa toda pronta
 }
 export interface TapMsg { n: number }
-export interface BuzzMsg { kind: 'pick' | 'deliver' | 'stomped' | 'stomp' | 'gold' | 'part' | 'finish' | 'alert' | 'storm' | 'boing' }
+export interface BuzzMsg { kind: 'pick' | 'deliver' | 'stomped' | 'stomp' | 'gold' | 'part' | 'finish' | 'alert' | 'storm' | 'boing' | 'power' | 'hit' | 'zap' }
 
 const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 export const newRoom = () => Array.from({ length: 4 }, () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join('');

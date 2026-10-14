@@ -178,6 +178,26 @@ export class GameAudio {
       case 'go': this.tone(1320, t, 0.45, 'square', 0.12, o); seq([72, 79, 84], 0.06, 'triangle', 0.15, 0.3); break;
       case 'balloon': this.tone(600, t, 0.5, 'sine', 0.12, o, { to: 1200, vib: 20 }); break;
       case 'ant': seq([67, 71, 74], 0.06, 'triangle', 0.15); break;
+      case 'deliverBig':
+        this.tone(150, t, 0.18, 'sine', 0.7, o, { to: 70 }); this.hiss(t, 0.12, 0.3, o, { type: 'lowpass', f: 900 });
+        seq([79, 84, 88, 91], 0.07, 'triangle', 0.22, 0.4); this.hiss(t + 0.1, 0.5, 0.05, o, { type: 'highpass', f: 6000 }); break;
+      case 'power': seq([84, 88, 91, 96], 0.04, 'sine', 0.18, 0.2); this.tone(600, t, 0.3, 'triangle', 0.08, o, { to: 1400 }); break;
+      case 'zap': this.tone(1400, t, 0.25, 'sawtooth', 0.06, o, { to: 300 }); this.hiss(t, 0.2, 0.12, o, { type: 'bandpass', f: 2500, to: 600 }); break;
+      case 'freeze': seq([96, 91, 100, 96], 0.05, 'sine', 0.14, 0.3); this.hiss(t, 0.5, 0.12, o, { type: 'highpass', f: 5000 }); break;
+      case 'fire': this.hiss(t, 0.9, 0.35, o, { type: 'bandpass', f: 500, to: 1800, q: 1 }, 0.05); this.tone(120, t, 0.5, 'sawtooth', 0.06, o, { to: 60 }); break;
+      case 'shrink': this.tone(900, t, 0.45, 'square', 0.08, o, { to: 1800, vib: 30 }); break;
+      case 'grow': this.tone(120, t, 0.6, 'square', 0.1, o, { to: 360, vib: 12 }); seq([60, 67, 72], 0.12, 'triangle', 0.18, 0.4); break;
+      case 'speed': this.tone(400, t, 0.35, 'square', 0.08, o, { to: 1600 }); this.hiss(t, 0.4, 0.1, o, { type: 'bandpass', f: 800, to: 4000 }); break;
+      case 'shield': [72, 76, 79].forEach((m) => this.tone(mtof(m + 12), t, 0.6, 'sine', 0.08, o, { attack: 0.03 })); break;
+      case 'block': this.tone(1800, t, 0.12, 'square', 0.08, o); this.tone(2400, t + 0.06, 0.2, 'sine', 0.08, o); break;
+      case 'magnet': this.tone(220, t, 0.6, 'sine', 0.2, o, { vib: 40 }); break;
+      case 'bees': this.tone(220, t, 2.2, 'sawtooth', 0.04, o, { vib: 30, attack: 0.2 }); this.tone(233, t, 2.2, 'sawtooth', 0.04, o, { vib: 25, attack: 0.2 }); break;
+      case 'boulder': this.hiss(t, 0.8, 0.35, o, { type: 'lowpass', f: 200 }, 0.1); this.tone(70, t, 0.6, 'sine', 0.3, o); break;
+      case 'crash': this.hiss(t, 0.4, 0.4, o, { type: 'lowpass', f: 700, to: 120 }); break;
+      case 'lightning': this.hiss(t, 0.1, 0.6, o, { type: 'highpass', f: 2500 }); this.hiss(t + 0.05, 1.4, 0.5, o, { type: 'lowpass', f: 600, to: 90 }); break;
+      case 'ouch': this.tone(520, t, 0.18, 'square', 0.1, o, { to: 260 }); break;
+      case 'fog': this.tone(196, t, 2, 'sine', 0.1, o, { attack: 0.6 }); this.tone(233, t + 0.3, 1.8, 'sine', 0.08, o, { attack: 0.6 }); break;
+      case 'drizzle': this.hiss(t, 4, 0.06, o, { type: 'highpass', f: 4000 }, 1); break;
     }
   }
 }

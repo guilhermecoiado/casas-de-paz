@@ -1,6 +1,6 @@
 /* Desenhos do jogo "Casa na Rocha" (canvas 2D, quadro lógico de 1920×1080). */
 
-import type { TaskId } from './net';
+import type { PowerId, TaskId } from './net';
 
 export const W = 1920, H = 1080, TAU = Math.PI * 2;
 export const C = {
@@ -35,7 +35,7 @@ export interface PoseOpts {
   walk?: number;        // fase da caminhada (0 parado)
   air?: boolean;
   carry?: ItemType | null;
-  carryGold?: boolean;
+  carryQty?: number;
   happy?: boolean;
   dizzy?: boolean;
   name?: string;
@@ -92,7 +92,7 @@ export function person(ctx: Ctx, x: number, y: number, slot: number, o: PoseOpts
   acc(ctx, ch.acc, ch.color, face);
   if (o.tool) { const up = o.work ?? 0; ctx.save(); ctx.translate((40 + up * 6) * face, -70 - up * 34); ctx.rotate(face * (0.3 - up * 0.6)); ctx.font = `34px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.tool, 0, 0); ctx.restore(); }
   // carregando
-  if (o.carry) { ctx.save(); ctx.translate(0, -158); item(ctx, o.carry, 0, 0, !!o.carryGold, 0.95); ctx.restore(); }
+  if (o.carry) { ctx.save(); ctx.translate(0, -158); item(ctx, o.carry, 0, 0, o.carryQty ?? 1, 0.95); ctx.restore(); }
   ctx.restore();
   // etiqueta do nome (sem escala do pulo)
   if (o.name) nameTag(ctx, x, y - (o.carry ? 196 : 158) * s, o.name, ch.color, o.guestStar);
@@ -142,15 +142,21 @@ export const NO_FIN: FinProg = { paint: 0, light: 0, garden: 0, decor: 0 };
 export const ITEM_LABEL: Record<ItemType, string> = { stone: 'pedras', brick: 'tijolos', tile: 'telhas', wood: 'madeiras', glass: 'vidros' };
 export const ITEM_EMOJI: Record<ItemType, string> = { stone: '🪨', brick: '🧱', tile: '🔺', wood: '🪵', glass: '🪟' };
 
-export function glow(ctx: Ctx, x: number, y: number, r = 44, a = 0.9) {
+export function glow(ctx: Ctx, x: number, y: number, r = 44, a = 0.9, rgb = '255,240,180') {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, `rgba(255,240,180,${a})`); g.addColorStop(1, 'rgba(255,240,180,0)');
+  g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`);
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
 }
 
-/** Material centrado em (x, y). */
-export function item(ctx: Ctx, t: ItemType, x: number, y: number, gold = false, s = 1) {
-  ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineWidth = 3; ctx.lineJoin = 'round';
+/** Quanto vale cada pacote de material: x1 (comum), x4 (azul) e x10 (dourado). */
+export const QTY_STYLE: Record<number, { glow: string; badge: string; label: string }> = {
+  1: { glow: '255,240,180', badge: '', label: '' },
+  4: { glow: '120,200,255', badge: '#2F8FD0', label: 'x4' },
+  10: { glow: '255,205,60', badge: '#C8553D', label: 'x10' },
+};
+
+function shape(ctx: Ctx, t: ItemType, gold: boolean) {
+  ctx.lineWidth = 3; ctx.lineJoin = 'round';
   if (t === 'brick') {
     ctx.fillStyle = gold ? '#F3C64A' : C.terra; rr(ctx, -26, -15, 52, 30, 6); ctx.fill(); ctx.strokeStyle = gold ? '#a07a10' : '#7a2618'; ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(0, 15); ctx.moveTo(-26, 0); ctx.lineTo(26, 0); ctx.stroke();
@@ -166,7 +172,79 @@ export function item(ctx: Ctx, t: ItemType, x: number, y: number, gold = false, 
     ctx.fillStyle = gold ? '#F3C64A' : '#bdb7ac'; ctx.beginPath(); ctx.moveTo(-26, 14); ctx.lineTo(-18, -14); ctx.lineTo(10, -20); ctx.lineTo(26, 2); ctx.lineTo(14, 18); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = gold ? '#a07a10' : '#4a4540'; ctx.stroke();
   }
-  if (gold) { ctx.fillStyle = '#fff'; ctx.font = `900 16px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('x3', 0, 6); }
+}
+
+/** Material centrado em (x, y). Pacotes x4 aparecem empilhados e com selo azul; x10, dourados. */
+export function item(ctx: Ctx, t: ItemType, x: number, y: number, qty = 1, s = 1) {
+  const tier = qty >= 10 ? 2 : qty >= 4 ? 1 : 0;
+  ctx.save(); ctx.translate(x, y); ctx.scale(s * [1, 1.1, 1.22][tier], s * [1, 1.1, 1.22][tier]);
+  if (tier >= 1) { ctx.save(); ctx.translate(7, -9); ctx.globalAlpha *= 0.9; shape(ctx, t, tier === 2); ctx.restore(); ctx.save(); ctx.translate(-7, -4); shape(ctx, t, tier === 2); ctx.restore(); ctx.translate(2, 4); }
+  shape(ctx, t, tier === 2);
+  if (tier) {
+    const st = QTY_STYLE[qty >= 10 ? 10 : 4];
+    ctx.fillStyle = st.badge; ctx.beginPath(); ctx.arc(24, -22, 15, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = `900 ${tier === 2 ? 12 : 14}px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(st.label, 24, -17);
+  }
+  ctx.restore();
+}
+
+/* ---------------- poderes ---------------- */
+
+export const POWERS: Record<PowerId, { label: string; emoji: string; self: boolean; color: string; rgb: string; dur: number; use: string }> = {
+  freeze: { label: 'Congelar', emoji: '❄️', self: false, color: '#4FB8E8', rgb: '120,210,250', dur: 3, use: 'JOGAR' },
+  speed: { label: 'Turbo', emoji: '⚡', self: true, color: '#E8A12E', rgb: '255,220,80', dur: 6, use: 'USAR' },
+  giant: { label: 'Gigante', emoji: '🍄', self: true, color: '#E25B45', rgb: '255,140,120', dur: 7, use: 'USAR' },
+  shrink: { label: 'Encolher', emoji: '🔻', self: false, color: '#7B3FA0', rgb: '190,140,230', dur: 6, use: 'JOGAR' },
+  fire: { label: 'Fogo', emoji: '🔥', self: false, color: '#F26B1D', rgb: '255,150,60', dur: 5, use: 'JOGAR' },
+  magnet: { label: 'Ímã', emoji: '🧲', self: true, color: '#C8553D', rgb: '255,160,150', dur: 6, use: 'USAR' },
+  shield: { label: 'Escudo', emoji: '🛡️', self: true, color: '#2F8FD0', rgb: '120,190,255', dur: 8, use: 'USAR' },
+};
+
+/** Bolha de poder caindo/parada. */
+export function powerBubble(ctx: Ctx, id: PowerId, x: number, y: number, t: number) {
+  const P = POWERS[id];
+  glow(ctx, x, y, 56, 0.9, P.rgb);
+  ctx.save(); ctx.translate(x, y + Math.sin(t * 4) * 3);
+  ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.beginPath(); ctx.arc(0, 0, 28, 0, TAU); ctx.fill();
+  ctx.strokeStyle = P.color; ctx.lineWidth = 4; ctx.stroke();
+  ctx.font = `30px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(P.emoji, 0, 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.ellipse(-10, -12, 6, 4, -0.6, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+export function bee(ctx: Ctx, x: number, y: number, t: number, i: number) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = 'rgba(255,255,255,0.75)'; const fl = Math.sin(t * 60 + i) * 3;
+  ctx.beginPath(); ctx.ellipse(-4, -9 - fl, 7, 5, -0.5, 0, TAU); ctx.ellipse(5, -9 + fl, 7, 5, 0.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#F2C230'; ctx.beginPath(); ctx.ellipse(0, 0, 12, 8, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = C.ink; ctx.fillRect(-3, -8, 3, 16); ctx.fillRect(4, -7, 3, 14); ctx.beginPath(); ctx.arc(-11, 0, 3, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+export function boulder(ctx: Ctx, x: number, y: number, r: number, rot: number) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+  ctx.fillStyle = '#8f887d'; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+  ctx.strokeStyle = '#5f5a52'; ctx.lineWidth = 4; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 0.2); ctx.lineTo(r * 0.2, -r * 0.5); ctx.moveTo(-r * 0.1, r * 0.4); ctx.lineTo(r * 0.5, r * 0.1); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.beginPath(); ctx.arc(-r * 0.35, -r * 0.35, r * 0.25, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+/** Raio: aviso no chão (k<1) e depois o raio caindo (k>=1). */
+export function bolt(ctx: Ctx, x: number, y: number, k: number, t: number) {
+  if (k < 1) {
+    ctx.save(); ctx.globalAlpha = 0.35 + 0.35 * Math.abs(Math.sin(t * 14));
+    ctx.fillStyle = '#E25B45'; ctx.beginPath(); ctx.ellipse(x, y, 60, 14, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#E25B45'; ctx.lineWidth = 4; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, 0); ctx.stroke();
+    ctx.restore(); return;
+  }
+  const a = Math.max(0, 1 - (k - 1) * 4);
+  ctx.save(); ctx.globalAlpha = a;
+  glow(ctx, x, y, 140, 0.9, '255,250,200');
+  ctx.strokeStyle = '#FFF6B0'; ctx.lineWidth = 12; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(x, 0);
+  let yy = 0, xx = x; while (yy < y) { yy += 60; xx = x + (Math.random() - 0.5) * 50; ctx.lineTo(xx, Math.min(y, yy)); }
+  ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.stroke();
   ctx.restore();
 }
 
@@ -339,7 +417,7 @@ export function ant(ctx: Ctx, x: number, y: number, dir: number, t: number, carr
   ctx.strokeStyle = C.ink; ctx.lineWidth = 3;
   for (const [i, lx] of [[0, -8], [1, 2], [2, 12]]) { const a = Math.sin(t * 20 + i * 2) * 5; ctx.beginPath(); ctx.moveTo(lx, -6); ctx.lineTo(lx - 6 + a, 6); ctx.stroke(); }
   ctx.beginPath(); ctx.moveTo(24, -16); ctx.lineTo(34, -28); ctx.stroke();
-  if (carrying) item(ctx, carrying, 0, -40, false, 0.8);
+  if (carrying) item(ctx, carrying, 0, -40, 1, 0.8);
   ctx.restore();
 }
 

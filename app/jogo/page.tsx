@@ -65,6 +65,7 @@ function TV() {
       const ch = channel(playerChan(room, id));
       ch.on('broadcast', { event: 'in' }, ({ payload }) => game.setInput(id, payload as InputMsg))
         .on('broadcast', { event: 'tap' }, ({ payload }) => game.tap(id, Number((payload as TapMsg)?.n) || 0))
+        .on('broadcast', { event: 'pw' }, () => game.usePower(id))
         .on('broadcast', { event: 'ping' }, () => game.touch(id))
         .on('broadcast', { event: 'bye' }, () => { game.removePlayer(id); closePlayer(id); })
         .subscribe();

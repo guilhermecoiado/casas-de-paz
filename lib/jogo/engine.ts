@@ -1,15 +1,16 @@
-/* Motor do jogo "Casa na Rocha": a TV é a dona do jogo (física, fases, desafios e pontos). */
+/* Motor do jogo "Casa na Rocha": a TV é a dona do jogo (física, fases, desafios, poderes e pontos). */
 
-import type { BuzzMsg, ChState, FinState, Mode, StateMsg, TaskId } from './net';
+import type { BuzzMsg, ChState, FinState, Mode, PowerId, StateMsg, TaskId } from './net';
 import {
-  C, CHARS, FONT, GROUND, H, ITEM_EMOJI, ITEM_LABEL, NO_FIN, PLATS, ROCK, TASK, TASKS, TAU, W,
-  ant, balloon, finishBack, fitText, glow, house, item, panel, person, platform, rr, scaffold, scenery, trampoline,
+  C, CHARS, FONT, GROUND, H, ITEM_EMOJI, ITEM_LABEL, NO_FIN, PLATS, POWERS, QTY_STYLE, ROCK, TASK, TASKS, TAU, W,
+  ant, balloon, bee, bolt, boulder, finishBack, fitText, glow, house, item, panel, person, platform, powerBubble, rr, scaffold, scenery, trampoline,
   type Ctx, type FinProg, type HouseProg, type ItemType, type Plat,
 } from './draw';
 
 // espaçamento entre letras (nem todo navegador tem; sem ele só fica junto)
 const ls = (ctx: CanvasRenderingContext2D, px: number) => { (ctx as unknown as { letterSpacing: string }).letterSpacing = `${px}px`; };
 const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const pickOne = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 
 export const MAX_PLAYERS = 12;
 const PLAY_TIME = 240;      // 4 minutos
@@ -24,6 +25,9 @@ const ZONE = { x0: 790, x1: 1130, top: ROCK.top - 520 };
 const TRAMPS = [{ x: 36, w: 116 }, { x: 1768, w: 116 }];
 const QUOTA = 60;     // toques da parte de cada um no acabamento
 const CH_TAPS = 20;   // toques por jogador para vencer um desafio de toque
+/** Pontos por entrega: pacote maior vale mais. */
+const DELIVER_PTS: Record<number, number> = { 1: 2, 4: 6, 10: 12 };
+const POWER_IDS = Object.keys(POWERS) as PowerId[];
 
 /** Altura do chão da rocha em x (rampa dos lados, topo reto), ou null fora dela. */
 export function rockSurface(x: number): number | null {
@@ -34,10 +38,13 @@ export function rockSurface(x: number): number | null {
 }
 
 export type Sfx =
-  | 'jump' | 'jump2' | 'boing' | 'pick' | 'gold' | 'deliver' | 'phase' | 'stomp' | 'join' | 'alert' | 'wind' | 'quake' | 'rain'
-  | 'thunder' | 'tap' | 'chWin' | 'chFail' | 'part' | 'task' | 'finished' | 'storm' | 'standing' | 'fall' | 'results' | 'beep' | 'go' | 'balloon' | 'ant';
+  | 'jump' | 'jump2' | 'boing' | 'pick' | 'gold' | 'deliver' | 'deliverBig' | 'phase' | 'stomp' | 'join' | 'alert' | 'wind' | 'quake' | 'rain'
+  | 'thunder' | 'tap' | 'chWin' | 'chFail' | 'part' | 'task' | 'finished' | 'storm' | 'standing' | 'fall' | 'results' | 'beep' | 'go' | 'balloon' | 'ant'
+  | 'power' | 'zap' | 'freeze' | 'fire' | 'grow' | 'shrink' | 'speed' | 'shield' | 'block' | 'magnet' | 'bees' | 'boulder' | 'crash' | 'lightning' | 'ouch' | 'fog' | 'drizzle';
 
 interface Input { l: boolean; r: boolean; j: boolean }
+type Fx = { frozen: number; fast: number; giant: number; tiny: number; burn: number; magnet: number; shield: number; slow: number };
+const NO_FX = (): Fx => ({ frozen: 0, fast: 0, giant: 0, tiny: 0, burn: 0, magnet: 0, shield: 0, slow: 0 });
 export interface Player {
   id: string; slot: number; name: string; bot?: boolean;
   x: number; y: number; vx: number; vy: number; onGround: boolean; coyote: number; face: 1 | -1;
@@ -45,14 +52,19 @@ export interface Player {
   input: Input; prevJ: boolean; carry: Item | null; pts: number; picks: number; delivered: number;
   dizzy: number; walk: number; lastSeen: number; happy: number;
   task: TaskId | null; helping: boolean; mine: number; taps: number; budget: number; budgetT: number; work: number; chTaps: number;
+  power: PowerId | null; powerT: number; fx: Fx; size: number; hitCd: number;
 }
-interface Item { id: number; type: ItemType; gold: boolean; x: number; y: number; vx: number; vy: number; rest: boolean; age: number; onGroundFloor: boolean; mover: number; float?: boolean }
+interface Item { id: number; type: ItemType; qty: number; x: number; y: number; vx: number; vy: number; rest: boolean; age: number; onGroundFloor: boolean; mover: number; float?: boolean; power?: PowerId; pulled?: boolean }
 interface Ant { x: number; dir: 1 | -1; carry: Item | null; flee: boolean }
 interface Floater { x: number; y: number; text: string; color: string; t: number }
 interface Mover { x: number; y: number; w: number; px: number; py: number; vertical: boolean }
 interface Balloon { x: number; y: number; dir: 1 | -1; item: Item | null }
-type Ghost = Pick<Player, 'x' | 'y' | 'pts' | 'picks' | 'delivered' | 'task' | 'helping' | 'mine' | 'taps' | 'slot'>;
-type EventType = 'wind' | 'quake' | 'rain' | 'ants';
+interface Shot { x: number; y: number; from: string; to: string; power: PowerId; t: number }
+interface Swarm { x: number; y: number; target: string | null; t: number }
+interface Boulder { x: number; dir: 1 | -1; rot: number }
+interface Bolt { x: number; y: number; t: number; hit: boolean }
+type Ghost = Pick<Player, 'x' | 'y' | 'pts' | 'picks' | 'delivered' | 'task' | 'helping' | 'mine' | 'taps' | 'slot' | 'power'>;
+type EventType = 'wind' | 'quake' | 'rain' | 'ants' | 'drizzle' | 'fog' | 'bees' | 'boulders' | 'lightning';
 interface GameEvent { at: number; type: EventType; dur: number; dir?: 1 | -1; started?: boolean }
 interface TapCh { kind: 'quake' | 'leak'; at: number; dur: number; need: number; have: number; started?: boolean; ended?: boolean; ok?: boolean }
 
@@ -63,18 +75,25 @@ const PHASES: { types: ItemType[]; title: string }[] = [
   { types: ['wood', 'glass'], title: 'Porta e janelas!' },
 ];
 const FINISH_TITLE = 'Acabamento!';
-const EVENT_INFO: Record<EventType, { soon: string; now: string; emoji: string }> = {
-  wind: { soon: 'Ventania chegando! Segurem firme!', now: 'Ventania!', emoji: '💨' },
-  quake: { soon: 'Terremoto chegando!', now: 'Terremoto! Tudo tremendo!', emoji: '🌋' },
-  rain: { soon: 'Vem chuva aí… chão escorregadio!', now: 'Chuva! Cuidado para não escorregar!', emoji: '🌧️' },
-  ants: { soon: 'Formigas à vista!', now: 'Formigas levando material! Pulem nelas!', emoji: '🐜' },
+const EVENT_INFO: Record<EventType, { soon: string; now: string; emoji: string; dur: number; sfx: Sfx }> = {
+  wind: { soon: 'Ventania chegando! Segurem firme!', now: 'Ventania!', emoji: '💨', dur: 7, sfx: 'wind' },
+  quake: { soon: 'Terremoto chegando!', now: 'Terremoto! Tudo tremendo!', emoji: '🌋', dur: 7, sfx: 'quake' },
+  rain: { soon: 'Vem chuva aí… chão escorregadio!', now: 'Chuva! Cuidado para não escorregar!', emoji: '🌧️', dur: 14, sfx: 'rain' },
+  ants: { soon: 'Formigas à vista!', now: 'Formigas! Pulem nelas, não deixem encostar', emoji: '🐜', dur: 14, sfx: 'ant' },
+  drizzle: { soon: 'Garoa chegando…', now: 'Garoa! Todo mundo mais lento', emoji: '🌦️', dur: 9, sfx: 'drizzle' },
+  fog: { soon: 'Neblina chegando!', now: 'Neblina! Quase não dá para ver', emoji: '🌫️', dur: 10, sfx: 'fog' },
+  bees: { soon: 'Abelhas à vista!', now: 'Abelhas! Fujam delas', emoji: '🐝', dur: 11, sfx: 'bees' },
+  boulders: { soon: 'Pedras rolando!', now: 'Pedras rolando! Pulem por cima', emoji: '🪨', dur: 10, sfx: 'boulder' },
+  lightning: { soon: 'Raios chegando!', now: 'Raios! Saiam do círculo vermelho', emoji: '⚡', dur: 10, sfx: 'thunder' },
 };
 const CH_INFO: Record<TapCh['kind'], { title: string; emoji: string; ok: string; fail: string }> = {
   quake: { title: 'Segurem a casa!', emoji: '🌋', ok: 'A casa ficou firme! 💪', fail: 'Caiu um pedaço… 😬' },
   leak: { title: 'Tapem as goteiras!', emoji: '💧', ok: 'Goteiras tapadas! 🙌', fail: 'A água estragou material… 😬' },
 };
 /** Quanto material cada fase pede: cresce com o número de jogadores (mesmo quem entra no meio). */
-const needFor = (n: number): Record<ItemType, number> => ({ stone: 6 + 3 * n, brick: 10 + 5 * n, tile: 8 + 4 * n, wood: 3 + 2 * n, glass: 2 + n });
+const needFor = (n: number): Record<ItemType, number> => ({ stone: 15 + 8 * n, brick: 26 + 13 * n, tile: 20 + 10 * n, wood: 8 + 5 * n, glass: 5 + 3 * n });
+/** Pacote sorteado: a maioria x1, alguns x4 e poucos x10. */
+const rollQty = () => { const r = Math.random(); return r < 0.08 ? 10 : r < 0.36 ? 4 : 1; };
 
 export interface Result { id: string; slot: number; name: string; pts: number; delivered: number; suggest: number }
 
@@ -84,12 +103,20 @@ export class Game {
   items: Item[] = [];
   ants: Ant[] = [];
   floaters: Floater[] = [];
-  rain: { x: number; y: number }[] = [];
+  rain: { x: number; y: number; light?: boolean }[] = [];
   sparks: { x: number; y: number; vx: number; vy: number; t: number; c: string }[] = [];
   movers: Mover[] = [];
   tramp = [0, 0];
   balloon: Balloon | null = null;
   balloonT = 0;
+  powerT = 0;
+  shots: Shot[] = [];
+  swarms: Swarm[] = [];
+  boulders: Boulder[] = [];
+  bolts: Bolt[] = [];
+  boulderT = 0;
+  boltT = 0;
+  fogCv: HTMLCanvasElement | null = null;
   t = 0;            // relógio geral
   modeT = 0;        // tempo no modo atual
   countdown = 0;
@@ -121,6 +148,7 @@ export class Game {
   private buzzAll(kind: BuzzMsg['kind']) { this.players.forEach((p) => this.onBuzz(p.id, kind)); }
   private once(key: string, fn: () => void) { if (!this.fired.has(key)) { this.fired.add(key); fn(); } }
   private setMode(m: Mode) { this.mode = m; this.modeT = 0; this.fired.clear(); }
+  private clearHazards() { this.items = []; this.ants = []; this.balloon = null; this.shots = []; this.swarms = []; this.boulders = []; this.bolts = []; }
 
   /* ---------------- jogadores ---------------- */
 
@@ -141,6 +169,7 @@ export class Game {
       input: { l: false, r: false, j: false }, prevJ: false, carry: null, pts: g?.pts ?? 0, picks: g?.picks ?? 0, delivered: g?.delivered ?? 0,
       dizzy: 0, walk: 0, lastSeen: this.t, happy: 0,
       task: g?.task ?? null, helping: g?.helping ?? false, mine: g?.mine ?? 0, taps: g?.taps ?? 0, budget: 20, budgetT: this.t, work: 0, chTaps: 0,
+      power: g?.power ?? null, powerT: 0, fx: NO_FX(), size: 1, hitCd: 0,
     };
     this.ghosts.delete(id);
     this.players.set(id, p);
@@ -162,8 +191,8 @@ export class Game {
     if (!p) return;
     if (p.carry) this.drop(p);
     if (this.mode === 'play' || this.mode === 'finale' || this.mode === 'results') {
-      const { x, y, pts, picks, delivered, task, helping, mine, taps, slot } = p;
-      this.ghosts.set(id, { x, y: Math.min(y, GROUND), pts, picks, delivered, task, helping, mine, taps, slot });
+      const { x, y, pts, picks, delivered, task, helping, mine, taps, slot, power } = p;
+      this.ghosts.set(id, { x, y: Math.min(y, GROUND), pts, picks, delivered, task, helping, mine, taps, slot, power });
     }
     this.players.delete(id);
     if (!this.players.size && this.mode !== 'results' && this.mode !== 'finale') this.toAttract();
@@ -195,10 +224,71 @@ export class Game {
     if (this.phase >= PHASES.length && !this.finished) this.finishTaps(p, k);
   }
 
+  /* ---------------- poderes ---------------- */
+
+  /** Usa o poder guardado: os de ajuda valem para quem usa; os de atrapalhar vão no jogador mais perto. */
+  usePower(id: string) {
+    const p = this.players.get(id);
+    if (!p || !p.power || this.mode !== 'play') return;
+    const pw = p.power, P = POWERS[pw];
+    p.lastSeen = this.t;
+    if (P.self) {
+      p.power = null;
+      this.applyPower(p, pw);
+      this.float(p.x, p.y - 210 * p.size, `${P.emoji} ${P.label}!`, P.color);
+      this.onBuzz(p.id, 'zap');
+      return;
+    }
+    let best: Player | null = null, bd = Infinity;
+    this.players.forEach((q) => { if (q !== p) { const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = q; } } });
+    if (!best) { this.float(p.x, p.y - 210, 'Ninguém por perto…', C.muted); return; }
+    p.power = null;
+    const target = best as Player;
+    this.shots.push({ x: p.x, y: p.y - 90 * p.size, from: p.id, to: target.id, power: pw, t: 0 });
+    this.sfx('zap'); this.onBuzz(p.id, 'zap');
+  }
+
+  private applyPower(q: Player, pw: PowerId, from?: Player) {
+    const f = q.fx, P = POWERS[pw];
+    if (!P.self && f.shield > 0) {
+      this.float(q.x, q.y - 200 * q.size, 'Bloqueado! 🛡️', '#2F8FD0'); this.sfx('block');
+      return;
+    }
+    switch (pw) {
+      case 'freeze': f.frozen = P.dur; q.vx = 0; this.dropFrom(q); this.sfx('freeze'); break;
+      case 'fire': f.burn = P.dur; this.dropFrom(q); this.sfx('fire'); break;
+      case 'shrink': f.tiny = P.dur; f.giant = 0; this.sfx('shrink'); break;
+      case 'speed': f.fast = P.dur; this.sfx('speed'); break;
+      case 'giant': f.giant = P.dur; f.tiny = 0; this.sfx('grow'); break;
+      case 'magnet': f.magnet = P.dur; this.sfx('magnet'); break;
+      case 'shield': f.shield = P.dur; f.frozen = 0; f.burn = 0; f.tiny = 0; f.slow = 0; this.sfx('shield'); break;
+    }
+    if (from) {
+      from.pts += 1;
+      this.float(q.x, q.y - 200 * q.size, `${P.emoji} ${P.label}!`, P.color);
+      this.onBuzz(q.id, 'hit');
+    }
+    this.burst(q.x, q.y - 80 * q.size, P.color, 16);
+  }
+
+  /** Algum perigo acertou o jogador (abelha, pedra, raio, formiga). */
+  private ouch(p: Player, opts: { slow?: number; lose?: number; dizzy?: number; knock?: number; text?: string }) {
+    if (p.fx.shield > 0 || p.hitCd > 0) return false;
+    p.hitCd = 1.2;
+    if (opts.slow) p.fx.slow = Math.max(p.fx.slow, opts.slow);
+    if (opts.dizzy) p.dizzy = Math.max(p.dizzy, opts.dizzy);
+    if (opts.lose) { const l = Math.min(p.pts, opts.lose); p.pts -= l; }
+    if (opts.knock) { p.vx = opts.knock; p.vy = -560; p.onGround = false; p.mover = -1; }
+    this.dropFrom(p);
+    this.float(p.x, p.y - 200 * p.size, opts.text ?? 'Ai!', C.terra);
+    this.onBuzz(p.id, 'stomped'); this.sfx('ouch');
+    return true;
+  }
+
   /* ---------------- modos ---------------- */
 
-  toAttract() { this.setMode('attract'); this.items = []; this.ants = []; this.balloon = null; this.ghosts.clear(); }
-  toLobby(sec = LOBBY_TIME) { this.setMode('lobby'); this.countdown = sec; this.items = []; this.ants = []; this.balloon = null; this.resetHouse(); }
+  toAttract() { this.setMode('attract'); this.clearHazards(); this.ghosts.clear(); }
+  toLobby(sec = LOBBY_TIME) { this.setMode('lobby'); this.countdown = sec; this.clearHazards(); this.resetHouse(); this.players.forEach((p) => { p.fx = NO_FX(); p.power = null; }); }
   startNow() { if (this.mode === 'lobby' || this.mode === 'attract') this.startPlay(); }
 
   private resetHouse() {
@@ -209,31 +299,31 @@ export class Game {
 
   startPlay() {
     if (!this.players.size) return;
-    this.setMode('play'); this.items = []; this.ants = []; this.balloon = null; this.resetHouse(); this.ghosts.clear();
+    this.setMode('play'); this.clearHazards(); this.resetHouse(); this.ghosts.clear();
     this.peak = this.players.size;
     this.need = needFor(Math.max(2, this.peak));
-    this.players.forEach((p) => { p.pts = 0; p.picks = 0; p.delivered = 0; p.carry = null; p.task = null; p.helping = false; p.mine = 0; p.taps = 0; p.chTaps = 0; });
+    this.players.forEach((p) => { p.pts = 0; p.picks = 0; p.delivered = 0; p.carry = null; p.task = null; p.helping = false; p.mine = 0; p.taps = 0; p.chTaps = 0; p.power = null; p.fx = NO_FX(); });
+    // desafios: terremoto e chuva fixos (têm desafio de toque); os outros sorteados nos demais horários
+    const bag: EventType[] = ['drizzle', 'wind', 'boulders', 'ants', 'bees', 'fog', 'lightning', 'wind', 'boulders', 'bees', 'ants'].sort(() => Math.random() - 0.5) as EventType[];
+    const slots = [16, 32, 47, 63, 80, 114, 152, 169, 184, 200, 214];
     const dirs = () => (Math.random() < 0.5 ? 1 : -1) as 1 | -1;
     this.events = [
-      { at: 30, type: 'wind', dur: 7, dir: dirs() },
-      { at: 62, type: 'ants', dur: 14 },
-      { at: 98, type: 'quake', dur: 7 },
-      { at: 132, type: 'rain', dur: 14 },
-      { at: 172, type: 'wind', dur: 7, dir: dirs() },
-      { at: 200, type: 'ants', dur: 12 },
-    ];
+      ...slots.map((at, i) => ({ at, type: bag[i], dur: EVENT_INFO[bag[i]].dur, dir: dirs() })),
+      { at: 98, type: 'quake' as EventType, dur: 7 },
+      { at: 132, type: 'rain' as EventType, dur: 14 },
+    ].sort((a, b) => a.at - b.at);
     this.chs = [
       { kind: 'quake', at: 98, dur: 7, need: 0, have: 0 },
       { kind: 'leak', at: 136, dur: 7, need: 0, have: 0 },
     ];
-    this.spawnT = 0.5; this.balloonT = 16;
+    this.spawnT = 0.5; this.balloonT = 16; this.powerT = 9;
     this.sfx('go');
   }
 
   private toFinale() {
     this.setMode('finale');
-    this.players.forEach((p) => { p.carry = null; p.work = 0; });
-    this.items = []; this.ants = []; this.balloon = null;
+    this.players.forEach((p) => { p.carry = null; p.work = 0; p.fx = NO_FX(); p.power = null; });
+    this.clearHazards();
     this.sfx('storm'); this.buzzAll('storm');
   }
 
@@ -268,6 +358,19 @@ export class Game {
 
   ranking() { return Array.from(this.players.values()).sort((a, b) => b.pts - a.pts); }
 
+  private fxText(p: Player): string | undefined {
+    const f = p.fx;
+    if (f.frozen > 0) return 'Você está congelado! ❄️';
+    if (f.burn > 0) return 'Pegando fogo! Mais lento 🔥';
+    if (f.tiny > 0) return 'Você está minúsculo! 🔻';
+    if (f.giant > 0) return 'Você está gigante! 🍄';
+    if (f.fast > 0) return 'Turbo ligado! ⚡';
+    if (f.shield > 0) return 'Escudo ativo 🛡️';
+    if (f.magnet > 0) return 'Ímã puxando material 🧲';
+    if (f.slow > 0) return 'Mais lento por um tempinho 🐌';
+    return undefined;
+  }
+
   stateFor(id: string): StateMsg | null {
     const p = this.players.get(id);
     if (!p) return null;
@@ -289,6 +392,8 @@ export class Game {
       phase: play ? (PHASES[this.phase]?.title ?? FINISH_TITLE) : undefined,
       suggest: this.mode === 'results' ? r?.suggest : undefined,
       complete: this.complete, fin, ch,
+      power: play && p.power ? p.power : undefined,
+      fx: play ? this.fxText(p) : undefined,
     };
   }
 
@@ -310,7 +415,10 @@ export class Game {
       if (this.countdown <= 0) this.startPlay();
     } else if (this.mode === 'play') {
       const before = Math.ceil(this.timeLeft + dt);
-      if (this.phase < PHASES.length) { this.stepEvents(dt); this.stepChallenges(); this.stepSpawn(dt); this.stepBalloon(dt); }
+      if (this.phase < PHASES.length) {
+        this.stepEvents(dt); this.stepChallenges(); this.stepSpawn(dt); this.stepBalloon(dt); this.stepPowers(dt);
+        this.stepHazards(dt);
+      }
       const tl = Math.ceil(this.timeLeft);
       if (tl !== before && tl <= 10 && tl > 0) this.sfx('beep');
       if (this.modeT >= PLAY_TIME || (this.finished && this.t - this.finishedAt > 3.5)) this.toFinale();
@@ -327,6 +435,11 @@ export class Game {
       this.players.forEach((p) => {
         if (p.bot) this.botThink(p);
         p.work = Math.max(0, p.work - dt * 4);
+        p.hitCd = Math.max(0, p.hitCd - dt);
+        (Object.keys(p.fx) as (keyof Fx)[]).forEach((k) => (p.fx[k] = Math.max(0, p.fx[k] - dt)));
+        const target = p.fx.giant > 0 ? 1.55 : p.fx.tiny > 0 ? 0.55 : 1;
+        p.size += (target - p.size) * Math.min(1, dt * 8);
+        if (p.fx.burn > 0 && Math.random() < dt * 14) this.sparks.push({ x: p.x + (Math.random() - 0.5) * 40 * p.size, y: p.y - 120 * p.size, vx: (Math.random() - 0.5) * 60, vy: -260, t: 0.2, c: Math.random() < 0.5 ? '#F26B1D' : '#F2C230' });
         if (finishing && p.task) this.stepStation(p, dt); else this.stepPlayer(p, dt);
       });
       this.stepStomps();
@@ -373,10 +486,12 @@ export class Game {
         // quem está carregando pode deixar cair
         const chance = e.type === 'wind' ? 0.3 : e.type === 'quake' ? 0.4 : 0;
         this.players.forEach((p) => { if (p.carry && Math.random() < chance) { this.drop(p); this.float(p.x, p.y - 170, 'Ops!', C.terra); } });
-        if (e.type === 'ants') { this.ants.push({ x: -40, dir: 1, carry: null, flee: false }, { x: W + 40, dir: -1, carry: null, flee: false }); this.sfx('ant'); }
-        if (e.type === 'wind') this.sfx('wind');
-        if (e.type === 'rain') this.sfx('rain');
-        if (e.type === 'quake') { this.sfx('quake'); this.buzzAll('storm'); }
+        if (e.type === 'ants') this.ants.push({ x: -40, dir: 1, carry: null, flee: false }, { x: W + 40, dir: -1, carry: null, flee: false });
+        if (e.type === 'bees') { const n = this.players.size > 4 ? 2 : 1; for (let i = 0; i < n; i++) this.swarms.push({ x: i ? W + 60 : -60, y: 300, target: null, t: 0 }); }
+        if (e.type === 'boulders') this.boulderT = 0;
+        if (e.type === 'lightning') this.boltT = 0.6;
+        this.sfx(EVENT_INFO[e.type].sfx);
+        if (e.type === 'quake') this.buzzAll('storm');
       }
     }
     const q = this.active('quake');
@@ -385,13 +500,79 @@ export class Game {
       if (Math.random() < dt * 3) this.players.forEach((p) => { if (p.onGround && Math.random() < 0.5) { p.vy = -380; p.onGround = false; p.mover = -1; } });
       if (Math.random() < dt * 2) this.items.forEach((it) => { if (it.rest && Math.random() < 0.4) { it.rest = false; it.mover = -1; it.vy = -300; it.vx = (Math.random() - 0.5) * 300; } });
     }
-    const r = this.active('rain');
-    if (r) {
+    if (this.active('rain')) {
       for (let i = 0; i < 6; i++) this.rain.push({ x: Math.random() * (W + 300), y: -20 });
       if (Math.random() < dt * 0.25) this.sfx('thunder');
     }
-    this.rain.forEach((d) => { d.y += 1500 * dt; d.x -= 300 * dt; });
+    if (this.active('drizzle') && Math.random() < 0.6) this.rain.push({ x: Math.random() * (W + 300), y: -20, light: true });
+    this.rain.forEach((d) => { d.y += (d.light ? 900 : 1500) * dt; d.x -= (d.light ? 120 : 300) * dt; });
     this.rain = this.rain.filter((d) => d.y < H);
+  }
+
+  /** Abelhas, pedras rolando e raios. */
+  private stepHazards(dt: number) {
+    const live = Array.from(this.players.values());
+    // abelhas: perseguem o jogador mais perto (mais devagar que quem corre)
+    const beesOn = !!this.active('bees');
+    for (const s of this.swarms) {
+      s.t += dt;
+      if (!beesOn) { s.y -= 300 * dt; s.x += (s.x < W / 2 ? -1 : 1) * 300 * dt; continue; }
+      let tg = live.find((p) => p.id === s.target);
+      if (!tg || Math.random() < dt * 0.3) {
+        let bd = Infinity; tg = undefined;
+        for (const p of live) { const d = Math.hypot(p.x - s.x, p.y - 80 - s.y); if (d < bd && p.hitCd <= 0) { bd = d; tg = p; } }
+        s.target = tg?.id ?? null;
+      }
+      if (tg) {
+        const dx = tg.x - s.x, dy = tg.y - 80 * tg.size - s.y, d = Math.hypot(dx, dy) || 1;
+        const sp = 250 + Math.sin(s.t * 3) * 40;
+        s.x += (dx / d) * sp * dt + Math.sin(s.t * 9) * 2; s.y += (dy / d) * sp * dt + Math.cos(s.t * 7) * 2;
+        if (d < 55 * tg.size) { if (this.ouch(tg, { slow: 2.5, lose: 2, dizzy: 0.8, text: 'Picada! -2 🐝' })) s.target = null; }
+      }
+    }
+    this.swarms = this.swarms.filter((s) => s.y > -200 && s.x > -200 && s.x < W + 200);
+    // pedras rolando pelo chão (dos dois lados até a rocha)
+    if (this.active('boulders')) {
+      this.boulderT -= dt;
+      if (this.boulderT <= 0) { this.boulderT = 1.6 + Math.random() * 1.2; const dir = (Math.random() < 0.5 ? 1 : -1) as 1 | -1; this.boulders.push({ x: dir > 0 ? -40 : W + 40, dir, rot: 0 }); this.sfx('boulder'); }
+    }
+    for (const b of this.boulders) {
+      b.x += b.dir * 520 * dt; b.rot += b.dir * 520 * dt / 34;
+      for (const p of live) if (Math.abs(p.x - b.x) < 40 * Math.max(1, p.size) && p.y > GROUND - 50 && p.y <= GROUND + 2) this.ouch(p, { knock: b.dir * 650, dizzy: 1, lose: 1, text: 'Pedrada! -1' });
+    }
+    this.boulders = this.boulders.filter((b) => {
+      const hitRock = (b.dir > 0 && b.x > ROCK.x0 - 30) || (b.dir < 0 && b.x < ROCK.x1 + 30);
+      if (hitRock) { this.burst(b.x, GROUND - 30, '#8f887d', 14); this.sfx('crash'); }
+      return !hitRock && b.x > -80 && b.x < W + 80;
+    });
+    // raios: marcam um círculo vermelho embaixo de alguém e caem 1,1s depois
+    if (this.active('lightning')) {
+      this.boltT -= dt;
+      if (this.boltT <= 0 && live.length) {
+        this.boltT = 1.1 + Math.random() * 0.8;
+        const p = pickOne(live);
+        this.bolts.push({ x: p.x, y: p.onGround ? p.y : GROUND, t: 0, hit: false });
+      }
+    }
+    for (const b of this.bolts) {
+      b.t += dt;
+      if (!b.hit && b.t >= 1.1) {
+        b.hit = true; this.shake = 0.25; this.sfx('lightning');
+        for (const p of live) if (Math.abs(p.x - b.x) < 62 && p.y > b.y - 260 && p.y <= b.y + 4) this.ouch(p, { dizzy: 1.2, lose: 1, text: 'Raio! -1 ⚡' });
+      }
+    }
+    this.bolts = this.bolts.filter((b) => b.t < 1.4);
+    // tiros de poder
+    for (const s of this.shots) {
+      const q = this.players.get(s.to);
+      if (!q) { s.t = 99; continue; }
+      s.t += dt;
+      const tx = q.x, ty = q.y - 80 * q.size, dx = tx - s.x, dy = ty - s.y, d = Math.hypot(dx, dy) || 1;
+      const sp = 1500 * dt;
+      if (d <= sp + 30) { s.t = 99; this.applyPower(q, s.power, this.players.get(s.from)); }
+      else { s.x += (dx / d) * sp; s.y += (dy / d) * sp; }
+    }
+    this.shots = this.shots.filter((s) => s.t < 3);
   }
 
   /** Desafios de toque: todo mundo toca rápido no celular para salvar a obra. */
@@ -409,7 +590,7 @@ export class Game {
           this.players.forEach((p) => { if (p.chTaps > 0) { p.pts += 3; p.happy = 1.2; this.float(p.x, p.y - 190, '+3', CHARS[p.slot].color); } });
           this.flash(info.ok, C.olive); this.burst(960, ROCK.top - 260, C.olive, 36); this.sfx('chWin');
         } else {
-          PHASES[this.phase]?.types.forEach((k) => (this.have[k] = Math.max(0, this.have[k] - Math.ceil(this.need[k] * 0.2))));
+          PHASES[this.phase]?.types.forEach((k) => (this.have[k] = Math.max(0, this.have[k] - Math.ceil(this.need[k] * 0.15))));
           this.flash(info.fail, C.terra); this.shake = 0.6; this.sfx('chFail');
         }
       }
@@ -430,24 +611,35 @@ export class Game {
     });
   }
 
+  private spots(): [number, number][] {
+    return [[160, 660], [1250, 1760], ...PLATS.map((p) => [p.x + 24, p.x + p.w - 24] as [number, number]),
+      [TRAMPS[0].x + 20, TRAMPS[0].x + TRAMPS[0].w - 20], [TRAMPS[1].x + 20, TRAMPS[1].x + TRAMPS[1].w - 20],
+      ...this.movers.map((m) => [m.x + 20, m.x + m.w - 20] as [number, number])];
+  }
+
   private stepSpawn(dt: number) {
     const n = Math.max(1, this.players.size);
     this.spawnT -= dt;
     const cap = Math.min(16, 4 + n);
-    if (this.spawnT > 0 || this.items.length >= cap) return;
+    if (this.spawnT > 0 || this.items.filter((i) => !i.power).length >= cap) return;
     this.spawnT = Math.max(0.45, 2.2 / Math.sqrt(n)) * (0.7 + Math.random() * 0.6);
     const types = this.currentTypes();
     if (!types.length) return;
-    const type = types[Math.floor(Math.random() * types.length)];
-    // onde cair: plataformas, chão (fora da obra), em cima das camas elásticas e das plataformas que se movem
-    const spots: [number, number][] = [[160, 660], [1250, 1760], ...PLATS.map((p) => [p.x + 24, p.x + p.w - 24] as [number, number]),
-      [TRAMPS[0].x + 20, TRAMPS[0].x + TRAMPS[0].w - 20], [TRAMPS[1].x + 20, TRAMPS[1].x + TRAMPS[1].w - 20],
-      ...this.movers.map((m) => [m.x + 20, m.x + m.w - 20] as [number, number])];
-    const [a, b] = spots[Math.floor(Math.random() * spots.length)];
-    this.items.push({ id: this.nextItem++, type, gold: Math.random() < 0.08, x: a + Math.random() * (b - a), y: -40, vx: 0, vy: 0, rest: false, age: 0, onGroundFloor: false, mover: -1 });
+    const [a, b] = pickOne(this.spots());
+    this.items.push({ id: this.nextItem++, type: pickOne(types), qty: rollQty(), x: a + Math.random() * (b - a), y: -40, vx: 0, vy: 0, rest: false, age: 0, onGroundFloor: false, mover: -1 });
   }
 
-  /** De tempos em tempos um balão cruza o céu com material dourado pendurado. */
+  /** Bolhas de poder caem de tempos em tempos (no máximo 2 na tela). */
+  private stepPowers(dt: number) {
+    this.powerT -= dt;
+    if (this.powerT > 0) return;
+    this.powerT = 9 + Math.random() * 7;
+    if (this.items.filter((i) => i.power).length >= 2) return;
+    const [a, b] = pickOne(this.spots());
+    this.items.push({ id: this.nextItem++, type: 'stone', qty: 0, power: pickOne(POWER_IDS), x: a + Math.random() * (b - a), y: -40, vx: 0, vy: 0, rest: false, age: 0, onGroundFloor: false, mover: -1 });
+  }
+
+  /** De tempos em tempos um balão cruza o céu com um pacote x10 pendurado. */
   private stepBalloon(dt: number) {
     if (!this.balloon) {
       this.balloonT -= dt;
@@ -455,7 +647,7 @@ export class Game {
       if (this.balloonT > 0 || !types.length) return;
       const dir = (Math.random() < 0.5 ? 1 : -1) as 1 | -1;
       const x = dir > 0 ? -80 : W + 80;
-      this.balloon = { x, y: 236, dir, item: { id: this.nextItem++, type: types[Math.floor(Math.random() * types.length)], gold: true, x, y: 340, vx: 0, vy: 0, rest: false, age: 0, onGroundFloor: false, mover: -1, float: true } };
+      this.balloon = { x, y: 236, dir, item: { id: this.nextItem++, type: pickOne(types), qty: 10, x, y: 340, vx: 0, vy: 0, rest: false, age: 0, onGroundFloor: false, mover: -1, float: true } };
       this.balloonT = 24; this.sfx('balloon');
       return;
     }
@@ -484,20 +676,24 @@ export class Game {
   private stepPlayer(p: Player, dt: number) {
     const rain = !!this.active('rain');
     const wind = this.active('wind');
-    const dir = (p.input.r ? 1 : 0) - (p.input.l ? 1 : 0);
-    const stunned = p.dizzy > 0;
+    const f = p.fx;
+    const frozen = f.frozen > 0;
+    const dir = frozen ? 0 : (p.input.r ? 1 : 0) - (p.input.l ? 1 : 0);
+    const stunned = p.dizzy > 0 || frozen;
     p.dizzy = Math.max(0, p.dizzy - dt); p.happy = Math.max(0, p.happy - dt);
-    const acc = p.onGround ? (rain ? 900 : 3400) : 1900;
+    const spd = (f.fast > 0 ? 1.6 : 1) * (f.burn > 0 ? 0.55 : 1) * (f.tiny > 0 ? 0.8 : 1) * (f.slow > 0 ? 0.6 : 1) * (this.active('drizzle') ? 0.72 : 1);
+    const acc = (p.onGround ? (rain ? 900 : 3400) : 1900) * Math.max(0.7, spd);
     if (dir && !stunned) { p.vx += dir * acc * dt; p.face = dir as 1 | -1; }
-    else if (p.onGround) { const dec = (rain ? 500 : 3800) * dt; p.vx = Math.abs(p.vx) <= dec ? 0 : p.vx - Math.sign(p.vx) * dec; }
-    if (wind) p.vx += (wind.dir ?? 1) * 1500 * dt;
-    const lim = MAXV + (wind ? 160 : 0);
+    else if (p.onGround || frozen) { const dec = (rain && !frozen ? 500 : 3800) * dt; p.vx = Math.abs(p.vx) <= dec ? 0 : p.vx - Math.sign(p.vx) * dec; }
+    if (wind && !frozen) p.vx += (wind.dir ?? 1) * 1500 * dt * (f.giant > 0 ? 0.4 : f.tiny > 0 ? 1.4 : 1);
+    const lim = MAXV * spd + (wind ? 160 : 0);
     p.vx = Math.max(-lim, Math.min(lim, p.vx));
     // pulo (com tolerância na borda), pulo duplo no ar e pulo mais baixo se soltar cedo
+    const jm = (f.fast > 0 ? 1.08 : 1) * (f.tiny > 0 ? 0.88 : 1) * (f.giant > 0 ? 1.06 : 1);
     p.coyote = p.onGround ? 0.09 : Math.max(0, p.coyote - dt);
     if (p.input.j && !p.prevJ && !stunned) {
-      if (p.onGround || p.coyote > 0) { p.vy = JUMP; p.onGround = false; p.coyote = 0; p.jumps = 1; p.boost = false; p.mover = -1; this.sfx('jump'); }
-      else if (p.jumps < 2) { p.vy = JUMP * 0.9; p.jumps = 2; p.boost = false; this.puff(p.x, p.y); this.sfx('jump2'); }
+      if (p.onGround || p.coyote > 0) { p.vy = JUMP * jm; p.onGround = false; p.coyote = 0; p.jumps = 1; p.boost = false; p.mover = -1; this.sfx('jump'); }
+      else if (p.jumps < 2) { p.vy = JUMP * 0.9 * jm; p.jumps = 2; p.boost = false; this.puff(p.x, p.y); this.sfx('jump2'); }
     }
     if (!p.input.j && !p.boost && p.vy < CUT) p.vy = CUT;
     if (p.vy >= 0) p.boost = false;
@@ -511,7 +707,7 @@ export class Game {
     const land = this.land(p.x, prevY, p.y, p.vy);
     if (land) {
       p.y = land.y; p.vy = 0; p.onGround = true; p.mover = land.m; p.jumps = 0;
-      if (land.tramp >= 0) { // cama elástica: lá vai para o alto
+      if (land.tramp >= 0 && !frozen) { // cama elástica: lá vai para o alto
         p.vy = TRAMP_V; p.onGround = false; p.boost = true; p.jumps = 1; p.mover = -1;
         this.tramp[land.tramp] = 1; this.sfx('boing'); this.onBuzz(p.id, 'boing');
       }
@@ -522,27 +718,34 @@ export class Game {
       if (p.y - rs <= 36 && p.vy >= 0) { p.y = rs; p.vy = 0; p.onGround = true; p.jumps = 0; p.mover = -1; }
       else { p.x = p.x < (ROCK.x0 + ROCK.x1) / 2 ? ROCK.x0 - 18 : ROCK.x1 + 18; p.vx = 0; }
     }
-    p.walk = p.onGround && Math.abs(p.vx) > 30 ? p.walk + dt * 14 : 0;
+    p.walk = p.onGround && Math.abs(p.vx) > 30 ? p.walk + dt * 14 * Math.min(1.6, spd) : 0;
+    if (f.fast > 0 && Math.abs(p.vx) > 200 && Math.random() < 0.5) this.sparks.push({ x: p.x - p.face * 30, y: p.y - 60 * p.size - Math.random() * 60, vx: -p.face * 200, vy: -40, t: 0.4, c: '#ffffff' });
 
     if (this.mode !== 'play') return;
+    const reach = 44 * Math.max(1, p.size), tall = 120 * Math.max(0.7, p.size);
+    const near = (i: Item) => Math.abs(i.x - p.x) < reach && i.y > p.y - tall && i.y < p.y + 20;
+    // pegar poder (fica guardado; não ocupa as mãos)
+    if (!p.power && !frozen) {
+      const pw = this.items.find((i) => i.power && near(i));
+      if (pw) {
+        this.items = this.items.filter((i) => i !== pw);
+        p.power = pw.power!;
+        const P = POWERS[p.power];
+        this.float(p.x, p.y - 200 * p.size, `${P.emoji} ${P.label}`, P.color);
+        this.onBuzz(p.id, 'power'); this.sfx('power');
+      }
+    }
     // pegar material (também o do balão)
     if (!p.carry && !stunned) {
-      const near = (i: Item) => Math.abs(i.x - p.x) < 44 && i.y > p.y - 120 && i.y < p.y + 20;
       const b = this.balloon;
-      if (b?.item && near(b.item)) {
-        const it = b.item; b.item = null; it.float = false;
+      let it: Item | undefined;
+      if (b?.item && near(b.item)) { it = b.item; b.item = null; it.float = false; }
+      else { it = this.items.find((i) => !i.power && near(i)); if (it) this.items = this.items.filter((i) => i !== it); }
+      if (it) {
         p.carry = it; p.pts += 1; p.picks++;
-        this.float(p.x, p.y - 190, '+1 ✨', CHARS[p.slot].color);
-        this.burst(p.x, p.y - 150, '#F3C64A', 22);
-        this.onBuzz(p.id, 'gold'); this.sfx('gold');
-      } else {
-        const it = this.items.find(near);
-        if (it) {
-          this.items = this.items.filter((i) => i !== it);
-          p.carry = it; p.pts += 1; p.picks++;
-          this.float(p.x, p.y - 190, '+1', CHARS[p.slot].color);
-          this.onBuzz(p.id, it.gold ? 'gold' : 'pick'); this.sfx(it.gold ? 'gold' : 'pick');
-        }
+        this.float(p.x, p.y - 190 * p.size, it.qty > 1 ? `+1 · x${it.qty}` : '+1', CHARS[p.slot].color);
+        if (it.qty >= 10) this.burst(p.x, p.y - 150, '#F3C64A', 22);
+        this.onBuzz(p.id, it.qty >= 4 ? 'gold' : 'pick'); this.sfx(it.qty >= 4 ? 'gold' : 'pick');
       }
     }
     // entregar na obra (o bonequinho continua onde está)
@@ -550,12 +753,12 @@ export class Game {
       const it = p.carry; p.carry = null;
       const types = this.currentTypes();
       const type = types.includes(it.type) ? it.type : types[0];
-      const val = it.gold ? 3 : 1;
-      if (type) this.have[type] = Math.min(this.need[type], this.have[type] + val);
-      p.pts += 2 * val; p.delivered += val; p.happy = 1;
-      this.float(p.x, p.y - 190, `+${2 * val}`, CHARS[p.slot].color);
-      this.burst(960, ROCK.top - 200, it.gold ? '#F3C64A' : C.terra);
-      this.onBuzz(p.id, 'deliver'); this.sfx('deliver');
+      if (type) this.have[type] = Math.min(this.need[type], this.have[type] + it.qty);
+      const pts = DELIVER_PTS[it.qty] ?? 2;
+      p.pts += pts; p.delivered += it.qty; p.happy = 1;
+      this.float(p.x, p.y - 190 * p.size, `+${pts}${it.qty > 1 ? ` (${it.qty} de uma vez!)` : ''}`, CHARS[p.slot].color);
+      this.burst(960, ROCK.top - 200, it.qty >= 10 ? '#F3C64A' : it.qty >= 4 ? '#4FA3DD' : C.terra, 10 + it.qty * 2);
+      this.onBuzz(p.id, 'deliver'); this.sfx(it.qty >= 4 ? 'deliverBig' : 'deliver');
       this.checkPhase();
     }
   }
@@ -567,7 +770,7 @@ export class Game {
       const next = PHASES[this.phase];
       // material que sobrou da fase anterior vira o da próxima
       if (next) {
-        this.items = this.items.filter((i) => next.types.includes(i.type));
+        this.items = this.items.filter((i) => i.power || next.types.includes(i.type));
         this.players.forEach((p) => { if (p.carry && !next.types.includes(p.carry.type)) p.carry.type = next.types[0]; });
         if (this.balloon?.item && !next.types.includes(this.balloon.item.type)) this.balloon.item.type = next.types[0];
         this.flash(`${next.title}`, C.terra); this.sfx('phase');
@@ -578,10 +781,10 @@ export class Game {
   /* ---------------- acabamento (fase 5) ---------------- */
 
   private startFinish() {
-    this.items = []; this.ants = []; this.balloon = null; this.rain = [];
+    this.clearHazards(); this.rain = [];
     this.chs.forEach((c) => { c.started = true; c.ended = true; });
     TASKS.forEach((t) => (this.fin[t.id] = { need: 0, have: 0 }));
-    Array.from(this.players.values()).sort((a, b) => a.slot - b.slot).forEach((p, i) => { p.carry = null; this.assign(p, TASKS[i % TASKS.length].id); });
+    Array.from(this.players.values()).sort((a, b) => a.slot - b.slot).forEach((p, i) => { p.carry = null; p.fx = NO_FX(); p.power = null; this.assign(p, TASKS[i % TASKS.length].id); });
     // com menos de 4 jogadores, as equipes sem ninguém ficam para quem terminar primeiro
     TASKS.forEach((t) => { if (!this.fin[t.id].need) this.fin[t.id].need = 40; });
     this.flash('Acabamento! Toquem rápido no celular 📱', C.terra);
@@ -610,7 +813,7 @@ export class Game {
     p.work = 1;
     const T = TASK[p.task ?? 'paint'];
     const cols: Record<TaskId, string[]> = { paint: ['#FBF1E1', '#E26D9A', '#F2DFC4'], light: ['#FFE28A', '#F2A541', '#fff'], garden: ['#5E8C3A', '#8FBF5A', '#E25B45'], decor: ['#E26D9A', '#F2A541', '#7B3FA0', '#2F8FD0'] };
-    for (let i = 0; i < 3; i++) { const c = cols[T.id]; this.sparks.push({ x: p.x + p.face * 40, y: p.y - 100, vx: (Math.random() - 0.5) * 300, vy: -200 - Math.random() * 300, t: 0, c: c[Math.floor(Math.random() * c.length)] }); }
+    for (let i = 0; i < 3; i++) { const c = cols[T.id]; this.sparks.push({ x: p.x + p.face * 40, y: p.y - 100, vx: (Math.random() - 0.5) * 300, vy: -200 - Math.random() * 300, t: 0, c: pickOne(c) }); }
     if (Math.random() < 0.35) this.sfx('tap');
     if (TASKS.every((t) => this.fin[t.id].have >= this.fin[t.id].need)) {
       this.finished = true; this.finishedAt = this.t;
@@ -647,13 +850,16 @@ export class Game {
     if (this.mode !== 'play' || this.phase >= PHASES.length) return;
     const arr = Array.from(this.players.values());
     for (const a of arr) {
-      if (a.vy < 150) continue;
+      if (a.vy < 150 || a.fx.frozen > 0) continue;
       for (const b of arr) {
         if (a === b || b.dizzy > 0) continue;
-        if (Math.abs(a.x - b.x) < 36 && a.y > b.y - 150 && a.y < b.y - 100) {
-          a.vy = -800; a.pts += 1; a.jumps = 1;
+        const head = 150 * b.size, w = 36 * Math.max(a.size, b.size);
+        if (Math.abs(a.x - b.x) < w && a.y > b.y - head && a.y < b.y - head + 50) {
+          a.vy = -800; a.jumps = 1;
+          if (b.fx.shield > 0) { this.float(b.x, b.y - 200, 'Bloqueado! 🛡️', '#2F8FD0'); this.sfx('block'); continue; }
+          a.pts += 1;
           if (b.carry) this.drop(b, a.face);
-          b.dizzy = 1.1;
+          b.dizzy = a.size > 1.3 ? 1.8 : 1.1;
           this.float(a.x, a.y - 190, '+1', CHARS[a.slot].color);
           this.onBuzz(a.id, 'stomp'); this.onBuzz(b.id, 'stomped'); this.sfx('stomp');
         }
@@ -661,17 +867,29 @@ export class Game {
     }
   }
 
+  private dropFrom(p: Player) { if (p.carry) { this.drop(p); } }
   private drop(p: Player, dir: number = p.face) {
     const it = p.carry; if (!it) return;
     p.carry = null;
-    it.x = p.x; it.y = p.y - 150; it.vx = dir * (180 + Math.random() * 200); it.vy = -520; it.rest = false; it.age = 0; it.mover = -1; it.float = false;
+    it.x = p.x; it.y = p.y - 150 * p.size; it.vx = dir * (180 + Math.random() * 200); it.vy = -520; it.rest = false; it.age = 0; it.mover = -1; it.float = false;
     this.items.push(it);
   }
 
   private stepItems(dt: number) {
     const wind = this.active('wind');
+    // ímã: puxa o material por perto
+    const magnets = Array.from(this.players.values()).filter((p) => p.fx.magnet > 0 && !p.carry);
+    for (const it of this.items) {
+      it.pulled = false;
+      if (it.power) continue;
+      for (const p of magnets) {
+        const tx = p.x, ty = p.y - 60, dx = tx - it.x, dy = ty - it.y, d = Math.hypot(dx, dy);
+        if (d < 380 && d > 4) { const s = Math.min(d, 620 * dt); it.x += (dx / d) * s; it.y += (dy / d) * s; it.rest = false; it.mover = -1; it.vx = 0; it.vy = 0; it.pulled = true; it.age = Math.min(it.age, 20); break; }
+      }
+    }
     for (const it of this.items) {
       it.age += dt;
+      if (it.pulled) continue;
       if (it.rest && it.mover >= 0) { // indo junto com a plataforma
         const m = this.movers[it.mover];
         it.x += m.x - m.px; it.y = m.y;
@@ -699,21 +917,26 @@ export class Game {
     for (const a of this.ants) {
       a.x += a.dir * (a.flee ? 260 : 120) * dt;
       if (!a.carry && !a.flee) {
-        const it = this.items.find((i) => i.rest && i.onGroundFloor && Math.abs(i.x - a.x) < 22);
+        const it = this.items.find((i) => !i.power && i.rest && i.onGroundFloor && Math.abs(i.x - a.x) < 22);
         if (it) { this.items = this.items.filter((i) => i !== it); a.carry = it; }
       }
-      // pular na formiga solta o material
       this.players.forEach((p) => {
-        if (!a.flee && p.vy > 100 && Math.abs(p.x - a.x) < 40 && p.y > GROUND - 50 && p.y <= GROUND + 2) {
+        const onFloor = p.y > GROUND - 50 && p.y <= GROUND + 2;
+        // pular na formiga solta o material
+        if (!a.flee && p.vy > 100 && Math.abs(p.x - a.x) < 40 * Math.max(1, p.size) && onFloor) {
           a.flee = true; p.vy = -700; p.jumps = 1; p.pts += 1; this.float(p.x, p.y - 190, '+1', CHARS[p.slot].color); this.onBuzz(p.id, 'stomp'); this.sfx('stomp');
           if (a.carry) { const it = a.carry; a.carry = null; it.x = a.x; it.y = GROUND - 60; it.vy = -400; it.vx = 0; it.rest = false; it.age = 0; it.mover = -1; this.items.push(it); }
           a.dir = (a.dir * -1) as 1 | -1;
+        } else if (!a.flee && p.onGround && onFloor && Math.abs(p.x - a.x) < 34 && p.vy >= 0) {
+          // se a formiga encosta: mordida, fica lento e ela leva o que você carregava
+          const had = p.carry;
+          if (this.ouch(p, { slow: 2.5, text: 'Formiga mordeu! 🐜' }) && had && !a.carry) { this.items = this.items.filter((i) => i !== had); a.carry = had; }
         }
       });
     }
     this.ants = this.ants.filter((a) => a.x > -80 && a.x < W + 80);
     const ev = this.active('ants');
-    if (ev && this.ants.length < 2 && Math.random() < dt * 0.6) this.ants.push(Math.random() < 0.5 ? { x: -40, dir: 1, carry: null, flee: false } : { x: W + 40, dir: -1, carry: null, flee: false });
+    if (ev && this.ants.length < 3 && Math.random() < dt * 0.6) this.ants.push(Math.random() < 0.5 ? { x: -40, dir: 1, carry: null, flee: false } : { x: W + 40, dir: -1, carry: null, flee: false });
   }
 
   private botThink(p: Player) {
@@ -722,12 +945,13 @@ export class Game {
       if (Math.random() < 0.11) this.tap(p.id, 1);
       if (this.phase >= PHASES.length) return;
     }
+    if (p.power && Math.random() < 0.006) this.usePower(p.id);
     let tx: number, ty: number;
     if (p.carry) { tx = 960; ty = ROCK.top; }
     else {
       let best: Item | null = null, bd = 1e9;
       const pool = this.balloon?.item ? [...this.items, this.balloon.item] : this.items;
-      for (const it of pool) { const d = Math.abs(it.x - p.x) + Math.abs(it.y - p.y) * 1.5; if (d < bd) { bd = d; best = it; } }
+      for (const it of pool) { if (it.power && p.power) continue; const d = Math.abs(it.x - p.x) + Math.abs(it.y - p.y) * 1.5 - it.qty * 20; if (d < bd) { bd = d; best = it; } }
       if (!best) { tx = 400 + ((p.slot * 137) % 1100); ty = GROUND; } else { tx = best.x; ty = best.y; }
     }
     const dx = tx - p.x;
@@ -749,7 +973,7 @@ export class Game {
   render(ctx: Ctx) {
     const finale = this.mode === 'finale';
     const fk = finale ? this.modeT : 0;
-    const dark = finale ? Math.min(1, fk / 1.2) * (this.complete ? Math.max(0, 1 - (fk - 4.5) / 1.5) : 1) : this.active('rain') ? 0.35 : 0;
+    const dark = finale ? Math.min(1, fk / 1.2) * (this.complete ? Math.max(0, 1 - (fk - 4.5) / 1.5) : 1) : this.active('rain') ? 0.35 : this.active('drizzle') ? 0.15 : this.active('lightning') ? 0.4 : 0;
     const fin = this.finProg();
     ctx.save();
     if (this.shake > 0) ctx.translate((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 12);
@@ -771,31 +995,50 @@ export class Game {
     const fall = finale && !this.complete ? Math.max(0, Math.min(1, (fk - 3.2) / 1.6)) : 0;
     house(ctx, prog, this.t, { wobble: finale && fk > 1 ? (this.complete ? 0.5 : 2) : quake ? 1 : 0, fall, fin });
     if (fin.decor < 1) scaffold(ctx);
-    // materiais
+    // avisos de raio (no chão, atrás de todo mundo)
+    this.bolts.forEach((b) => { if (b.t < 1.1) bolt(ctx, b.x, b.y, b.t / 1.1, this.t); });
+    // materiais e poderes
     for (const it of this.items) {
       if (it.age > 23 && Math.floor(it.age * 6) % 2) continue;
       const bob = it.rest ? Math.sin(this.t * 3 + it.id) * 2 : 0;
-      glow(ctx, it.x, it.y - 18 + bob, 44, it.gold ? 1 : 0.8);
-      item(ctx, it.type, it.x, it.y - 18 + bob, it.gold);
+      if (it.power) { powerBubble(ctx, it.power, it.x, it.y - 30 + bob, this.t); continue; }
+      glow(ctx, it.x, it.y - 18 + bob, it.qty >= 4 ? 58 : 44, it.qty >= 4 ? 1 : 0.8, QTY_STYLE[it.qty]?.glow);
+      item(ctx, it.type, it.x, it.y - 18 + bob, it.qty);
     }
     if (this.balloon) {
       const b = this.balloon;
       balloon(ctx, b.x, b.y, this.t, !!b.item);
-      if (b.item) { glow(ctx, b.item.x, b.item.y - 18, 50, 1); item(ctx, b.item.type, b.item.x, b.item.y - 18, true); }
+      if (b.item) { glow(ctx, b.item.x, b.item.y - 18, 58, 1, QTY_STYLE[10].glow); item(ctx, b.item.type, b.item.x, b.item.y - 18, 10); }
     }
     this.ants.forEach((a) => ant(ctx, a.x, GROUND + 4, a.dir, this.t, a.carry?.type));
+    this.boulders.forEach((b) => boulder(ctx, b.x, GROUND - 34, 34, b.rot));
     // jogadores (de trás para frente)
     const finishing = this.phase >= PHASES.length && this.mode === 'play';
     const arr = Array.from(this.players.values()).sort((a, b) => a.y - b.y);
     for (const p of arr) {
       const working = finishing && p.task;
+      const f = p.fx, s = p.size;
+      if (f.magnet > 0) { ctx.save(); ctx.globalAlpha = 0.35 + 0.2 * Math.sin(this.t * 8); ctx.strokeStyle = POWERS.magnet.color; ctx.lineWidth = 4; ctx.setLineDash([12, 10]); ctx.beginPath(); ctx.arc(p.x, p.y - 70 * s, 110 + Math.sin(this.t * 6) * 10, 0, TAU); ctx.stroke(); ctx.restore(); }
       person(ctx, p.x, p.y, p.slot, {
-        face: p.face, walk: p.walk, air: !p.onGround, carry: p.carry?.type ?? null, carryGold: p.carry?.gold,
-        happy: p.happy > 0 || (finale && this.complete && fk > 5), dizzy: p.dizzy > 0, name: p.name,
+        face: p.face, walk: p.walk, air: !p.onGround, carry: p.carry?.type ?? null, carryQty: p.carry?.qty,
+        happy: p.happy > 0 || (finale && this.complete && fk > 5), dizzy: p.dizzy > 0, name: p.name, scale: s,
         tool: working ? TASK[p.task as TaskId].tool : undefined, work: working ? Math.abs(Math.sin(p.work * Math.PI * 2)) : 0,
       });
-      if (p.dizzy > 0) { ctx.fillStyle = C.amber; ctx.font = `900 22px ${FONT}`; ctx.textAlign = 'center'; for (let i = 0; i < 3; i++) { const a = this.t * 6 + (i * TAU) / 3; ctx.fillText('★', p.x + Math.cos(a) * 30, p.y - 140 + Math.sin(a) * 8); } }
+      if (f.frozen > 0) {
+        ctx.save(); ctx.globalAlpha = 0.55; ctx.fillStyle = '#BFE9FA'; rr(ctx, p.x - 40 * s, p.y - 150 * s, 80 * s, 152 * s, 14); ctx.fill();
+        ctx.globalAlpha = 0.9; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(p.x - 24 * s, p.y - 130 * s); ctx.lineTo(p.x - 8 * s, p.y - 110 * s); ctx.stroke(); ctx.restore();
+      }
+      if (f.shield > 0) { ctx.save(); ctx.globalAlpha = 0.5 + 0.2 * Math.sin(this.t * 6); ctx.strokeStyle = '#4FA3DD'; ctx.fillStyle = 'rgba(120,190,255,0.15)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.ellipse(p.x, p.y - 75 * s, 62 * s, 92 * s, 0, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore(); }
+      const icon = f.frozen > 0 ? '❄️' : f.burn > 0 ? '🔥' : f.fast > 0 ? '⚡' : f.slow > 0 ? '🐌' : '';
+      if (icon) { ctx.font = `26px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(icon, p.x + 44 * s, p.y - 140 * s); }
+      if (p.power && this.mode === 'play') { ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(p.x - 44 * s, p.y - 150 * s, 17, 0, TAU); ctx.fill(); ctx.strokeStyle = POWERS[p.power].color; ctx.lineWidth = 3; ctx.stroke(); ctx.font = `18px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(POWERS[p.power].emoji, p.x - 44 * s, p.y - 149 * s); ctx.restore(); }
+      if (p.dizzy > 0) { ctx.fillStyle = C.amber; ctx.font = `900 22px ${FONT}`; ctx.textAlign = 'center'; for (let i = 0; i < 3; i++) { const a = this.t * 6 + (i * TAU) / 3; ctx.fillText('★', p.x + Math.cos(a) * 30 * s, p.y - 140 * s + Math.sin(a) * 8); } }
     }
+    // abelhas, tiros de poder e raios caindo
+    this.swarms.forEach((sw) => { for (let i = 0; i < 6; i++) bee(ctx, sw.x + Math.cos(this.t * 5 + i) * 30, sw.y + Math.sin(this.t * 7 + i * 2) * 22, this.t, i); });
+    this.shots.forEach((s) => { const P = POWERS[s.power]; glow(ctx, s.x, s.y, 46, 1, P.rgb); ctx.font = `34px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(P.emoji, s.x, s.y); ctx.textBaseline = 'alphabetic'; });
+    this.bolts.forEach((b) => { if (b.t >= 1.1) bolt(ctx, b.x, b.y, 1 + (b.t - 1.1), this.t); });
     // efeitos
     this.sparks.forEach((s) => { ctx.globalAlpha = Math.max(0, 1 - s.t / 0.9); ctx.fillStyle = s.c; ctx.fillRect(s.x - 5, s.y - 5, 10, 10); }); ctx.globalAlpha = 1;
     const wind = this.active('wind');
@@ -810,11 +1053,11 @@ export class Game {
     }
     if (this.rain.length || (finale && fk < 5)) {
       if (finale && fk < 5) for (let i = 0; i < 10; i++) this.rain.push({ x: Math.random() * (W + 300), y: -20 });
-      ctx.strokeStyle = 'rgba(200,225,245,0.75)'; ctx.lineWidth = 3;
-      this.rain.forEach((d) => { ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - 8, d.y + 26); ctx.stroke(); });
+      this.rain.forEach((d) => { ctx.strokeStyle = d.light ? 'rgba(220,235,250,0.55)' : 'rgba(200,225,245,0.75)'; ctx.lineWidth = d.light ? 2 : 3; ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - (d.light ? 3 : 8), d.y + (d.light ? 14 : 26)); ctx.stroke(); });
       if (finale) this.rain.forEach((d) => { d.y += 1500 / 60; d.x -= 5; });
       this.rain = this.rain.filter((d) => d.y < H);
     }
+    if (this.active('fog')) this.drawFog(ctx);
     if (finale && fk > 1.4 && fk < 4.2 && Math.floor(fk * 7) % 9 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(0, 0, W, H); }
     this.floaters.forEach((f) => {
       ctx.save(); ctx.globalAlpha = 1 - f.t / 1.4; ctx.font = `900 30px ${FONT}`; ctx.textAlign = 'center'; ctx.lineWidth = 6; ctx.strokeStyle = '#fff';
@@ -829,6 +1072,25 @@ export class Game {
     if (finale) this.finaleOverlay(ctx, fk);
     if (this.mode === 'results') this.resultsOverlay(ctx);
     if (this.mode !== 'play' && this.mode !== 'results') this.scoreStrip(ctx, this.mode === 'finale');
+  }
+
+  /** Neblina: só dá para ver em volta de cada bonequinho. */
+  private drawFog(ctx: Ctx) {
+    if (typeof document === 'undefined') return;
+    const e = this.events.find((x) => x.type === 'fog' && this.modeT >= x.at && this.modeT < x.at + x.dur);
+    const k = e ? Math.min(1, (this.modeT - e.at) / 1.2, (e.at + e.dur - this.modeT) / 1.2) : 0;
+    this.fogCv ??= Object.assign(document.createElement('canvas'), { width: W / 4, height: H / 4 });
+    const f = this.fogCv.getContext('2d')!;
+    f.globalCompositeOperation = 'source-over'; f.clearRect(0, 0, W / 4, H / 4);
+    f.fillStyle = `rgba(236,236,232,${0.93 * k})`; f.fillRect(0, 0, W / 4, H / 4);
+    f.globalCompositeOperation = 'destination-out';
+    this.players.forEach((p) => {
+      const x = p.x / 4, y = (p.y - 80) / 4, r = 55 * Math.max(1, p.size);
+      const g = f.createRadialGradient(x, y, r * 0.4, x, y, r);
+      g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      f.fillStyle = g; f.beginPath(); f.arc(x, y, r, 0, TAU); f.fill();
+    });
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.drawImage(this.fogCv, 0, 0, W, H); ctx.restore();
   }
 
   private bannerFlash(ctx: Ctx) {
@@ -863,14 +1125,20 @@ export class Game {
         ctx.fillStyle = v >= 1 ? C.olive : t.color; rr(ctx, x + 34, 164, Math.max(14, 92 * v), 14, 7); ctx.fill();
       });
     } else {
+      // só o material da fase atual em destaque; os outros pequenos
+      const kinds = ['stone', 'brick', 'tile', 'wood', 'glass'] as ItemType[];
+      const parts = kinds.map((k) => ({ k, txt: `${ITEM_EMOJI[k]} ${this.have[k]}/${this.need[k]}${this.have[k] >= this.need[k] ? ' ✓' : ''}` }));
       ctx.font = `800 21px ${FONT}`;
-      let x = M + 34;
-      (['stone', 'brick', 'tile', 'wood', 'glass'] as ItemType[]).forEach((k) => {
+      const total = parts.reduce((a, p) => a + ctx.measureText(p.txt).width, 0) + 18 * (parts.length - 1);
+      const sc = Math.min(1, 572 / total);
+      ctx.save(); ctx.translate(M + 34, 176); ctx.scale(sc, 1);
+      let x = 0;
+      parts.forEach(({ k, txt }) => {
         const done = this.have[k] >= this.need[k];
-        const txt = `${ITEM_EMOJI[k]} ${this.have[k]}/${this.need[k]}${done ? ' ✓' : ''}`;
         ctx.fillStyle = done ? C.olive : PHASES[this.phase]?.types.includes(k) ? C.ink : '#b9a690';
-        ctx.fillText(txt, x, 176); x += ctx.measureText(txt).width + 22;
+        ctx.fillText(txt, x, 0); x += ctx.measureText(txt).width + 18;
       });
+      ctx.restore();
     }
     // relógio
     const tl = Math.ceil(this.timeLeft);
@@ -894,11 +1162,11 @@ export class Game {
       if (be) {
         const info = EVENT_INFO[be.e.type];
         const msg = `${info.emoji} ${be.soon ? info.soon : info.now}`;
-        ctx.font = `900 28px ${FONT}`; const bw = ctx.measureText(msg).width + 64;
+        ctx.font = `900 28px ${FONT}`; const bw = Math.min(700, ctx.measureText(msg).width + 64);
         ctx.save(); ctx.translate(W / 2, 176); ctx.rotate(-0.012); const pulse = be.soon ? 1 + Math.sin(this.t * 10) * 0.03 : 1; ctx.scale(pulse, pulse);
         ctx.fillStyle = '#c98a1f'; rr(ctx, -bw / 2, -24, bw, 60, 30); ctx.fill();
         ctx.fillStyle = be.soon ? C.amber : '#ff9a3c'; rr(ctx, -bw / 2, -30, bw, 60, 30); ctx.fill();
-        ctx.fillStyle = C.ink; ctx.textAlign = 'center'; ctx.fillText(msg, 0, 10); ctx.restore();
+        ctx.fillStyle = C.ink; ctx.textAlign = 'center'; fitText(ctx, msg, 0, 10, bw - 50, 900, 28); ctx.restore();
       }
     }
     this.qrPanel(ctx);
@@ -980,7 +1248,7 @@ export class Game {
     // cabeçalho da tabela
     const ty = y + 180;
     ctx.fillStyle = C.muted; ctx.font = `800 18px ${FONT}`; ctx.textAlign = 'left'; ctx.fillText('JOGADOR', x + 130, ty);
-    ctx.textAlign = 'right'; ctx.fillText('ENTREGAS', x + 640, ty); ctx.fillText('PONTOS', x + 820, ty); ctx.fillText('SUGESTÃO APP', x + cw - 60, ty);
+    ctx.textAlign = 'right'; ctx.fillText('MATERIAL', x + 640, ty); ctx.fillText('PONTOS', x + 820, ty); ctx.fillText('SUGESTÃO APP', x + cw - 60, ty);
     list.forEach((r, i) => {
       const yy = ty + 22 + i * rowH;
       ctx.fillStyle = i % 2 ? '#fff' : C.cream; rr(ctx, x + 40, yy, cw - 80, rowH - 6, 16); ctx.fill();

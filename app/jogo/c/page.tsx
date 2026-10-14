@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { CHARS, TASK, person } from '@/lib/jogo/draw';
+import { CHARS, POWERS, TASK, person } from '@/lib/jogo/draw';
 import { channel, lobbyName, newId, playerChan, type BuzzMsg, type InputMsg, type StateMsg, type WelcomeMsg } from '@/lib/jogo/net';
 
 /* Controle no celular: o jogador digita o nome e o celular (deitado) vira o joystick do bonequinho na TV. */
@@ -19,9 +19,10 @@ const BUZZ: Record<BuzzMsg['kind'], number | number[]> = {
   pick: 30, gold: [30, 40, 30, 40, 60], deliver: [40, 50, 80], stomp: 50, stomped: [120, 60, 120], boing: [20, 30, 60],
   part: [60, 40, 60, 40, 120], finish: [100, 60, 100, 60, 300], alert: [200, 100, 200],
   storm: [400, 120, 250, 80, 500, 120, 300, 80, 600],
+  power: [30, 30, 30, 30, 80], hit: [250, 80, 150], zap: 40,
 };
 const FLASH: Partial<Record<BuzzMsg['kind'], string>> = {
-  pick: 'Pegou! +1', gold: 'Dourado! ✨', deliver: 'Entregue! 🧱', stomp: 'Boing! +1', stomped: 'Ai! 💫', boing: 'Lá vai! 🚀',
+  pick: 'Pegou! +1', gold: 'Pacote grande! ✨', power: 'Ganhou um poder! ✨', hit: 'Te acertaram! 😵', zap: 'Poder lançado! 💥', deliver: 'Entregue! 🧱', stomp: 'Boing! +1', stomped: 'Ai! 💫', boing: 'Lá vai! 🚀',
   part: 'Sua parte está pronta! +5', finish: 'Casa pronta! ✨', storm: 'Segura! 🌩️',
 };
 const vibrate = (p: number | number[]) => { try { navigator.vibrate?.(p); } catch {} };
@@ -186,7 +187,7 @@ function Pad() {
           </div>
         </div>
       </header>
-      <p className={`shrink-0 truncate px-6 pt-2 text-center text-[14px] font-extrabold ${lost ? 'text-terra' : 'text-[#6b5643]'}`}>{lost ? 'Reconectando…' : status}</p>
+      <p className={`shrink-0 truncate px-6 pt-2 text-center text-[14px] font-extrabold ${lost || st?.fx ? 'text-terra' : 'text-[#6b5643]'}`}>{lost ? 'Reconectando…' : st?.fx ?? status}</p>
 
       <div className="relative flex min-h-0 flex-1" style={{ paddingLeft: 'max(env(safe-area-inset-left), 28px)', paddingRight: 'max(env(safe-area-inset-right), 28px)', paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
         {st?.mode === 'play' && st.ch ? (
@@ -209,14 +210,27 @@ function Pad() {
             />
           )
         ) : (
-          <div className="flex flex-1 items-center justify-between gap-6 pt-1">
-            <div className="flex gap-5">
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-3 pt-1">
+            <div className="flex shrink-0 gap-3">
               <PadButton label="◀" onChange={(v) => press('l', v)} className="bg-white text-ink" />
               <PadButton label="▶" onChange={(v) => press('r', v)} className="bg-white text-ink" />
             </div>
-            <div className="flex flex-col items-center gap-2">
+            {st?.mode === 'play' && st.power ? (
+              <button
+                type="button"
+                onPointerDown={(e) => { e.preventDefault(); send('pw', {}); vibrate(40); setSt((x) => (x ? { ...x, power: undefined } : x)); }}
+                className="flex h-[min(16.5vw,36vh)] w-[min(16.5vw,36vh)] shrink-0 animate-pulse flex-col items-center justify-center rounded-full border-4 bg-white shadow-[0_8px_0_rgba(43,33,24,0.18)]"
+                style={{ borderColor: POWERS[st.power].color, touchAction: 'none' }}
+              >
+                <span className="text-[min(7vw,12vh)] leading-none">{POWERS[st.power].emoji}</span>
+                <span className="mt-1 whitespace-nowrap text-[min(2.6vw,4.4vh)] font-black" style={{ color: POWERS[st.power].color }}>{POWERS[st.power].label}</span>
+              </button>
+            ) : (
+              <p className="min-w-0 flex-1 truncate text-center text-xs font-bold text-[#c4b29c]">Pegue bolhas ✨ e ganhe poderes</p>
+            )}
+            <div className="flex shrink-0 flex-col items-center gap-2">
               <PadButton label="PULAR" big onChange={(v) => press('j', v)} className="text-white" style={{ background: color }} />
-              <p className="whitespace-nowrap text-xs font-bold text-[#a8927a]">Toque de novo no ar: pulo duplo</p>
+              <p className="whitespace-nowrap text-xs font-bold text-[#a8927a]">2x no ar: pulo duplo</p>
             </div>
           </div>
         )}
@@ -267,7 +281,7 @@ function TapScreen({ title, sub, button, prog, color, onTap }: { title: string; 
 function PadButton({ label, onChange, className = '', big = false, style }: { label: string; onChange: (v: boolean) => void; className?: string; big?: boolean; style?: React.CSSProperties }) {
   const [down, setDown] = useState(false);
   const set = (v: boolean) => { setDown(v); onChange(v); };
-  const size = big ? 'h-[min(38vw,54vh)] w-[min(38vw,54vh)] text-[min(8vw,8vh)]' : 'h-[min(26vw,44vh)] w-[min(26vw,44vh)] text-[min(10vw,12vh)]';
+  const size = big ? 'h-[min(26vw,54vh)] w-[min(26vw,54vh)] text-[min(5.6vw,8vh)]' : 'h-[min(18.5vw,42vh)] w-[min(18.5vw,42vh)] text-[min(7vw,11vh)]';
   return (
     <button
       type="button"
