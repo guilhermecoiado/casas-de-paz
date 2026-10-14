@@ -16,15 +16,27 @@ type Step = 'room' | 'name' | 'joining' | 'full' | 'play';
 
 // vibração de cada acontecimento (Android; no iPhone o navegador não deixa vibrar)
 const BUZZ: Record<BuzzMsg['kind'], number | number[]> = {
-  pick: 30, gold: [30, 40, 30, 40, 60], deliver: [40, 50, 80], stomp: 50, stomped: [120, 60, 120], boing: [20, 30, 60],
-  part: [60, 40, 60, 40, 120], finish: [100, 60, 100, 60, 300], alert: [200, 100, 200],
-  storm: [400, 120, 250, 80, 500, 120, 300, 80, 600],
-  power: [30, 30, 30, 30, 80], hit: [250, 80, 150], zap: 40,
+  pick: 25, gold: [30, 30, 30, 30, 90], deliver: [40, 40, 90], deliverBig: [50, 40, 50, 40, 50, 40, 220],
+  stomp: [30, 20, 60], stomped: [150, 50, 150], boing: [15, 15, 15, 15, 80],
+  part: [60, 40, 60, 40, 160], finish: [100, 60, 100, 60, 100, 60, 400], alert: [200, 100, 200],
+  storm: [400, 120, 250, 80, 500, 120, 300, 80, 600], quake: [120, 40, 220, 40, 120, 40, 260],
+  power: [20, 20, 20, 20, 20, 20, 120], hit: [250, 80, 150], zap: [60, 30, 20], block: [20, 40, 20],
+  freeze: [500], burn: [40, 25, 40, 25, 40, 25, 40, 25, 120], shrink: [100, 40, 60, 40, 30, 40, 15],
+  speed: [15, 15, 15, 15, 15, 15, 15, 15, 15], giant: [60, 40, 120, 40, 260], shield: [120, 60, 120],
+  magnet: [40, 40, 40, 40, 40, 40], crack: [30, 20, 30, 20, 90],
+  bolt: [30, 30, 30, 30, 30, 30, 30], strike: [450], sting: [60, 25, 60, 25, 60], rock: [280], bite: [50, 30, 50],
 };
 const FLASH: Partial<Record<BuzzMsg['kind'], string>> = {
-  pick: 'Pegou! +1', gold: 'Pacote grande! ✨', power: 'Ganhou um poder! ✨', hit: 'Te acertaram! 😵', zap: 'Poder lançado! 💥', deliver: 'Entregue! 🧱', stomp: 'Boing! +1', stomped: 'Ai! 💫', boing: 'Lá vai! 🚀',
-  part: 'Sua parte está pronta! +5', finish: 'Casa pronta! ✨', storm: 'Segura! 🌩️',
+  pick: 'Pegou! +1', gold: 'Pacote grande! ✨', power: 'Ganhou um poder! ✨', zap: 'Poder lançado! 💥', block: 'Bloqueado! 🛡️',
+  deliver: 'Entregue! 🧱', deliverBig: 'Entrega grande! 🎉', stomp: 'Boing! +1', stomped: 'Ai! 💫', boing: 'Lá vai! 🚀',
+  part: 'Sua parte está pronta! +5', finish: 'Casa pronta! ✨', storm: 'Segura! 🌩️', quake: 'Terremoto! 🌋',
+  freeze: 'Congelaram você! ❄️', burn: 'Pegando fogo! 🔥', shrink: 'Encolheram você! 🔻', speed: 'Turbo! ⚡', giant: 'Gigante! 🍄',
+  shield: 'Escudo ligado! 🛡️', magnet: 'Ímã ligado! 🧲', crack: 'Quebrou o gelo! 💥',
+  bolt: '⚡ Raio vindo em você! Saia daí!', strike: 'Raio! -1 ⚡', sting: 'Picada! -2 🐝', rock: 'Pedrada! -1 🪨', bite: 'Formiga mordeu! 🐜',
 };
+// toques que fazem o controle tremer/balançar na hora
+const SHAKE_KINDS = new Set<BuzzMsg['kind']>(['quake', 'rock', 'strike', 'storm']);
+const WOBBLE_KINDS = new Set<BuzzMsg['kind']>(['stomped', 'sting', 'bite', 'hit', 'shrink']);
 const vibrate = (p: number | number[]) => { try { navigator.vibrate?.(p); } catch {} };
 
 /** Deita a tela (Android, em tela cheia). No iPhone aparece o aviso para girar. */
@@ -44,6 +56,7 @@ function Pad() {
   const [slot, setSlot] = useState(-1);
   const [st, setSt] = useState<StateMsg | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [pulse, setPulse] = useState<{ k: BuzzMsg['kind']; n: number } | null>(null);
   const [lost, setLost] = useState(false);
   const [extra, setExtra] = useState(0); // toques ainda não confirmados pela TV (barrinha anda na hora)
   const idRef = useRef('');
@@ -75,7 +88,8 @@ function Pad() {
           const k = (payload as BuzzMsg).kind;
           vibrate(BUZZ[k] ?? 30);
           const f = FLASH[k];
-          if (f) { setFlash(f); setTimeout(() => setFlash(null), k === 'part' || k === 'finish' ? 1600 : 450); }
+          if (f) { setFlash(f); setTimeout(() => setFlash(null), k === 'part' || k === 'finish' || k === 'bolt' ? 1500 : 700); }
+          const n = Date.now(); setPulse({ k, n }); setTimeout(() => setPulse((x) => (x?.n === n ? null : x)), 900);
         })
         .subscribe();
       chRef.current = own;
@@ -131,6 +145,14 @@ function Pad() {
     if (tapMode) { inRef.current = { l: false, r: false, j: false }; send('in', inRef.current); }
   }, [tapMode, send]);
 
+  // pegando fogo: o celular fica vibrando de leve enquanto durar
+  const burning = !!st?.fxs?.includes('burn');
+  useEffect(() => {
+    if (!burning) return;
+    const iv = setInterval(() => vibrate([30, 20, 30, 20, 30]), 650);
+    return () => clearInterval(iv);
+  }, [burning]);
+
   const color = slot >= 0 ? CHARS[slot % CHARS.length].color : '#C8553D';
 
   if (step !== 'play') {
@@ -160,6 +182,9 @@ function Pad() {
     );
   }
 
+  const fxs = new Set(st?.mode === 'play' ? st.fxs ?? [] : []);
+  const env = new Set(st?.env ?? []);
+  const padScale = fxs.has('tiny') ? 0.72 : fxs.has('giant') ? 1.05 : 1;
   const tl = st?.timeLeft ?? 0;
   const status = !st ? 'Conectando à TV…'
     : st.mode === 'lobby' ? `Começa em ${st.countdown}s · treine aí!`
@@ -169,7 +194,16 @@ function Pad() {
             : 'Aguardando a próxima partida';
 
   return (
-    <main className="fixed inset-0 flex select-none flex-col bg-cream" style={{ touchAction: 'none', WebkitUserSelect: 'none' }} onContextMenu={(e) => e.preventDefault()}>
+    <main
+      className="fixed inset-0 flex select-none flex-col overflow-hidden bg-cream"
+      style={{
+        touchAction: 'none', WebkitUserSelect: 'none',
+        animation: pulse && SHAKE_KINDS.has(pulse.k) ? 'cdp-shake .12s linear infinite' : env.has('quake') || env.has('storm') ? 'cdp-shake .3s linear infinite'
+          : pulse && WOBBLE_KINDS.has(pulse.k) ? 'cdp-wobble .45s ease-in-out 2' : undefined,
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <style>{FX_CSS}</style>
       <header className="flex shrink-0 items-center gap-4 py-3 text-white" style={{ background: color, paddingTop: 'max(env(safe-area-inset-top), 12px)', paddingLeft: 'max(env(safe-area-inset-left), 28px)', paddingRight: 'max(env(safe-area-inset-right), 28px)' }}>
         <Avatar slot={slot} />
         <div className="min-w-0 flex-1">
@@ -210,7 +244,7 @@ function Pad() {
             />
           )
         ) : (
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-3 pt-1">
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-3 pt-1 transition-transform duration-300" style={{ transform: `scale(${padScale})`, filter: fxs.has('slow') ? 'saturate(.35)' : undefined }}>
             <div className="flex shrink-0 gap-3">
               <PadButton label="◀" onChange={(v) => press('l', v)} className="bg-white text-ink" />
               <PadButton label="▶" onChange={(v) => press('r', v)} className="bg-white text-ink" />
@@ -234,13 +268,17 @@ function Pad() {
             </div>
           </div>
         )}
+        <FxLayer fxs={fxs} env={env} onBreak={() => tap(0)} />
         {flash && (
-          <div className="pointer-events-none absolute inset-x-0 top-1 text-center">
+          <div className="pointer-events-none absolute inset-x-0 top-1 z-50 text-center">
             <span className="inline-block whitespace-nowrap rounded-full bg-ink px-5 py-1.5 text-xl font-black text-white">{flash}</span>
           </div>
         )}
       </div>
 
+      {pulse?.k === 'strike' && <div key={pulse.n} className="pointer-events-none fixed inset-0 z-40 bg-white" style={{ animation: 'cdp-flash .45s ease-out forwards' }} />}
+      {pulse?.k === 'bolt' && <div key={pulse.n} className="pointer-events-none fixed inset-0 z-40" style={{ boxShadow: 'inset 0 0 0 10px #E25B45, inset 0 0 120px rgba(226,91,69,.6)', animation: 'cdp-glow .2s linear infinite' }} />}
+      {pulse && ['deliverBig', 'gold', 'finish', 'part'].includes(pulse.k) && <div key={pulse.n} className="pointer-events-none fixed inset-0 z-40" style={{ boxShadow: 'inset 0 0 140px 30px rgba(243,198,74,.85)', animation: 'cdp-flash .8s ease-out forwards' }} />}
       {/* celular em pé: pede para deitar (o controle funciona deitado) */}
       <div className="fixed inset-0 z-50 hidden flex-col items-center justify-center gap-4 bg-cream px-8 text-center portrait:flex" onClick={goLandscape}>
         <div className="text-7xl" style={{ animation: 'cdp-rot 2.4s ease-in-out infinite' }}>📱</div>
@@ -305,4 +343,75 @@ function Avatar({ slot }: { slot: number }) {
     person(ctx, 60, 112, slot, { scale: 0.62, happy: true });
   }, [slot]);
   return <canvas ref={ref} width={120} height={120} className="h-12 w-12 shrink-0" />;
+}
+
+const FX_CSS = `
+@keyframes cdp-shake{0%{transform:translate(0,0) rotate(0)}20%{transform:translate(-7px,4px) rotate(-1deg)}40%{transform:translate(7px,-4px) rotate(1deg)}60%{transform:translate(-5px,-5px) rotate(-.6deg)}80%{transform:translate(6px,4px) rotate(.7deg)}100%{transform:translate(0,0) rotate(0)}}
+@keyframes cdp-wobble{0%,100%{transform:rotate(0)}25%{transform:rotate(-2.5deg) scale(.98)}75%{transform:rotate(2.5deg) scale(.98)}}
+@keyframes cdp-flame{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-14px) scale(1.18)}}
+@keyframes cdp-rain{from{background-position:0 0}to{background-position:-60px 240px}}
+@keyframes cdp-streak{from{transform:translateX(0)}to{transform:translateX(-140vw)}}
+@keyframes cdp-glow{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes cdp-flash{from{opacity:.95}to{opacity:0}}
+@keyframes cdp-float{0%{transform:translate(0,0) rotate(0)}25%{transform:translate(40px,-20px) rotate(10deg)}50%{transform:translate(80px,6px) rotate(0)}75%{transform:translate(36px,18px) rotate(-10deg)}100%{transform:translate(0,0) rotate(0)}}
+@keyframes cdp-snow{0%,100%{transform:rotate(0) scale(1)}50%{transform:rotate(20deg) scale(1.15)}}
+`;
+
+/** Camada de efeitos por cima do controle: gelo, fogo, turbo, escudo… e o clima da TV (chuva, neblina, vento). */
+function FxLayer({ fxs, env, onBreak }: { fxs: Set<string>; env: Set<string>; onBreak: () => void }) {
+  const badge = (emoji: string, color: string) => (
+    <div className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl shadow" style={{ border: `3px solid ${color}`, animation: 'cdp-glow 1s ease-in-out infinite' }}>{emoji}</div>
+  );
+  return (
+    <>
+      {/* clima */}
+      {(env.has('rain') || env.has('drizzle') || env.has('storm')) && (
+        <div className="pointer-events-none absolute inset-0 z-10" style={{ backgroundImage: `repeating-linear-gradient(105deg, rgba(120,170,220,${env.has('drizzle') ? '.22' : '.4'}) 0 2px, transparent 2px ${env.has('drizzle') ? 34 : 18}px)`, animation: `cdp-rain ${env.has('drizzle') ? '.9s' : '.45s'} linear infinite` }} />
+      )}
+      {env.has('wind') && <Streaks color="rgba(255,255,255,.9)" n={7} speed={0.7} />}
+      {env.has('fog') && <div className="pointer-events-none absolute inset-0 z-10" style={{ background: 'radial-gradient(ellipse at center, rgba(240,240,236,.15), rgba(240,240,236,.75))' }} />}
+      {env.has('lightning') && <div className="pointer-events-none absolute inset-0 z-10" style={{ background: 'rgba(40,50,70,.14)' }} />}
+      {env.has('bees') && ['18%', '46%', '72%'].map((l, i) => <span key={l} className="pointer-events-none absolute z-10 text-3xl" style={{ left: l, top: `${20 + i * 22}%`, animation: `cdp-float ${1.4 + i * 0.3}s ease-in-out infinite` }}>🐝</span>)}
+
+      {/* efeitos no próprio bonequinho */}
+      {fxs.has('burn') && (
+        <div className="pointer-events-none absolute inset-0 z-20" style={{ boxShadow: 'inset 0 0 150px 40px rgba(242,107,29,.8)', animation: 'cdp-glow .35s ease-in-out infinite' }}>
+          <div className="absolute inset-x-0 bottom-0 flex justify-around">
+            {Array.from({ length: 9 }, (_, i) => <span key={i} className="text-5xl" style={{ animation: `cdp-flame ${0.4 + (i % 3) * 0.12}s ease-in-out infinite`, animationDelay: `${i * 0.07}s` }}>🔥</span>)}
+          </div>
+        </div>
+      )}
+      {fxs.has('fast') && <div className="pointer-events-none absolute inset-0 z-20" style={{ boxShadow: 'inset 0 0 90px rgba(255,214,70,.75)' }}><Streaks color="rgba(242,180,40,.85)" n={9} speed={0.35} />{badge('⚡', '#E8A12E')}</div>}
+      {fxs.has('shield') && <div className="pointer-events-none absolute inset-0 z-20" style={{ boxShadow: 'inset 0 0 0 6px #4FA3DD, inset 0 0 90px rgba(79,163,221,.6)', animation: 'cdp-glow 1.2s ease-in-out infinite' }}>{badge('🛡️', '#2F8FD0')}</div>}
+      {fxs.has('magnet') && <div className="pointer-events-none absolute inset-0 z-20" style={{ boxShadow: 'inset 0 0 0 5px rgba(200,85,61,.8), inset 0 0 80px rgba(200,85,61,.45)', animation: 'cdp-glow .6s ease-in-out infinite' }}>{badge('🧲', '#C8553D')}</div>}
+      {fxs.has('giant') && <div className="pointer-events-none absolute inset-0 z-20">{badge('🍄', '#E25B45')}</div>}
+      {fxs.has('tiny') && <div className="pointer-events-none absolute inset-0 z-20" style={{ boxShadow: 'inset 0 0 80px rgba(123,63,160,.45)' }}>{badge('🔻', '#7B3FA0')}</div>}
+      {fxs.has('slow') && <div className="pointer-events-none absolute inset-0 z-20">{badge('🐌', '#8A6F57')}</div>}
+      {fxs.has('frozen') && (
+        <button
+          type="button"
+          onPointerDown={(e) => { e.preventDefault(); onBreak(); }}
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center"
+          style={{ background: 'linear-gradient(135deg, rgba(220,244,252,.82), rgba(170,222,245,.72))', boxShadow: 'inset 0 0 140px 40px rgba(120,200,240,.95)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)', touchAction: 'none' }}
+        >
+          {[['6%', '10%'], ['88%', '14%'], ['10%', '70%'], ['84%', '68%'], ['48%', '6%'], ['30%', '82%'], ['66%', '80%']].map(([l, t], i) => (
+            <span key={i} className="pointer-events-none absolute text-4xl" style={{ left: l, top: t, animation: `cdp-snow ${1.2 + i * 0.2}s ease-in-out infinite` }}>❄️</span>
+          ))}
+          <span className="whitespace-nowrap font-display text-4xl font-extrabold text-[#1d5a7a]">Congelado! 🧊</span>
+          <span className="mt-2 whitespace-nowrap text-lg font-black text-[#2f6f9f]" style={{ animation: 'cdp-glow .6s ease-in-out infinite' }}>Toque rápido para quebrar o gelo!</span>
+        </button>
+      )}
+    </>
+  );
+}
+
+/** Riscos atravessando a tela (vento, turbo). */
+function Streaks({ color, n, speed }: { color: string; n: number; speed: number }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+      {Array.from({ length: n }, (_, i) => (
+        <span key={i} className="absolute h-[3px] rounded-full" style={{ left: '105%', top: `${8 + ((i * 37) % 84)}%`, width: `${80 + ((i * 53) % 90)}px`, background: color, animation: `cdp-streak ${speed + (i % 3) * 0.12}s linear infinite`, animationDelay: `${(i * 0.13) % speed}s` }} />
+      ))}
+    </div>
+  );
 }

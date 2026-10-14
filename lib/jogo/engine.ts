@@ -40,7 +40,7 @@ export function rockSurface(x: number): number | null {
 export type Sfx =
   | 'jump' | 'jump2' | 'boing' | 'pick' | 'gold' | 'deliver' | 'deliverBig' | 'phase' | 'stomp' | 'join' | 'alert' | 'wind' | 'quake' | 'rain'
   | 'thunder' | 'tap' | 'chWin' | 'chFail' | 'part' | 'task' | 'finished' | 'storm' | 'standing' | 'fall' | 'results' | 'beep' | 'go' | 'balloon' | 'ant'
-  | 'power' | 'zap' | 'freeze' | 'fire' | 'grow' | 'shrink' | 'speed' | 'shield' | 'block' | 'magnet' | 'bees' | 'boulder' | 'crash' | 'lightning' | 'ouch' | 'fog' | 'drizzle';
+  | 'power' | 'zap' | 'jolt' | 'crack' | 'freeze' | 'fire' | 'grow' | 'shrink' | 'speed' | 'shield' | 'block' | 'magnet' | 'bees' | 'boulder' | 'crash' | 'lightning' | 'ouch' | 'fog' | 'drizzle';
 
 interface Input { l: boolean; r: boolean; j: boolean }
 type Fx = { frozen: number; fast: number; giant: number; tiny: number; burn: number; magnet: number; shield: number; slow: number };
@@ -136,6 +136,9 @@ export class Game {
   banner: { text: string; t: number; color: string } | null = null;
   results: Result[] = [];
   shake = 0;
+  shakeAmp = 16;
+  quakeT = 0;
+  screenFx: { c: string; t: number; d: number; a: number; vig: boolean }[] = [];
   fired = new Set<string>();
   room = '';
   gameQR: HTMLImageElement | null = null;
@@ -145,6 +148,8 @@ export class Game {
   constructor() { this.updateMovers(); this.updateMovers(); }
 
   private sfx(s: Sfx) { this.onSfx(s); }
+  /** Pisca a tela inteira (ou só as bordas) de uma cor. */
+  private screen(c: string, d: number, a: number, vig = false) { this.screenFx.push({ c, t: 0, d, a, vig }); }
   private buzzAll(kind: BuzzMsg['kind']) { this.players.forEach((p) => this.onBuzz(p.id, kind)); }
   private once(key: string, fn: () => void) { if (!this.fired.has(key)) { this.fired.add(key); fn(); } }
   private setMode(m: Mode) { this.mode = m; this.modeT = 0; this.fired.clear(); }
@@ -215,6 +220,14 @@ export class Game {
     const k = Math.min(Math.floor(p.budget), Math.max(0, Math.floor(n)));
     if (k <= 0) return;
     p.budget -= k;
+    // congelado: tocar rápido quebra o gelo mais cedo
+    if (p.fx.frozen > 0) {
+      p.fx.frozen = Math.max(0, p.fx.frozen - 0.11 * k);
+      for (let i = 0; i < k; i++) this.sparks.push({ x: p.x + (Math.random() - 0.5) * 60, y: p.y - 80 * p.size, vx: (Math.random() - 0.5) * 400, vy: -200 - Math.random() * 200, t: 0.2, c: Math.random() < 0.5 ? '#ffffff' : '#BFE9FA' });
+      if (p.fx.frozen <= 0) { this.float(p.x, p.y - 200 * p.size, 'Quebrou o gelo! 💥', '#4FB8E8'); this.sfx('crack'); this.onBuzz(p.id, 'crack'); }
+      else if (Math.random() < 0.5) this.sfx('tap');
+      return;
+    }
     const c = this.activeCh();
     if (c) {
       c.have += k; p.chTaps += k; p.work = 1;
@@ -236,7 +249,6 @@ export class Game {
       p.power = null;
       this.applyPower(p, pw);
       this.float(p.x, p.y - 210 * p.size, `${P.emoji} ${P.label}!`, P.color);
-      this.onBuzz(p.id, 'zap');
       return;
     }
     let best: Player | null = null, bd = Infinity;
@@ -251,9 +263,14 @@ export class Game {
   private applyPower(q: Player, pw: PowerId, from?: Player) {
     const f = q.fx, P = POWERS[pw];
     if (!P.self && f.shield > 0) {
-      this.float(q.x, q.y - 200 * q.size, 'Bloqueado! 🛡️', '#2F8FD0'); this.sfx('block');
+      this.float(q.x, q.y - 200 * q.size, 'Bloqueado! 🛡️', '#2F8FD0'); this.sfx('block'); this.onBuzz(q.id, 'block');
       return;
     }
+    const buzz: Record<PowerId, BuzzMsg['kind']> = { freeze: 'freeze', fire: 'burn', shrink: 'shrink', speed: 'speed', giant: 'giant', magnet: 'magnet', shield: 'shield' };
+    this.onBuzz(q.id, buzz[pw]);
+    this.screen(P.color, 0.6, pw === 'freeze' || pw === 'fire' ? 0.4 : 0.25, true);
+    if (pw === 'freeze') for (let i = 0; i < 24; i++) { const a = Math.random() * TAU, v = 150 + Math.random() * 350; this.sparks.push({ x: q.x, y: q.y - 80 * q.size, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 200, t: 0, c: Math.random() < 0.5 ? '#ffffff' : '#9fdcf6' }); }
+    if (pw === 'fire') for (let i = 0; i < 20; i++) this.sparks.push({ x: q.x + (Math.random() - 0.5) * 70, y: q.y - Math.random() * 140 * q.size, vx: (Math.random() - 0.5) * 120, vy: -300 - Math.random() * 300, t: 0, c: pickOne(['#F26B1D', '#F2C230', '#E25B45']) });
     switch (pw) {
       case 'freeze': f.frozen = P.dur; q.vx = 0; this.dropFrom(q); this.sfx('freeze'); break;
       case 'fire': f.burn = P.dur; this.dropFrom(q); this.sfx('fire'); break;
@@ -266,13 +283,12 @@ export class Game {
     if (from) {
       from.pts += 1;
       this.float(q.x, q.y - 200 * q.size, `${P.emoji} ${P.label}!`, P.color);
-      this.onBuzz(q.id, 'hit');
     }
     this.burst(q.x, q.y - 80 * q.size, P.color, 16);
   }
 
   /** Algum perigo acertou o jogador (abelha, pedra, raio, formiga). */
-  private ouch(p: Player, opts: { slow?: number; lose?: number; dizzy?: number; knock?: number; text?: string }) {
+  private ouch(p: Player, opts: { slow?: number; lose?: number; dizzy?: number; knock?: number; text?: string; buzz?: BuzzMsg['kind'] }) {
     if (p.fx.shield > 0 || p.hitCd > 0) return false;
     p.hitCd = 1.2;
     if (opts.slow) p.fx.slow = Math.max(p.fx.slow, opts.slow);
@@ -281,7 +297,7 @@ export class Game {
     if (opts.knock) { p.vx = opts.knock; p.vy = -560; p.onGround = false; p.mover = -1; }
     this.dropFrom(p);
     this.float(p.x, p.y - 200 * p.size, opts.text ?? 'Ai!', C.terra);
-    this.onBuzz(p.id, 'stomped'); this.sfx('ouch');
+    this.onBuzz(p.id, opts.buzz ?? 'stomped'); this.sfx('ouch');
     return true;
   }
 
@@ -304,7 +320,7 @@ export class Game {
     this.need = needFor(Math.max(2, this.peak));
     this.players.forEach((p) => { p.pts = 0; p.picks = 0; p.delivered = 0; p.carry = null; p.task = null; p.helping = false; p.mine = 0; p.taps = 0; p.chTaps = 0; p.power = null; p.fx = NO_FX(); });
     // desafios: terremoto e chuva fixos (têm desafio de toque); os outros sorteados nos demais horários
-    const bag: EventType[] = ['drizzle', 'wind', 'boulders', 'ants', 'bees', 'fog', 'lightning', 'wind', 'boulders', 'bees', 'ants'].sort(() => Math.random() - 0.5) as EventType[];
+    const bag: EventType[] = ['drizzle', 'wind', 'boulders', 'ants', 'bees', 'fog', 'lightning', 'quake', 'boulders', 'bees', 'ants'].sort(() => Math.random() - 0.5) as EventType[];
     const slots = [16, 32, 47, 63, 80, 114, 152, 169, 184, 200, 214];
     const dirs = () => (Math.random() < 0.5 ? 1 : -1) as 1 | -1;
     this.events = [
@@ -394,6 +410,8 @@ export class Game {
       complete: this.complete, fin, ch,
       power: play && p.power ? p.power : undefined,
       fx: play ? this.fxText(p) : undefined,
+      fxs: play ? (Object.keys(p.fx) as (keyof Fx)[]).filter((k) => p.fx[k] > 0) : undefined,
+      env: play ? this.events.filter((e) => this.modeT >= e.at && this.modeT < e.at + e.dur && this.phase < PHASES.length).map((e) => e.type) : this.mode === 'finale' && this.modeT < 4.6 ? ['storm'] : undefined,
     };
   }
 
@@ -402,6 +420,8 @@ export class Game {
   step(dt: number) {
     this.t += dt; this.modeT += dt;
     this.shake = Math.max(0, this.shake - dt);
+    this.shakeAmp += (16 - this.shakeAmp) * Math.min(1, dt * 3);
+    this.screenFx.forEach((f) => (f.t += dt)); this.screenFx = this.screenFx.filter((f) => f.t < f.d);
     this.updateMovers();
     this.tramp = this.tramp.map((v) => Math.max(0, v - dt * 5));
     // quem sumiu (celular fechou) sai depois de um tempo
@@ -491,14 +511,28 @@ export class Game {
         if (e.type === 'boulders') this.boulderT = 0;
         if (e.type === 'lightning') this.boltT = 0.6;
         this.sfx(EVENT_INFO[e.type].sfx);
-        if (e.type === 'quake') this.buzzAll('storm');
+        if (e.type === 'quake') { this.buzzAll('storm'); this.quakeT = 0.4; }
       }
     }
     const q = this.active('quake');
     if (q) {
-      this.shake = 0.2;
-      if (Math.random() < dt * 3) this.players.forEach((p) => { if (p.onGround && Math.random() < 0.5) { p.vy = -380; p.onGround = false; p.mover = -1; } });
-      if (Math.random() < dt * 2) this.items.forEach((it) => { if (it.rest && Math.random() < 0.4) { it.rest = false; it.mover = -1; it.vy = -300; it.vx = (Math.random() - 0.5) * 300; } });
+      // terremoto: a tela chacoalha o tempo todo e, a cada tranco, bonecos e materiais voam para outros lugares
+      this.shake = Math.max(this.shake, 0.25); this.shakeAmp = Math.max(this.shakeAmp, 22);
+      this.quakeT -= dt;
+      if (this.quakeT <= 0) {
+        this.quakeT = 1.1 + Math.random() * 0.7;
+        this.shake = 0.5; this.shakeAmp = 46;
+        this.players.forEach((p) => {
+          this.onBuzz(p.id, 'quake');
+          if (p.fx.shield > 0) return;
+          p.vy = -650 - Math.random() * 500; p.vx = (Math.random() - 0.5) * 1100; p.onGround = false; p.mover = -1; p.boost = true;
+          if (p.carry && Math.random() < 0.5) this.drop(p);
+        });
+        this.items.forEach((it) => { if (it.power) return; it.rest = false; it.mover = -1; it.vy = -650 - Math.random() * 750; it.vx = (Math.random() - 0.5) * 1500; it.age = Math.min(it.age, 18); });
+        for (let x = 40; x < W; x += 120) this.burst(x, GROUND, pickOne(['#b9a690', '#a9a398', '#8f887d']), 3);
+        this.screen('#6b5643', 0.35, 0.18);
+        this.sfx('jolt');
+      }
     }
     if (this.active('rain')) {
       for (let i = 0; i < 6; i++) this.rain.push({ x: Math.random() * (W + 300), y: -20 });
@@ -527,7 +561,7 @@ export class Game {
         const dx = tg.x - s.x, dy = tg.y - 80 * tg.size - s.y, d = Math.hypot(dx, dy) || 1;
         const sp = 250 + Math.sin(s.t * 3) * 40;
         s.x += (dx / d) * sp * dt + Math.sin(s.t * 9) * 2; s.y += (dy / d) * sp * dt + Math.cos(s.t * 7) * 2;
-        if (d < 55 * tg.size) { if (this.ouch(tg, { slow: 2.5, lose: 2, dizzy: 0.8, text: 'Picada! -2 🐝' })) s.target = null; }
+        if (d < 55 * tg.size) { if (this.ouch(tg, { slow: 2.5, lose: 2, dizzy: 0.8, text: 'Picada! -2 🐝', buzz: 'sting' })) s.target = null; }
       }
     }
     this.swarms = this.swarms.filter((s) => s.y > -200 && s.x > -200 && s.x < W + 200);
@@ -538,7 +572,7 @@ export class Game {
     }
     for (const b of this.boulders) {
       b.x += b.dir * 520 * dt; b.rot += b.dir * 520 * dt / 34;
-      for (const p of live) if (Math.abs(p.x - b.x) < 40 * Math.max(1, p.size) && p.y > GROUND - 50 && p.y <= GROUND + 2) this.ouch(p, { knock: b.dir * 650, dizzy: 1, lose: 1, text: 'Pedrada! -1' });
+      for (const p of live) if (Math.abs(p.x - b.x) < 40 * Math.max(1, p.size) && p.y > GROUND - 50 && p.y <= GROUND + 2) this.ouch(p, { knock: b.dir * 650, dizzy: 1, lose: 1, text: 'Pedrada! -1', buzz: 'rock' }) && this.screen('#6b5643', 0.3, 0.2, true);
     }
     this.boulders = this.boulders.filter((b) => {
       const hitRock = (b.dir > 0 && b.x > ROCK.x0 - 30) || (b.dir < 0 && b.x < ROCK.x1 + 30);
@@ -552,13 +586,14 @@ export class Game {
         this.boltT = 1.1 + Math.random() * 0.8;
         const p = pickOne(live);
         this.bolts.push({ x: p.x, y: p.onGround ? p.y : GROUND, t: 0, hit: false });
+        this.onBuzz(p.id, 'bolt');
       }
     }
     for (const b of this.bolts) {
       b.t += dt;
       if (!b.hit && b.t >= 1.1) {
-        b.hit = true; this.shake = 0.25; this.sfx('lightning');
-        for (const p of live) if (Math.abs(p.x - b.x) < 62 && p.y > b.y - 260 && p.y <= b.y + 4) this.ouch(p, { dizzy: 1.2, lose: 1, text: 'Raio! -1 ⚡' });
+        b.hit = true; this.shake = 0.3; this.shakeAmp = 24; this.sfx('lightning'); this.screen('#ffffff', 0.3, 0.85); this.screen('#FFF6B0', 0.7, 0.3);
+        for (const p of live) if (Math.abs(p.x - b.x) < 62 && p.y > b.y - 260 && p.y <= b.y + 4) this.ouch(p, { dizzy: 1.2, lose: 1, text: 'Raio! -1 ⚡', buzz: 'strike' });
       }
     }
     this.bolts = this.bolts.filter((b) => b.t < 1.4);
@@ -588,10 +623,10 @@ export class Game {
         const info = CH_INFO[c.kind];
         if (c.ok) {
           this.players.forEach((p) => { if (p.chTaps > 0) { p.pts += 3; p.happy = 1.2; this.float(p.x, p.y - 190, '+3', CHARS[p.slot].color); } });
-          this.flash(info.ok, C.olive); this.burst(960, ROCK.top - 260, C.olive, 36); this.sfx('chWin');
+          this.flash(info.ok, C.olive); this.burst(960, ROCK.top - 260, C.olive, 36); this.sfx('chWin'); this.screen(C.olive, 0.6, 0.3, true);
         } else {
           PHASES[this.phase]?.types.forEach((k) => (this.have[k] = Math.max(0, this.have[k] - Math.ceil(this.need[k] * 0.15))));
-          this.flash(info.fail, C.terra); this.shake = 0.6; this.sfx('chFail');
+          this.flash(info.fail, C.terra); this.shake = 0.6; this.shakeAmp = 30; this.sfx('chFail'); this.screen(C.terra, 0.7, 0.35, true);
         }
       }
     }
@@ -758,7 +793,8 @@ export class Game {
       p.pts += pts; p.delivered += it.qty; p.happy = 1;
       this.float(p.x, p.y - 190 * p.size, `+${pts}${it.qty > 1 ? ` (${it.qty} de uma vez!)` : ''}`, CHARS[p.slot].color);
       this.burst(960, ROCK.top - 200, it.qty >= 10 ? '#F3C64A' : it.qty >= 4 ? '#4FA3DD' : C.terra, 10 + it.qty * 2);
-      this.onBuzz(p.id, 'deliver'); this.sfx(it.qty >= 4 ? 'deliverBig' : 'deliver');
+      this.onBuzz(p.id, it.qty >= 4 ? 'deliverBig' : 'deliver'); this.sfx(it.qty >= 4 ? 'deliverBig' : 'deliver');
+      if (it.qty >= 10) this.screen('#F3C64A', 0.5, 0.3, true);
       this.checkPhase();
     }
   }
@@ -766,7 +802,7 @@ export class Game {
   private checkPhase() {
     while (this.phase < PHASES.length && PHASES[this.phase].types.every((k) => this.have[k] >= this.need[k])) {
       this.phase++;
-      this.burst(960, ROCK.top - 300, C.amber, 40);
+      this.burst(960, ROCK.top - 300, C.amber, 40); this.screen('#ffffff', 0.4, 0.35);
       const next = PHASES[this.phase];
       // material que sobrou da fase anterior vira o da próxima
       if (next) {
@@ -820,7 +856,7 @@ export class Game {
       this.flash('Casa pronta! ✨', C.olive);
       for (let i = 0; i < 4; i++) this.burst(700 + i * 170, 400 + (i % 2) * 120, [C.amber, C.terra, C.olive, '#E26D9A'][i], 34);
       this.players.forEach((q) => (q.happy = 3));
-      this.sfx('finished'); this.buzzAll('finish');
+      this.sfx('finished'); this.buzzAll('finish'); this.screen('#F3C64A', 1.2, 0.35, true); this.screen('#ffffff', 0.3, 0.5);
     }
   }
 
@@ -930,7 +966,7 @@ export class Game {
         } else if (!a.flee && p.onGround && onFloor && Math.abs(p.x - a.x) < 34 && p.vy >= 0) {
           // se a formiga encosta: mordida, fica lento e ela leva o que você carregava
           const had = p.carry;
-          if (this.ouch(p, { slow: 2.5, text: 'Formiga mordeu! 🐜' }) && had && !a.carry) { this.items = this.items.filter((i) => i !== had); a.carry = had; }
+          if (this.ouch(p, { slow: 2.5, text: 'Formiga mordeu! 🐜', buzz: 'bite' }) && had && !a.carry) { this.items = this.items.filter((i) => i !== had); a.carry = had; }
         }
       });
     }
@@ -976,7 +1012,11 @@ export class Game {
     const dark = finale ? Math.min(1, fk / 1.2) * (this.complete ? Math.max(0, 1 - (fk - 4.5) / 1.5) : 1) : this.active('rain') ? 0.35 : this.active('drizzle') ? 0.15 : this.active('lightning') ? 0.4 : 0;
     const fin = this.finProg();
     ctx.save();
-    if (this.shake > 0) ctx.translate((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 12);
+    if (this.shake > 0) {
+      const a = this.shakeAmp;
+      ctx.translate(W / 2, H / 2); ctx.rotate((Math.random() - 0.5) * 0.0006 * a); ctx.translate(-W / 2, -H / 2);
+      ctx.translate((Math.random() - 0.5) * a, (Math.random() - 0.5) * a * 0.75);
+    }
     if (finale && fk > 1 && fk < 4.5) ctx.translate((Math.random() - 0.5) * 8, 0);
     scenery(ctx, this.t, dark);
     if (this.mode === 'lobby') this.lobbyOverlay(ctx); // atrás dos bonequinhos
@@ -1018,6 +1058,9 @@ export class Game {
     for (const p of arr) {
       const working = finishing && p.task;
       const f = p.fx, s = p.size;
+      if (f.burn > 0) glow(ctx, p.x, p.y - 60 * s, 90 * s, 0.55 + 0.2 * Math.sin(this.t * 20), '255,140,50');
+      if (f.frozen > 0) glow(ctx, p.x, p.y - 70 * s, 90 * s, 0.6, '170,225,250');
+      if (f.fast > 0) glow(ctx, p.x, p.y - 70 * s, 70 * s, 0.4, '255,230,90');
       if (f.magnet > 0) { ctx.save(); ctx.globalAlpha = 0.35 + 0.2 * Math.sin(this.t * 8); ctx.strokeStyle = POWERS.magnet.color; ctx.lineWidth = 4; ctx.setLineDash([12, 10]); ctx.beginPath(); ctx.arc(p.x, p.y - 70 * s, 110 + Math.sin(this.t * 6) * 10, 0, TAU); ctx.stroke(); ctx.restore(); }
       person(ctx, p.x, p.y, p.slot, {
         face: p.face, walk: p.walk, air: !p.onGround, carry: p.carry?.type ?? null, carryQty: p.carry?.qty,
@@ -1072,6 +1115,18 @@ export class Game {
     if (finale) this.finaleOverlay(ctx, fk);
     if (this.mode === 'results') this.resultsOverlay(ctx);
     if (this.mode !== 'play' && this.mode !== 'results') this.scoreStrip(ctx, this.mode === 'finale');
+    // flashes de tela (raio, poderes, entrega dourada…)
+    for (const f of this.screenFx) {
+      const k = 1 - f.t / f.d, a = f.a * k * k;
+      if (a <= 0.01) continue;
+      ctx.save();
+      if (f.vig) {
+        const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.62);
+        g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, f.c);
+        ctx.globalAlpha = Math.min(1, a * 2.2); ctx.fillStyle = g;
+      } else { ctx.globalAlpha = a; ctx.fillStyle = f.c; }
+      ctx.fillRect(0, 0, W, H); ctx.restore();
+    }
   }
 
   /** Neblina: só dá para ver em volta de cada bonequinho. */

@@ -54,6 +54,10 @@ export interface StateMsg {
   power?: PowerId;
   /** O que está acontecendo com o bonequinho agora (congelado, turbo…). */
   fx?: string;
+  /** Efeitos ativos no bonequinho (para o controle ficar congelado, pegando fogo…). */
+  fxs?: string[];
+  /** Desafios acontecendo agora na TV (terremoto, chuva, neblina…). */
+  env?: string[];
 }
 export interface ChState { kind: 'quake' | 'leak'; title: string; emoji: string; prog: number; per: number; left: number }
 export type TaskId = 'paint' | 'light' | 'garden' | 'decor';
@@ -66,7 +70,10 @@ export interface FinState {
   done: boolean;      // casa toda pronta
 }
 export interface TapMsg { n: number }
-export interface BuzzMsg { kind: 'pick' | 'deliver' | 'stomped' | 'stomp' | 'gold' | 'part' | 'finish' | 'alert' | 'storm' | 'boing' | 'power' | 'hit' | 'zap' }
+export type BuzzKind =
+  | 'pick' | 'deliver' | 'deliverBig' | 'stomped' | 'stomp' | 'gold' | 'part' | 'finish' | 'alert' | 'storm' | 'boing' | 'power' | 'hit' | 'zap'
+  | 'freeze' | 'burn' | 'shrink' | 'speed' | 'giant' | 'shield' | 'magnet' | 'quake' | 'bolt' | 'strike' | 'sting' | 'rock' | 'bite' | 'crack' | 'block';
+export interface BuzzMsg { kind: BuzzKind }
 
 const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 export const newRoom = () => Array.from({ length: 4 }, () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join('');

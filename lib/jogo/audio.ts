@@ -195,6 +195,8 @@ export class GameAudio {
       case 'boulder': this.hiss(t, 0.8, 0.35, o, { type: 'lowpass', f: 200 }, 0.1); this.tone(70, t, 0.6, 'sine', 0.3, o); break;
       case 'crash': this.hiss(t, 0.4, 0.4, o, { type: 'lowpass', f: 700, to: 120 }); break;
       case 'lightning': this.hiss(t, 0.1, 0.6, o, { type: 'highpass', f: 2500 }); this.hiss(t + 0.05, 1.4, 0.5, o, { type: 'lowpass', f: 600, to: 90 }); break;
+      case 'jolt': this.hiss(t, 0.7, 0.7, o, { type: 'lowpass', f: 260, to: 60 }, 0.01); this.tone(55, t, 0.6, 'sine', 0.6, o, { to: 30 }); this.hiss(t, 0.15, 0.3, o, { type: 'bandpass', f: 900 }); break;
+      case 'crack': this.hiss(t, 0.25, 0.4, o, { type: 'highpass', f: 3000 }); seq([96, 91, 88], 0.04, 'triangle', 0.14, 0.2); break;
       case 'ouch': this.tone(520, t, 0.18, 'square', 0.1, o, { to: 260 }); break;
       case 'fog': this.tone(196, t, 2, 'sine', 0.1, o, { attack: 0.6 }); this.tone(233, t + 0.3, 1.8, 'sine', 0.08, o, { attack: 0.6 }); break;
       case 'drizzle': this.hiss(t, 4, 0.06, o, { type: 'highpass', f: 4000 }, 1); break;
