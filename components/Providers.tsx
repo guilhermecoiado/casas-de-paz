@@ -61,7 +61,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // tela de abertura animada uma vez por sessão
     try {
-      if (!sessionStorage.getItem('cdp-splash')) {
+      if (!location.pathname.startsWith('/jogo') && !sessionStorage.getItem('cdp-splash')) {
         setShowSplash(true);
         sessionStorage.setItem('cdp-splash', '1');
         setTimeout(() => setShowSplash(false), 1700);

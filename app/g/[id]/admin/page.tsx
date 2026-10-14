@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Gavel, ImagePlus, KeyRound, Plus, Trash2, UserMinus, X } from 'lucide-react';
+import { ArrowLeft, Gamepad2, Gavel, ImagePlus, KeyRound, Plus, Trash2, UserMinus, X } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import { useConfirm, useToast } from '@/components/Providers';
 import { Avatar, PhotoPicker, Spinner } from '@/components/ui';
@@ -189,6 +189,13 @@ export default function Admin() {
         </Link>
 
         <AdminCheckinQR />
+        <a href={`/jogo?g=${group.id}`} target="_blank" rel="noreferrer" className="card flex items-center gap-3 p-4">
+          <Gamepad2 className="shrink-0 text-terra" />
+          <div className="min-w-0 flex-1">
+            <p className="font-extrabold">Abrir tela do jogo</p>
+            <p className="text-sm text-[#8A6F57]">Para a TV: check-in e o jogo Casa na Rocha.</p>
+          </div>
+        </a>
         <AdminPush />
 
         <Section title="Período">
