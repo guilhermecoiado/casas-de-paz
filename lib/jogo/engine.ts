@@ -1,38 +1,60 @@
 /* Motor do jogo "Casa na Rocha": a TV é a dona do jogo (física, fases, desafios e pontos). */
 
-import type { BuzzMsg, Mode, StateMsg } from './net';
+import type { BuzzMsg, ChState, FinState, Mode, StateMsg, TaskId } from './net';
+import {
+  C, CHARS, FONT, GROUND, H, ITEM_EMOJI, ITEM_LABEL, NO_FIN, PLATS, ROCK, TASK, TASKS, TAU, W,
+  ant, balloon, finishBack, fitText, glow, house, item, panel, person, platform, rr, scaffold, scenery, trampoline,
+  type Ctx, type FinProg, type HouseProg, type ItemType, type Plat,
+} from './draw';
 
 // espaçamento entre letras (nem todo navegador tem; sem ele só fica junto)
 const ls = (ctx: CanvasRenderingContext2D, px: number) => { (ctx as unknown as { letterSpacing: string }).letterSpacing = `${px}px`; };
-import {
-  C, CHARS, FONT, GROUND, H, ITEM_EMOJI, ITEM_LABEL, PLATS, ROCK, TAU, W, ant, glow, house, item, panel, person, platform, rr, scaffold, scenery,
-  type Ctx, type HouseProg, type ItemType, type Plat,
-  fitText,
-} from './draw';
+const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 
 export const MAX_PLAYERS = 12;
-const PLAY_TIME = 210;      // 3min30
+const PLAY_TIME = 240;      // 4 minutos
 const LOBBY_TIME = 20;
 const FINALE_TIME = 8;
 const RESULTS_TIME = 30;
 
-const GRAV = 2600, JUMP = -1130, CUT = -420, MAXV = 430;
+const GRAV = 2600, JUMP = -1130, CUT = -420, MAXV = 430, TRAMP_V = -1720;
 // degraus invisíveis no andaime (ajudam a subir da rocha)
 const SOLID_PLATS: Plat[] = [...PLATS, { x: 1128, y: 718, w: 76 }, { x: 1128, y: 618, w: 76 }];
 const ZONE = { x0: 790, x1: 1130, top: ROCK.top - 520 };
+const TRAMPS = [{ x: 36, w: 116 }, { x: 1768, w: 116 }];
+const QUOTA = 60;     // toques da parte de cada um no acabamento
+const CH_TAPS = 20;   // toques por jogador para vencer um desafio de toque
+
+/** Altura do chão da rocha em x (rampa dos lados, topo reto), ou null fora dela. */
+export function rockSurface(x: number): number | null {
+  if (x < ROCK.x0 || x > ROCK.x1) return null;
+  if (x < 790) return 905 + ((x - ROCK.x0) / (790 - ROCK.x0)) * (ROCK.top - 905);
+  if (x <= 1130) return ROCK.top;
+  return ROCK.top + ((x - 1130) / (ROCK.x1 - 1130)) * (900 - ROCK.top);
+}
+
+export type Sfx =
+  | 'jump' | 'jump2' | 'boing' | 'pick' | 'gold' | 'deliver' | 'phase' | 'stomp' | 'join' | 'alert' | 'wind' | 'quake' | 'rain'
+  | 'thunder' | 'tap' | 'chWin' | 'chFail' | 'part' | 'task' | 'finished' | 'storm' | 'standing' | 'fall' | 'results' | 'beep' | 'go' | 'balloon' | 'ant';
 
 interface Input { l: boolean; r: boolean; j: boolean }
 export interface Player {
   id: string; slot: number; name: string; bot?: boolean;
   x: number; y: number; vx: number; vy: number; onGround: boolean; coyote: number; face: 1 | -1;
+  jumps: number; boost: boolean; mover: number;
   input: Input; prevJ: boolean; carry: Item | null; pts: number; picks: number; delivered: number;
   dizzy: number; walk: number; lastSeen: number; happy: number;
+  task: TaskId | null; helping: boolean; mine: number; taps: number; budget: number; budgetT: number; work: number; chTaps: number;
 }
-interface Item { id: number; type: ItemType; gold: boolean; x: number; y: number; vx: number; vy: number; rest: boolean; age: number; onGroundFloor: boolean }
+interface Item { id: number; type: ItemType; gold: boolean; x: number; y: number; vx: number; vy: number; rest: boolean; age: number; onGroundFloor: boolean; mover: number; float?: boolean }
 interface Ant { x: number; dir: 1 | -1; carry: Item | null; flee: boolean }
 interface Floater { x: number; y: number; text: string; color: string; t: number }
+interface Mover { x: number; y: number; w: number; px: number; py: number; vertical: boolean }
+interface Balloon { x: number; y: number; dir: 1 | -1; item: Item | null }
+type Ghost = Pick<Player, 'x' | 'y' | 'pts' | 'picks' | 'delivered' | 'task' | 'helping' | 'mine' | 'taps' | 'slot'>;
 type EventType = 'wind' | 'quake' | 'rain' | 'ants';
 interface GameEvent { at: number; type: EventType; dur: number; dir?: 1 | -1; started?: boolean }
+interface TapCh { kind: 'quake' | 'leak'; at: number; dur: number; need: number; have: number; started?: boolean; ended?: boolean; ok?: boolean }
 
 const PHASES: { types: ItemType[]; title: string }[] = [
   { types: ['stone'], title: 'Fundação na rocha!' },
@@ -40,12 +62,19 @@ const PHASES: { types: ItemType[]; title: string }[] = [
   { types: ['tile'], title: 'Hora do telhado!' },
   { types: ['wood', 'glass'], title: 'Porta e janelas!' },
 ];
+const FINISH_TITLE = 'Acabamento!';
 const EVENT_INFO: Record<EventType, { soon: string; now: string; emoji: string }> = {
   wind: { soon: 'Ventania chegando! Segurem firme!', now: 'Ventania!', emoji: '💨' },
   quake: { soon: 'Terremoto chegando!', now: 'Terremoto! Tudo tremendo!', emoji: '🌋' },
   rain: { soon: 'Vem chuva aí… chão escorregadio!', now: 'Chuva! Cuidado para não escorregar!', emoji: '🌧️' },
   ants: { soon: 'Formigas à vista!', now: 'Formigas levando material! Pulem nelas!', emoji: '🐜' },
 };
+const CH_INFO: Record<TapCh['kind'], { title: string; emoji: string; ok: string; fail: string }> = {
+  quake: { title: 'Segurem a casa!', emoji: '🌋', ok: 'A casa ficou firme! 💪', fail: 'Caiu um pedaço… 😬' },
+  leak: { title: 'Tapem as goteiras!', emoji: '💧', ok: 'Goteiras tapadas! 🙌', fail: 'A água estragou material… 😬' },
+};
+/** Quanto material cada fase pede: cresce com o número de jogadores (mesmo quem entra no meio). */
+const needFor = (n: number): Record<ItemType, number> => ({ stone: 6 + 3 * n, brick: 10 + 5 * n, tile: 8 + 4 * n, wood: 3 + 2 * n, glass: 2 + n });
 
 export interface Result { id: string; slot: number; name: string; pts: number; delivered: number; suggest: number }
 
@@ -57,21 +86,41 @@ export class Game {
   floaters: Floater[] = [];
   rain: { x: number; y: number }[] = [];
   sparks: { x: number; y: number; vx: number; vy: number; t: number; c: string }[] = [];
+  movers: Mover[] = [];
+  tramp = [0, 0];
+  balloon: Balloon | null = null;
+  balloonT = 0;
   t = 0;            // relógio geral
   modeT = 0;        // tempo no modo atual
   countdown = 0;
   phase = 0;
   need: Record<ItemType, number> = { stone: 0, brick: 0, tile: 0, wood: 0, glass: 0 };
   have: Record<ItemType, number> = { stone: 0, brick: 0, tile: 0, wood: 0, glass: 0 };
+  fin: Record<TaskId, { need: number; have: number }> = { paint: { need: 0, have: 0 }, light: { need: 0, have: 0 }, garden: { need: 0, have: 0 }, decor: { need: 0, have: 0 } };
   events: GameEvent[] = [];
+  chs: TapCh[] = [];
   spawnT = 0;
   nextItem = 1;
-  complete = false;
+  complete = false;   // estrutura pronta (aguenta a tempestade)
+  finished = false;   // acabamento pronto
+  finishedAt = 0;
+  peak = 0;
+  ghosts = new Map<string, Ghost>();
+  banner: { text: string; t: number; color: string } | null = null;
   results: Result[] = [];
   shake = 0;
+  fired = new Set<string>();
   room = '';
   gameQR: HTMLImageElement | null = null;
   onBuzz: (id: string, kind: BuzzMsg['kind']) => void = () => {};
+  onSfx: (s: Sfx) => void = () => {};
+
+  constructor() { this.updateMovers(); this.updateMovers(); }
+
+  private sfx(s: Sfx) { this.onSfx(s); }
+  private buzzAll(kind: BuzzMsg['kind']) { this.players.forEach((p) => this.onBuzz(p.id, kind)); }
+  private once(key: string, fn: () => void) { if (!this.fired.has(key)) { this.fired.add(key); fn(); } }
+  private setMode(m: Mode) { this.mode = m; this.modeT = 0; this.fired.clear(); }
 
   /* ---------------- jogadores ---------------- */
 
@@ -80,18 +129,31 @@ export class Game {
     if (ex) { ex.name = name || ex.name; ex.lastSeen = this.t; return ex; }
     if (this.players.size >= MAX_PLAYERS) return null;
     const used = new Set(Array.from(this.players.values()).map((p) => p.slot));
-    let slot = 0; while (used.has(slot)) slot++;
-    const x = 120 + Math.random() * 520;
+    // quem caiu e voltou continua de onde parou (mesmo lugar, mesmos pontos e, se der, a mesma cor)
+    const g = this.ghosts.get(id);
+    let slot = 0;
+    if (g && !used.has(g.slot)) slot = g.slot; else while (used.has(slot)) slot++;
+    const sx = 120 + Math.random() * 520;
     const p: Player = {
       id, slot, name: (name || `Jogador ${slot + 1}`).slice(0, 12), bot,
-      x: Math.random() < 0.5 ? x : W - x, y: -60, vx: 0, vy: 0, onGround: false, coyote: 0, face: 1,
-      input: { l: false, r: false, j: false }, prevJ: false, carry: null, pts: 0, picks: 0, delivered: 0,
+      x: g?.x ?? (Math.random() < 0.5 ? sx : W - sx), y: g ? g.y - 2 : -60, vx: 0, vy: 0, onGround: false, coyote: 0, face: 1,
+      jumps: 0, boost: false, mover: -1,
+      input: { l: false, r: false, j: false }, prevJ: false, carry: null, pts: g?.pts ?? 0, picks: g?.picks ?? 0, delivered: g?.delivered ?? 0,
       dizzy: 0, walk: 0, lastSeen: this.t, happy: 0,
+      task: g?.task ?? null, helping: g?.helping ?? false, mine: g?.mine ?? 0, taps: g?.taps ?? 0, budget: 20, budgetT: this.t, work: 0, chTaps: 0,
     };
+    this.ghosts.delete(id);
     this.players.set(id, p);
-    this.float(p.x, 200, `${p.name} entrou!`, CHARS[slot].color);
+    this.float(p.x, Math.max(200, p.y - 200), g ? `${p.name} voltou!` : `${p.name} entrou!`, CHARS[slot].color);
+    this.sfx('join');
     if (this.mode === 'attract') this.toLobby();
     else if (this.mode === 'lobby') this.countdown = Math.max(this.countdown, 10);
+    else if (this.mode === 'play') {
+      // entrou no meio: a casa pede mais material e, no acabamento, ganha uma tarefa
+      this.peak = Math.max(this.peak, this.players.size);
+      this.scaleNeeds();
+      if (this.phase >= PHASES.length && !p.task) this.assign(p, this.neediest() ?? 'paint');
+    }
     return p;
   }
 
@@ -99,6 +161,10 @@ export class Game {
     const p = this.players.get(id);
     if (!p) return;
     if (p.carry) this.drop(p);
+    if (this.mode === 'play' || this.mode === 'finale' || this.mode === 'results') {
+      const { x, y, pts, picks, delivered, task, helping, mine, taps, slot } = p;
+      this.ghosts.set(id, { x, y: Math.min(y, GROUND), pts, picks, delivered, task, helping, mine, taps, slot });
+    }
     this.players.delete(id);
     if (!this.players.size && this.mode !== 'results' && this.mode !== 'finale') this.toAttract();
   }
@@ -110,45 +176,75 @@ export class Game {
   }
   touch(id: string) { const p = this.players.get(id); if (p) p.lastSeen = this.t; }
 
+  /** Toques rápidos no celular: desafio de toque ativo ou acabamento. */
+  tap(id: string, n: number) {
+    const p = this.players.get(id);
+    if (!p || this.mode !== 'play') return;
+    p.lastSeen = this.t;
+    // limite humano (~15 toques por segundo)
+    p.budget = Math.min(20, p.budget + (this.t - p.budgetT) * 15); p.budgetT = this.t;
+    const k = Math.min(Math.floor(p.budget), Math.max(0, Math.floor(n)));
+    if (k <= 0) return;
+    p.budget -= k;
+    const c = this.activeCh();
+    if (c) {
+      c.have += k; p.chTaps += k; p.work = 1;
+      if (Math.random() < 0.4) this.sfx('tap');
+      return;
+    }
+    if (this.phase >= PHASES.length && !this.finished) this.finishTaps(p, k);
+  }
+
   /* ---------------- modos ---------------- */
 
-  toAttract() { this.mode = 'attract'; this.modeT = 0; this.items = []; this.ants = []; }
-  toLobby(sec = LOBBY_TIME) { this.mode = 'lobby'; this.modeT = 0; this.countdown = sec; this.items = []; this.ants = []; this.resetHouse(); }
+  toAttract() { this.setMode('attract'); this.items = []; this.ants = []; this.balloon = null; this.ghosts.clear(); }
+  toLobby(sec = LOBBY_TIME) { this.setMode('lobby'); this.countdown = sec; this.items = []; this.ants = []; this.balloon = null; this.resetHouse(); }
   startNow() { if (this.mode === 'lobby' || this.mode === 'attract') this.startPlay(); }
 
   private resetHouse() {
-    this.phase = 0; this.complete = false;
+    this.phase = 0; this.complete = false; this.finished = false;
     (Object.keys(this.have) as ItemType[]).forEach((k) => (this.have[k] = 0));
+    TASKS.forEach((t) => (this.fin[t.id] = { need: 0, have: 0 }));
   }
 
   startPlay() {
     if (!this.players.size) return;
-    this.mode = 'play'; this.modeT = 0; this.items = []; this.ants = []; this.resetHouse();
-    const n = Math.max(2, this.players.size);
-    this.need = { stone: 8 + n, brick: 14 + 3 * n, tile: 10 + 2 * n, wood: 4 + n, glass: 3 + Math.ceil(n / 2) };
-    this.players.forEach((p) => { p.pts = 0; p.picks = 0; p.delivered = 0; p.carry = null; });
+    this.setMode('play'); this.items = []; this.ants = []; this.balloon = null; this.resetHouse(); this.ghosts.clear();
+    this.peak = this.players.size;
+    this.need = needFor(Math.max(2, this.peak));
+    this.players.forEach((p) => { p.pts = 0; p.picks = 0; p.delivered = 0; p.carry = null; p.task = null; p.helping = false; p.mine = 0; p.taps = 0; p.chTaps = 0; });
     const dirs = () => (Math.random() < 0.5 ? 1 : -1) as 1 | -1;
     this.events = [
-      { at: 35, type: 'wind', dur: 7, dir: dirs() },
-      { at: 70, type: 'ants', dur: 14 },
-      { at: 105, type: 'quake', dur: 5 },
-      { at: 140, type: 'rain', dur: 12 },
-      { at: 178, type: 'wind', dur: 7, dir: dirs() },
+      { at: 30, type: 'wind', dur: 7, dir: dirs() },
+      { at: 62, type: 'ants', dur: 14 },
+      { at: 98, type: 'quake', dur: 7 },
+      { at: 132, type: 'rain', dur: 14 },
+      { at: 172, type: 'wind', dur: 7, dir: dirs() },
+      { at: 200, type: 'ants', dur: 12 },
     ];
-    this.spawnT = 0.5;
+    this.chs = [
+      { kind: 'quake', at: 98, dur: 7, need: 0, have: 0 },
+      { kind: 'leak', at: 136, dur: 7, need: 0, have: 0 },
+    ];
+    this.spawnT = 0.5; this.balloonT = 16;
+    this.sfx('go');
   }
 
   private toFinale() {
-    this.mode = 'finale'; this.modeT = 0;
-    this.players.forEach((p) => { if (p.carry) { p.carry = null; } });
-    this.items = []; this.ants = [];
+    this.setMode('finale');
+    this.players.forEach((p) => { p.carry = null; p.work = 0; });
+    this.items = []; this.ants = []; this.balloon = null;
+    this.sfx('storm'); this.buzzAll('storm');
   }
 
   private toResults() {
-    this.mode = 'results'; this.modeT = 0;
+    this.setMode('results');
+    this.rain = [];
+    const bonus = this.finished ? 5 : this.complete ? 3 : 0;
     this.results = Array.from(this.players.values())
-      .map((p) => ({ id: p.id, slot: p.slot, name: p.name, pts: p.pts, delivered: p.delivered, suggest: Math.min(30, Math.round(p.pts / 4)) + (this.complete ? 5 : 0) }))
+      .map((p) => ({ id: p.id, slot: p.slot, name: p.name, pts: p.pts, delivered: p.delivered, suggest: Math.min(30, Math.round(p.pts / 4)) + bonus }))
       .sort((a, b) => b.pts - a.pts);
+    this.sfx('results');
   }
 
   get team() { let s = 0; this.players.forEach((p) => (s += p.pts)); return s; }
@@ -159,9 +255,15 @@ export class Game {
     if (this.mode === 'lobby' || this.mode === 'attract') return { stone: 0, brick: 0, tile: 0, wood: 0, glass: 0 };
     return { stone: q('stone'), brick: q('brick'), tile: q('tile'), wood: q('wood'), glass: q('glass') };
   }
+  finProg(): FinProg {
+    if (this.mode === 'lobby' || this.mode === 'attract') return NO_FIN;
+    const q = (k: TaskId) => (this.fin[k].need ? Math.min(1, this.fin[k].have / this.fin[k].need) : 0);
+    return { paint: q('paint'), light: q('light'), garden: q('garden'), decor: q('decor') };
+  }
   housePct() {
-    const p = this.progress();
-    return Math.round(((p.stone + p.brick + p.tile + (p.wood + p.glass) / 2) / 4) * 100);
+    const p = this.progress(), f = this.finProg();
+    const s = (p.stone + p.brick + p.tile + (p.wood + p.glass) / 2) / 4;
+    return Math.round((s * 0.8 + ((f.paint + f.light + f.garden + f.decor) / 4) * 0.2) * 100);
   }
 
   ranking() { return Array.from(this.players.values()).sort((a, b) => b.pts - a.pts); }
@@ -171,13 +273,22 @@ export class Game {
     if (!p) return null;
     const rk = this.ranking().findIndex((x) => x.id === id) + 1;
     const r = this.results.find((x) => x.id === id);
+    const play = this.mode === 'play';
+    const c = this.activeCh();
+    let ch: ChState | undefined;
+    if (c) ch = { kind: c.kind, title: CH_INFO[c.kind].title, emoji: CH_INFO[c.kind].emoji, prog: clamp(c.have / c.need), per: 1 / c.need, left: Math.max(0, Math.ceil(c.at + c.dur - this.modeT)) };
+    let fin: FinState | undefined;
+    if (play && this.phase >= PHASES.length && p.task) {
+      const f = this.fin[p.task];
+      fin = { task: p.task, helping: p.helping, prog: p.helping ? clamp(f.have / f.need) : clamp(p.mine / QUOTA), per: p.helping ? 1 / Math.max(1, f.need) : 1 / QUOTA, done: this.finished };
+    }
     return {
       mode: this.mode, slot: p.slot, pts: p.pts, rank: rk, team: this.team, players: this.players.size,
       countdown: this.mode === 'lobby' ? Math.ceil(this.countdown) : undefined,
-      timeLeft: this.mode === 'play' ? Math.ceil(this.timeLeft) : undefined,
-      phase: this.mode === 'play' ? PHASES[this.phase]?.title : undefined,
+      timeLeft: play ? Math.ceil(this.timeLeft) : undefined,
+      phase: play ? (PHASES[this.phase]?.title ?? FINISH_TITLE) : undefined,
       suggest: this.mode === 'results' ? r?.suggest : undefined,
-      complete: this.complete,
+      complete: this.complete, fin, ch,
     };
   }
 
@@ -186,38 +297,67 @@ export class Game {
   step(dt: number) {
     this.t += dt; this.modeT += dt;
     this.shake = Math.max(0, this.shake - dt);
+    this.updateMovers();
+    this.tramp = this.tramp.map((v) => Math.max(0, v - dt * 5));
     // quem sumiu (celular fechou) sai depois de um tempo
     this.players.forEach((p) => { if (!p.bot && this.t - p.lastSeen > (this.mode === 'play' ? 25 : 12)) this.removePlayer(p.id); });
 
     if (this.mode === 'lobby') {
+      const before = Math.ceil(this.countdown);
       this.countdown -= dt;
+      const now = Math.ceil(this.countdown);
+      if (now !== before && now <= 5 && now > 0) this.sfx('beep');
       if (this.countdown <= 0) this.startPlay();
     } else if (this.mode === 'play') {
-      this.stepEvents(dt);
-      this.stepSpawn(dt);
-      if (this.modeT >= PLAY_TIME || this.complete) this.toFinale();
+      const before = Math.ceil(this.timeLeft + dt);
+      if (this.phase < PHASES.length) { this.stepEvents(dt); this.stepChallenges(); this.stepSpawn(dt); this.stepBalloon(dt); }
+      const tl = Math.ceil(this.timeLeft);
+      if (tl !== before && tl <= 10 && tl > 0) this.sfx('beep');
+      if (this.modeT >= PLAY_TIME || (this.finished && this.t - this.finishedAt > 3.5)) this.toFinale();
     } else if (this.mode === 'finale') {
+      for (const k of [1.5, 2.6, 3.7]) if (this.modeT >= k) this.once(`th${k}`, () => this.sfx('thunder'));
+      if (this.modeT >= 4.6) this.once('end', () => this.sfx(this.complete ? 'standing' : 'fall'));
       if (this.modeT >= FINALE_TIME) this.toResults();
     } else if (this.mode === 'results') {
       if (this.modeT >= RESULTS_TIME) { if (this.players.size) this.toLobby(15); else this.toAttract(); }
     }
 
     if (this.mode !== 'attract') {
-      this.players.forEach((p) => { if (p.bot) this.botThink(p); this.stepPlayer(p, dt); });
+      const finishing = this.mode === 'play' && this.phase >= PHASES.length;
+      this.players.forEach((p) => {
+        if (p.bot) this.botThink(p);
+        p.work = Math.max(0, p.work - dt * 4);
+        if (finishing && p.task) this.stepStation(p, dt); else this.stepPlayer(p, dt);
+      });
       this.stepStomps();
       this.stepItems(dt);
       this.stepAnts(dt);
     }
     this.floaters.forEach((f) => (f.t += dt)); this.floaters = this.floaters.filter((f) => f.t < 1.4);
     this.sparks.forEach((s) => { s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 900 * dt; }); this.sparks = this.sparks.filter((s) => s.t < 0.9);
+    if (this.banner && this.t - this.banner.t > 2.8) this.banner = null;
+  }
+
+  /** Plataformas que se movem: uma vai e volta no alto à direita, um elevador sobe e desce à esquerda. */
+  private updateMovers() {
+    const a = this.t;
+    const now = [
+      { x: 1290 + ((Math.sin(a * 0.5) + 1) / 2) * 340, y: 330, w: 170, vertical: false },
+      { x: 18, y: 475 + Math.sin(a * 0.65) * 150, w: 112, vertical: true },
+    ];
+    this.movers = now.map((m, i) => ({ ...m, px: this.movers[i]?.x ?? m.x, py: this.movers[i]?.y ?? m.y }));
   }
 
   private active(type: EventType) {
-    if (this.mode !== 'play') return null;
+    if (this.mode !== 'play' || this.phase >= PHASES.length) return null;
     return this.events.find((e) => e.type === type && this.modeT >= e.at && this.modeT < e.at + e.dur) ?? null;
   }
-  private bannerEvent() {
+  private activeCh() {
     if (this.mode !== 'play') return null;
+    return this.chs.find((c) => c.started && !c.ended) ?? null;
+  }
+  private bannerEvent() {
+    if (this.mode !== 'play' || this.phase >= PHASES.length) return null;
     for (const e of this.events) {
       if (this.modeT >= e.at - 3 && this.modeT < e.at) return { e, soon: true };
       if (this.modeT >= e.at && this.modeT < e.at + e.dur) return { e, soon: false };
@@ -227,29 +367,67 @@ export class Game {
 
   private stepEvents(dt: number) {
     for (const e of this.events) {
+      if (!e.started && this.modeT >= e.at - 3) this.once(`soon${e.at}`, () => this.sfx('alert'));
       if (!e.started && this.modeT >= e.at) {
         e.started = true;
         // quem está carregando pode deixar cair
         const chance = e.type === 'wind' ? 0.3 : e.type === 'quake' ? 0.4 : 0;
         this.players.forEach((p) => { if (p.carry && Math.random() < chance) { this.drop(p); this.float(p.x, p.y - 170, 'Ops!', C.terra); } });
-        if (e.type === 'ants') this.ants.push({ x: -40, dir: 1, carry: null, flee: false }, { x: W + 40, dir: -1, carry: null, flee: false });
+        if (e.type === 'ants') { this.ants.push({ x: -40, dir: 1, carry: null, flee: false }, { x: W + 40, dir: -1, carry: null, flee: false }); this.sfx('ant'); }
+        if (e.type === 'wind') this.sfx('wind');
+        if (e.type === 'rain') this.sfx('rain');
+        if (e.type === 'quake') { this.sfx('quake'); this.buzzAll('storm'); }
       }
     }
     const q = this.active('quake');
     if (q) {
       this.shake = 0.2;
-      if (Math.random() < dt * 3) this.players.forEach((p) => { if (p.onGround && Math.random() < 0.5) { p.vy = -380; p.onGround = false; } });
-      if (Math.random() < dt * 2) this.items.forEach((it) => { if (it.rest && Math.random() < 0.4) { it.rest = false; it.vy = -300; it.vx = (Math.random() - 0.5) * 300; } });
+      if (Math.random() < dt * 3) this.players.forEach((p) => { if (p.onGround && Math.random() < 0.5) { p.vy = -380; p.onGround = false; p.mover = -1; } });
+      if (Math.random() < dt * 2) this.items.forEach((it) => { if (it.rest && Math.random() < 0.4) { it.rest = false; it.mover = -1; it.vy = -300; it.vx = (Math.random() - 0.5) * 300; } });
     }
     const r = this.active('rain');
-    if (r) for (let i = 0; i < 6; i++) this.rain.push({ x: Math.random() * (W + 300), y: -20 });
+    if (r) {
+      for (let i = 0; i < 6; i++) this.rain.push({ x: Math.random() * (W + 300), y: -20 });
+      if (Math.random() < dt * 0.25) this.sfx('thunder');
+    }
     this.rain.forEach((d) => { d.y += 1500 * dt; d.x -= 300 * dt; });
     this.rain = this.rain.filter((d) => d.y < H);
+  }
+
+  /** Desafios de toque: todo mundo toca rápido no celular para salvar a obra. */
+  private stepChallenges() {
+    for (const c of this.chs) {
+      if (!c.started && this.modeT >= c.at) {
+        c.started = true; c.need = CH_TAPS * Math.max(1, this.players.size); c.have = 0;
+        this.players.forEach((p) => (p.chTaps = 0));
+        this.buzzAll('alert'); this.sfx('alert');
+      }
+      if (c.started && !c.ended && (c.have >= c.need || this.modeT >= c.at + c.dur)) {
+        c.ended = true; c.ok = c.have >= c.need;
+        const info = CH_INFO[c.kind];
+        if (c.ok) {
+          this.players.forEach((p) => { if (p.chTaps > 0) { p.pts += 3; p.happy = 1.2; this.float(p.x, p.y - 190, '+3', CHARS[p.slot].color); } });
+          this.flash(info.ok, C.olive); this.burst(960, ROCK.top - 260, C.olive, 36); this.sfx('chWin');
+        } else {
+          PHASES[this.phase]?.types.forEach((k) => (this.have[k] = Math.max(0, this.have[k] - Math.ceil(this.need[k] * 0.2))));
+          this.flash(info.fail, C.terra); this.shake = 0.6; this.sfx('chFail');
+        }
+      }
+    }
   }
 
   private currentTypes(): ItemType[] {
     const ph = PHASES[this.phase];
     return ph ? ph.types.filter((k) => this.have[k] < this.need[k]) : [];
+  }
+
+  /** Jogador novo no meio da partida: as fases que ainda faltam pedem mais material. */
+  private scaleNeeds() {
+    const nn = needFor(Math.max(2, this.peak));
+    PHASES.forEach((ph, i) => {
+      if (i < this.phase) return;
+      ph.types.forEach((k) => { if (this.have[k] < this.need[k] || i > this.phase) this.need[k] = Math.max(this.need[k], nn[k]); });
+    });
   }
 
   private stepSpawn(dt: number) {
@@ -261,21 +439,46 @@ export class Game {
     const types = this.currentTypes();
     if (!types.length) return;
     const type = types[Math.floor(Math.random() * types.length)];
-    // onde cair: em cima de uma plataforma ou no chão, fora da obra
-    const spots: [number, number][] = [[60, 660], [1250, 1860], ...PLATS.map((p) => [p.x + 24, p.x + p.w - 24] as [number, number])];
+    // onde cair: plataformas, chão (fora da obra), em cima das camas elásticas e das plataformas que se movem
+    const spots: [number, number][] = [[160, 660], [1250, 1760], ...PLATS.map((p) => [p.x + 24, p.x + p.w - 24] as [number, number]),
+      [TRAMPS[0].x + 20, TRAMPS[0].x + TRAMPS[0].w - 20], [TRAMPS[1].x + 20, TRAMPS[1].x + TRAMPS[1].w - 20],
+      ...this.movers.map((m) => [m.x + 20, m.x + m.w - 20] as [number, number])];
     const [a, b] = spots[Math.floor(Math.random() * spots.length)];
-    this.items.push({ id: this.nextItem++, type, gold: Math.random() < 0.08, x: a + Math.random() * (b - a), y: -40, vx: 0, vy: 0, rest: false, age: 0, onGroundFloor: false });
+    this.items.push({ id: this.nextItem++, type, gold: Math.random() < 0.08, x: a + Math.random() * (b - a), y: -40, vx: 0, vy: 0, rest: false, age: 0, onGroundFloor: false, mover: -1 });
   }
 
-  private landY(x: number, prevY: number, y: number, vy: number): number | null {
-    if (vy < 0) return null;
-    let best: number | null = null;
-    for (const p of SOLID_PLATS) {
-      if (x > p.x - 14 && x < p.x + p.w + 14 && prevY <= p.y + 1 && y >= p.y) best = best == null ? p.y : Math.min(best, p.y);
+  /** De tempos em tempos um balão cruza o céu com material dourado pendurado. */
+  private stepBalloon(dt: number) {
+    if (!this.balloon) {
+      this.balloonT -= dt;
+      const types = this.currentTypes();
+      if (this.balloonT > 0 || !types.length) return;
+      const dir = (Math.random() < 0.5 ? 1 : -1) as 1 | -1;
+      const x = dir > 0 ? -80 : W + 80;
+      this.balloon = { x, y: 236, dir, item: { id: this.nextItem++, type: types[Math.floor(Math.random() * types.length)], gold: true, x, y: 340, vx: 0, vy: 0, rest: false, age: 0, onGroundFloor: false, mover: -1, float: true } };
+      this.balloonT = 24; this.sfx('balloon');
+      return;
     }
-    if (x > ROCK.x0 + 14 && x < ROCK.x1 - 14 && prevY <= ROCK.top + 1 && y >= ROCK.top) best = best == null ? ROCK.top : Math.min(best, ROCK.top);
-    if (y >= GROUND) best = best == null ? GROUND : Math.min(best, GROUND);
-    return best;
+    const b = this.balloon;
+    b.x += b.dir * 150 * dt;
+    if (!b.item) b.y -= 260 * dt; else b.y = 236 + Math.sin(this.t * 2) * 8;
+    if (b.item) { b.item.x = b.x; b.item.y = b.y + 104; }
+    if (b.x < -140 || b.x > W + 140 || b.y < -160) this.balloon = null;
+  }
+
+  /** Onde algo que está caindo pousa (plataformas, plataformas móveis, rocha, chão). */
+  private land(x: number, prevY: number, y: number, vy: number) {
+    if (vy < 0) return null;
+    const r = { y: Infinity, m: -1, tramp: -1 };
+    const take = (py: number, m: number) => { if (py < r.y) { r.y = py; r.m = m; } };
+    for (const p of SOLID_PLATS) if (x > p.x - 14 && x < p.x + p.w + 14 && prevY <= p.y + 1 && y >= p.y) take(p.y, -1);
+    this.movers.forEach((m, i) => { if (x > m.x - 10 && x < m.x + m.w + 10 && prevY <= Math.max(m.py, m.y) + 1 && y >= m.y) take(m.y, i); });
+    const rs = rockSurface(x);
+    if (rs != null && prevY <= rs + 1 && y >= rs) take(rs, -1);
+    if (y >= GROUND) take(GROUND, -1);
+    if (r.y === Infinity) return null;
+    if (r.y === GROUND && r.m === -1) r.tramp = TRAMPS.findIndex((t) => x > t.x && x < t.x + t.w);
+    return r;
   }
 
   private stepPlayer(p: Player, dt: number) {
@@ -290,35 +493,59 @@ export class Game {
     if (wind) p.vx += (wind.dir ?? 1) * 1500 * dt;
     const lim = MAXV + (wind ? 160 : 0);
     p.vx = Math.max(-lim, Math.min(lim, p.vx));
-    // pulo (com tolerância na borda e pulo mais baixo se soltar cedo)
+    // pulo (com tolerância na borda), pulo duplo no ar e pulo mais baixo se soltar cedo
     p.coyote = p.onGround ? 0.09 : Math.max(0, p.coyote - dt);
-    if (p.input.j && !p.prevJ && (p.onGround || p.coyote > 0) && !stunned) { p.vy = JUMP; p.onGround = false; p.coyote = 0; }
-    if (!p.input.j && p.vy < CUT) p.vy = CUT;
+    if (p.input.j && !p.prevJ && !stunned) {
+      if (p.onGround || p.coyote > 0) { p.vy = JUMP; p.onGround = false; p.coyote = 0; p.jumps = 1; p.boost = false; p.mover = -1; this.sfx('jump'); }
+      else if (p.jumps < 2) { p.vy = JUMP * 0.9; p.jumps = 2; p.boost = false; this.puff(p.x, p.y); this.sfx('jump2'); }
+    }
+    if (!p.input.j && !p.boost && p.vy < CUT) p.vy = CUT;
+    if (p.vy >= 0) p.boost = false;
     p.prevJ = p.input.j;
+    // em cima de plataforma que se move: vai junto
+    if (p.onGround && p.mover >= 0) { const m = this.movers[p.mover]; p.x += m.x - m.px; p.y = m.y; }
     p.vy += GRAV * dt;
     const prevY = p.y;
     p.x += p.vx * dt; p.y += p.vy * dt;
-    // paredes da rocha
-    if (p.y > ROCK.top + 4 && p.x > ROCK.x0 - 18 && p.x < ROCK.x1 + 18) {
-      p.x = p.x < (ROCK.x0 + ROCK.x1) / 2 ? ROCK.x0 - 18 : ROCK.x1 + 18; p.vx = 0;
-    }
     p.x = Math.max(30, Math.min(W - 30, p.x));
-    const land = this.landY(p.x, prevY, p.y, p.vy);
-    if (land != null) { p.y = land; p.vy = 0; p.onGround = true; } else p.onGround = false;
+    const land = this.land(p.x, prevY, p.y, p.vy);
+    if (land) {
+      p.y = land.y; p.vy = 0; p.onGround = true; p.mover = land.m; p.jumps = 0;
+      if (land.tramp >= 0) { // cama elástica: lá vai para o alto
+        p.vy = TRAMP_V; p.onGround = false; p.boost = true; p.jumps = 1; p.mover = -1;
+        this.tramp[land.tramp] = 1; this.sfx('boing'); this.onBuzz(p.id, 'boing');
+      }
+    } else { p.onGround = false; p.mover = -1; }
+    // rocha: dá para subir a rampa andando; se bater de lado, para na parede
+    const rs = rockSurface(p.x);
+    if (rs != null && p.y > rs + 2) {
+      if (p.y - rs <= 36 && p.vy >= 0) { p.y = rs; p.vy = 0; p.onGround = true; p.jumps = 0; p.mover = -1; }
+      else { p.x = p.x < (ROCK.x0 + ROCK.x1) / 2 ? ROCK.x0 - 18 : ROCK.x1 + 18; p.vx = 0; }
+    }
     p.walk = p.onGround && Math.abs(p.vx) > 30 ? p.walk + dt * 14 : 0;
 
     if (this.mode !== 'play') return;
-    // pegar material
+    // pegar material (também o do balão)
     if (!p.carry && !stunned) {
-      const it = this.items.find((i) => Math.abs(i.x - p.x) < 44 && i.y > p.y - 120 && i.y < p.y + 20);
-      if (it) {
-        this.items = this.items.filter((i) => i !== it);
+      const near = (i: Item) => Math.abs(i.x - p.x) < 44 && i.y > p.y - 120 && i.y < p.y + 20;
+      const b = this.balloon;
+      if (b?.item && near(b.item)) {
+        const it = b.item; b.item = null; it.float = false;
         p.carry = it; p.pts += 1; p.picks++;
-        this.float(p.x, p.y - 190, '+1', CHARS[p.slot].color);
-        this.onBuzz(p.id, it.gold ? 'gold' : 'pick');
+        this.float(p.x, p.y - 190, '+1 ✨', CHARS[p.slot].color);
+        this.burst(p.x, p.y - 150, '#F3C64A', 22);
+        this.onBuzz(p.id, 'gold'); this.sfx('gold');
+      } else {
+        const it = this.items.find(near);
+        if (it) {
+          this.items = this.items.filter((i) => i !== it);
+          p.carry = it; p.pts += 1; p.picks++;
+          this.float(p.x, p.y - 190, '+1', CHARS[p.slot].color);
+          this.onBuzz(p.id, it.gold ? 'gold' : 'pick'); this.sfx(it.gold ? 'gold' : 'pick');
+        }
       }
     }
-    // entregar na obra
+    // entregar na obra (o bonequinho continua onde está)
     if (p.carry && p.x > ZONE.x0 && p.x < ZONE.x1 && p.y <= ROCK.top + 2 && p.y > ZONE.top) {
       const it = p.carry; p.carry = null;
       const types = this.currentTypes();
@@ -328,7 +555,7 @@ export class Game {
       p.pts += 2 * val; p.delivered += val; p.happy = 1;
       this.float(p.x, p.y - 190, `+${2 * val}`, CHARS[p.slot].color);
       this.burst(960, ROCK.top - 200, it.gold ? '#F3C64A' : C.terra);
-      this.onBuzz(p.id, 'deliver');
+      this.onBuzz(p.id, 'deliver'); this.sfx('deliver');
       this.checkPhase();
     }
   }
@@ -342,23 +569,93 @@ export class Game {
       if (next) {
         this.items = this.items.filter((i) => next.types.includes(i.type));
         this.players.forEach((p) => { if (p.carry && !next.types.includes(p.carry.type)) p.carry.type = next.types[0]; });
-      } else this.complete = true;
+        if (this.balloon?.item && !next.types.includes(this.balloon.item.type)) this.balloon.item.type = next.types[0];
+        this.flash(`${next.title}`, C.terra); this.sfx('phase');
+      } else { this.complete = true; this.startFinish(); }
     }
   }
 
+  /* ---------------- acabamento (fase 5) ---------------- */
+
+  private startFinish() {
+    this.items = []; this.ants = []; this.balloon = null; this.rain = [];
+    this.chs.forEach((c) => { c.started = true; c.ended = true; });
+    TASKS.forEach((t) => (this.fin[t.id] = { need: 0, have: 0 }));
+    Array.from(this.players.values()).sort((a, b) => a.slot - b.slot).forEach((p, i) => { p.carry = null; this.assign(p, TASKS[i % TASKS.length].id); });
+    // com menos de 4 jogadores, as equipes sem ninguém ficam para quem terminar primeiro
+    TASKS.forEach((t) => { if (!this.fin[t.id].need) this.fin[t.id].need = 40; });
+    this.flash('Acabamento! Toquem rápido no celular 📱', C.terra);
+    this.sfx('phase'); this.buzzAll('alert');
+  }
+  private assign(p: Player, task: TaskId) { p.task = task; p.helping = false; p.mine = 0; this.fin[task].need += QUOTA; }
+  private neediest(): TaskId | null {
+    let best: TaskId | null = null, bd = 0;
+    for (const t of TASKS) { const r = this.fin[t.id].need - this.fin[t.id].have; if (r > bd) { bd = r; best = t.id; } }
+    return best;
+  }
+
+  private finishTaps(p: Player, n: number) {
+    for (let i = 0; i < n; i++) {
+      if (!p.task) return;
+      let f = this.fin[p.task];
+      if (f.have >= f.need) { const nx = this.neediest(); if (!nx) break; p.task = nx; p.helping = true; f = this.fin[nx]; }
+      f.have++; p.taps++;
+      if (p.taps % 4 === 0) p.pts += 1;
+      if (!p.helping) {
+        p.mine++;
+        if (p.mine >= QUOTA) { p.helping = true; p.pts += 5; p.happy = 1.2; this.float(p.x, p.y - 200, 'Parte pronta! +5', CHARS[p.slot].color); this.onBuzz(p.id, 'part'); this.sfx('part'); }
+      }
+      if (f.have === f.need) { const T = TASK[p.task]; this.flash(`${T.emoji} ${T.done}`, T.color); this.burst(960, ROCK.top - 260, T.color, 30); this.sfx('task'); }
+    }
+    p.work = 1;
+    const T = TASK[p.task ?? 'paint'];
+    const cols: Record<TaskId, string[]> = { paint: ['#FBF1E1', '#E26D9A', '#F2DFC4'], light: ['#FFE28A', '#F2A541', '#fff'], garden: ['#5E8C3A', '#8FBF5A', '#E25B45'], decor: ['#E26D9A', '#F2A541', '#7B3FA0', '#2F8FD0'] };
+    for (let i = 0; i < 3; i++) { const c = cols[T.id]; this.sparks.push({ x: p.x + p.face * 40, y: p.y - 100, vx: (Math.random() - 0.5) * 300, vy: -200 - Math.random() * 300, t: 0, c: c[Math.floor(Math.random() * c.length)] }); }
+    if (Math.random() < 0.35) this.sfx('tap');
+    if (TASKS.every((t) => this.fin[t.id].have >= this.fin[t.id].need)) {
+      this.finished = true; this.finishedAt = this.t;
+      this.flash('Casa pronta! ✨', C.olive);
+      for (let i = 0; i < 4; i++) this.burst(700 + i * 170, 400 + (i % 2) * 120, [C.amber, C.terra, C.olive, '#E26D9A'][i], 34);
+      this.players.forEach((q) => (q.happy = 3));
+      this.sfx('finished'); this.buzzAll('finish');
+    }
+  }
+
+  /** No acabamento cada um vai para o seu posto de trabalho em volta da casa. */
+  private station(p: Player): [number, number] {
+    const crew = Array.from(this.players.values()).filter((q) => q.task === p.task).sort((a, b) => a.slot - b.slot);
+    const i = Math.max(0, crew.indexOf(p));
+    const pick = (s: [number, number][]) => s[i % s.length];
+    switch (p.task) {
+      case 'paint': return pick([[846, ROCK.top], [1078, ROCK.top], [884, ROCK.top], [1040, ROCK.top], [810, ROCK.top], [1112, ROCK.top]]);
+      case 'light': return pick([[960, 400], [1350, 520], [640, 500], [900, 400], [1420, 520], [700, 500]]);
+      case 'garden': return pick([[520, GROUND], [1430, GROUND], [380, GROUND], [1570, GROUND], [260, GROUND], [1690, GROUND]]);
+      default: return pick([[672, GROUND], [1252, GROUND], [600, GROUND], [1320, GROUND], [560, GROUND], [1380, GROUND]]);
+    }
+  }
+  private stepStation(p: Player, dt: number) {
+    const [sx, sy] = this.station(p);
+    const dx = sx - p.x, dy = sy - p.y, k = Math.min(1, dt * 3);
+    p.x += dx * k; p.y += dy * k; p.vx = 0; p.vy = 0; p.mover = -1; p.carry = null;
+    p.onGround = Math.abs(dy) < 8;
+    p.walk = Math.abs(dx) > 8 ? p.walk + dt * 14 : 0;
+    p.face = Math.abs(dx) > 8 ? (Math.sign(dx) as 1 | -1) : p.x < 960 ? 1 : -1;
+    p.happy = Math.max(0, p.happy - dt); p.dizzy = 0;
+  }
+
   private stepStomps() {
-    if (this.mode !== 'play') return;
+    if (this.mode !== 'play' || this.phase >= PHASES.length) return;
     const arr = Array.from(this.players.values());
     for (const a of arr) {
       if (a.vy < 150) continue;
       for (const b of arr) {
         if (a === b || b.dizzy > 0) continue;
         if (Math.abs(a.x - b.x) < 36 && a.y > b.y - 150 && a.y < b.y - 100) {
-          a.vy = -800; a.pts += 1;
+          a.vy = -800; a.pts += 1; a.jumps = 1;
           if (b.carry) this.drop(b, a.face);
           b.dizzy = 1.1;
           this.float(a.x, a.y - 190, '+1', CHARS[a.slot].color);
-          this.onBuzz(a.id, 'stomp'); this.onBuzz(b.id, 'stomped');
+          this.onBuzz(a.id, 'stomp'); this.onBuzz(b.id, 'stomped'); this.sfx('stomp');
         }
       }
     }
@@ -367,7 +664,7 @@ export class Game {
   private drop(p: Player, dir: number = p.face) {
     const it = p.carry; if (!it) return;
     p.carry = null;
-    it.x = p.x; it.y = p.y - 150; it.vx = dir * (180 + Math.random() * 200); it.vy = -520; it.rest = false; it.age = 0;
+    it.x = p.x; it.y = p.y - 150; it.vx = dir * (180 + Math.random() * 200); it.vy = -520; it.rest = false; it.age = 0; it.mover = -1; it.float = false;
     this.items.push(it);
   }
 
@@ -375,18 +672,26 @@ export class Game {
     const wind = this.active('wind');
     for (const it of this.items) {
       it.age += dt;
+      if (it.rest && it.mover >= 0) { // indo junto com a plataforma
+        const m = this.movers[it.mover];
+        it.x += m.x - m.px; it.y = m.y;
+        if (it.x < m.x - 6 || it.x > m.x + m.w + 6) { it.rest = false; it.mover = -1; }
+        continue;
+      }
       if (wind && it.rest) { it.vx += (wind.dir ?? 1) * 260 * dt; it.rest = Math.abs(it.vx) < 5; }
       if (!it.rest) {
         it.vy += GRAV * 0.8 * dt;
         const prevY = it.y;
         it.x += it.vx * dt; it.y += it.vy * dt; it.vx *= 1 - 1.5 * dt;
-        if (it.y > ROCK.top && it.x > ROCK.x0 - 10 && it.x < ROCK.x1 + 10) { it.x = it.x < 965 ? ROCK.x0 - 10 : ROCK.x1 + 10; it.vx = -it.vx * 0.4; }
         if (it.x < 30 || it.x > W - 30) { it.x = Math.max(30, Math.min(W - 30, it.x)); it.vx = -it.vx * 0.5; }
-        const land = this.landY(it.x, prevY, it.y, it.vy);
-        if (land != null) { it.y = land; it.vy = 0; it.vx *= 0.5; if (Math.abs(it.vx) < 20) { it.vx = 0; it.rest = true; } it.onGroundFloor = land === GROUND; }
+        const land = this.land(it.x, prevY, it.y, it.vy);
+        if (land && land.tramp >= 0) { it.y = land.y - 1; it.vy = -1100; this.tramp[land.tramp] = 0.7; }
+        else if (land) { it.y = land.y; it.vy = 0; it.vx *= 0.5; it.mover = land.m; if (Math.abs(it.vx) < 20) { it.vx = 0; it.rest = true; } it.onGroundFloor = land.y === GROUND; }
+        const rs = rockSurface(it.x);
+        if (rs != null && it.y > rs + 2) { it.x = it.x < 965 ? ROCK.x0 - 10 : ROCK.x1 + 10; it.vx = -it.vx * 0.4; }
       }
     }
-    // material esquecido some depois de um tempo (e o que cair na obra conta como entregue para ninguém)
+    // material esquecido some depois de um tempo
     this.items = this.items.filter((it) => it.age < 28);
   }
 
@@ -400,8 +705,8 @@ export class Game {
       // pular na formiga solta o material
       this.players.forEach((p) => {
         if (!a.flee && p.vy > 100 && Math.abs(p.x - a.x) < 40 && p.y > GROUND - 50 && p.y <= GROUND + 2) {
-          a.flee = true; p.vy = -700; p.pts += 1; this.float(p.x, p.y - 190, '+1', CHARS[p.slot].color); this.onBuzz(p.id, 'stomp');
-          if (a.carry) { const it = a.carry; a.carry = null; it.x = a.x; it.y = GROUND - 60; it.vy = -400; it.vx = 0; it.rest = false; it.age = 0; this.items.push(it); }
+          a.flee = true; p.vy = -700; p.jumps = 1; p.pts += 1; this.float(p.x, p.y - 190, '+1', CHARS[p.slot].color); this.onBuzz(p.id, 'stomp'); this.sfx('stomp');
+          if (a.carry) { const it = a.carry; a.carry = null; it.x = a.x; it.y = GROUND - 60; it.vy = -400; it.vx = 0; it.rest = false; it.age = 0; it.mover = -1; this.items.push(it); }
           a.dir = (a.dir * -1) as 1 | -1;
         }
       });
@@ -412,22 +717,31 @@ export class Game {
   }
 
   private botThink(p: Player) {
+    p.lastSeen = this.t;
+    if (this.mode === 'play' && (this.activeCh() || (this.phase >= PHASES.length && !this.finished))) {
+      if (Math.random() < 0.11) this.tap(p.id, 1);
+      if (this.phase >= PHASES.length) return;
+    }
     let tx: number, ty: number;
     if (p.carry) { tx = 960; ty = ROCK.top; }
     else {
       let best: Item | null = null, bd = 1e9;
-      for (const it of this.items) { const d = Math.abs(it.x - p.x) + Math.abs(it.y - p.y) * 1.5; if (d < bd) { bd = d; best = it; } }
+      const pool = this.balloon?.item ? [...this.items, this.balloon.item] : this.items;
+      for (const it of pool) { const d = Math.abs(it.x - p.x) + Math.abs(it.y - p.y) * 1.5; if (d < bd) { bd = d; best = it; } }
       if (!best) { tx = 400 + ((p.slot * 137) % 1100); ty = GROUND; } else { tx = best.x; ty = best.y; }
     }
     const dx = tx - p.x;
     const wantUp = ty < p.y - 60;
     p.input = { l: dx < -20, r: dx > 20, j: (wantUp && Math.random() < 0.08) || (p.onGround && Math.abs(p.vx) < 5 && Math.abs(dx) > 30 && Math.random() < 0.05) ? true : p.input.j && Math.random() < 0.8 };
-    p.lastSeen = this.t;
   }
 
   private float(x: number, y: number, text: string, color: string) { this.floaters.push({ x, y, text, color, t: 0 }); }
+  private flash(text: string, color: string) { this.banner = { text, t: this.t, color }; }
   private burst(x: number, y: number, c: string, n = 18) {
     for (let i = 0; i < n; i++) { const a = Math.random() * TAU, v = 200 + Math.random() * 400; this.sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 300, t: 0, c }); }
+  }
+  private puff(x: number, y: number) {
+    for (let i = 0; i < 8; i++) this.sparks.push({ x: x + (Math.random() - 0.5) * 30, y: y - 6, vx: (Math.random() - 0.5) * 260, vy: 60 + Math.random() * 120, t: 0.3, c: '#ffffff' });
   }
 
   /* ---------------- desenho ---------------- */
@@ -436,18 +750,27 @@ export class Game {
     const finale = this.mode === 'finale';
     const fk = finale ? this.modeT : 0;
     const dark = finale ? Math.min(1, fk / 1.2) * (this.complete ? Math.max(0, 1 - (fk - 4.5) / 1.5) : 1) : this.active('rain') ? 0.35 : 0;
+    const fin = this.finProg();
     ctx.save();
     if (this.shake > 0) ctx.translate((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 12);
     if (finale && fk > 1 && fk < 4.5) ctx.translate((Math.random() - 0.5) * 8, 0);
     scenery(ctx, this.t, dark);
     if (this.mode === 'lobby') this.lobbyOverlay(ctx); // atrás dos bonequinhos
+    finishBack(ctx, fin, this.t);
     const quake = !!this.active('quake');
     PLATS.forEach((pl, i) => platform(ctx, pl, quake ? Math.sin(this.t * 40 + i) * 4 : 0));
+    // plataformas que se movem (trilho e cabos)
+    const [mh, mv] = this.movers;
+    ctx.save(); ctx.setLineDash([10, 10]); ctx.strokeStyle = 'rgba(43,33,24,0.25)'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(1290, mh.y + 13); ctx.lineTo(1290 + 340 + mh.w, mh.y + 13); ctx.stroke(); ctx.restore();
+    ctx.strokeStyle = 'rgba(43,33,24,0.45)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(mv.x + 12, 0); ctx.lineTo(mv.x + 12, mv.y); ctx.moveTo(mv.x + mv.w - 12, 0); ctx.lineTo(mv.x + mv.w - 12, mv.y); ctx.stroke();
+    this.movers.forEach((m) => platform(ctx, m, 0, true));
+    TRAMPS.forEach((t, i) => trampoline(ctx, t.x, t.w, this.tramp[i]));
     // a casa
     const prog = this.progress();
     const fall = finale && !this.complete ? Math.max(0, Math.min(1, (fk - 3.2) / 1.6)) : 0;
-    house(ctx, prog, this.t, { wobble: finale && fk > 1 ? (this.complete ? 0.5 : 2) : quake ? 1 : 0, fall });
-    scaffold(ctx);
+    house(ctx, prog, this.t, { wobble: finale && fk > 1 ? (this.complete ? 0.5 : 2) : quake ? 1 : 0, fall, fin });
+    if (fin.decor < 1) scaffold(ctx);
     // materiais
     for (const it of this.items) {
       if (it.age > 23 && Math.floor(it.age * 6) % 2) continue;
@@ -455,18 +778,26 @@ export class Game {
       glow(ctx, it.x, it.y - 18 + bob, 44, it.gold ? 1 : 0.8);
       item(ctx, it.type, it.x, it.y - 18 + bob, it.gold);
     }
+    if (this.balloon) {
+      const b = this.balloon;
+      balloon(ctx, b.x, b.y, this.t, !!b.item);
+      if (b.item) { glow(ctx, b.item.x, b.item.y - 18, 50, 1); item(ctx, b.item.type, b.item.x, b.item.y - 18, true); }
+    }
     this.ants.forEach((a) => ant(ctx, a.x, GROUND + 4, a.dir, this.t, a.carry?.type));
     // jogadores (de trás para frente)
+    const finishing = this.phase >= PHASES.length && this.mode === 'play';
     const arr = Array.from(this.players.values()).sort((a, b) => a.y - b.y);
     for (const p of arr) {
+      const working = finishing && p.task;
       person(ctx, p.x, p.y, p.slot, {
         face: p.face, walk: p.walk, air: !p.onGround, carry: p.carry?.type ?? null, carryGold: p.carry?.gold,
         happy: p.happy > 0 || (finale && this.complete && fk > 5), dizzy: p.dizzy > 0, name: p.name,
+        tool: working ? TASK[p.task as TaskId].tool : undefined, work: working ? Math.abs(Math.sin(p.work * Math.PI * 2)) : 0,
       });
       if (p.dizzy > 0) { ctx.fillStyle = C.amber; ctx.font = `900 22px ${FONT}`; ctx.textAlign = 'center'; for (let i = 0; i < 3; i++) { const a = this.t * 6 + (i * TAU) / 3; ctx.fillText('★', p.x + Math.cos(a) * 30, p.y - 140 + Math.sin(a) * 8); } }
     }
     // efeitos
-    this.sparks.forEach((s) => { ctx.globalAlpha = 1 - s.t / 0.9; ctx.fillStyle = s.c; ctx.fillRect(s.x - 5, s.y - 5, 10, 10); }); ctx.globalAlpha = 1;
+    this.sparks.forEach((s) => { ctx.globalAlpha = Math.max(0, 1 - s.t / 0.9); ctx.fillStyle = s.c; ctx.fillRect(s.x - 5, s.y - 5, 10, 10); }); ctx.globalAlpha = 1;
     const wind = this.active('wind');
     if (wind) {
       ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 6; ctx.lineCap = 'round';
@@ -494,44 +825,81 @@ export class Game {
     // o QR do saguão fica sempre por cima, para ninguém tampar na hora de escanear
     if (this.mode === 'lobby' && this.gameQR) { const x = W / 2 - 450; ctx.fillStyle = '#fff'; rr(ctx, x + 26, 116, 248, 248, 18); ctx.fill(); ctx.drawImage(this.gameQR, x + 36, 126, 228, 228); }
     if (this.mode === 'play') this.hud(ctx);
+    if (this.banner && this.mode === 'play') this.bannerFlash(ctx);
     if (finale) this.finaleOverlay(ctx, fk);
     if (this.mode === 'results') this.resultsOverlay(ctx);
     if (this.mode !== 'play' && this.mode !== 'results') this.scoreStrip(ctx, this.mode === 'finale');
   }
 
+  private bannerFlash(ctx: Ctx) {
+    const b = this.banner!; const k = this.t - b.t;
+    const a = Math.min(1, k * 5) * Math.min(1, (2.8 - k) * 3);
+    const s = 0.85 + 0.15 * Math.min(1, k * 6);
+    ctx.save(); ctx.globalAlpha = Math.max(0, a); ctx.translate(W / 2, 300); ctx.scale(s, s);
+    ctx.font = `900 46px ${FONT}`; const bw = Math.min(W - 200, ctx.measureText(b.text).width + 90);
+    ctx.fillStyle = b.color; rr(ctx, -bw / 2, -46, bw, 86, 43); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; fitText(ctx, b.text, 0, 14, bw - 70, 900, 46);
+    ctx.restore();
+  }
+
   private hud(ctx: Ctx) {
     const M = 64;
+    const finishing = this.phase >= PHASES.length;
     // fase e materiais
     panel(ctx, M, 44, 640, 156);
     ctx.textAlign = 'left'; ctx.fillStyle = C.terra; ctx.font = `900 19px ${FONT}`; ls(ctx, 4);
-    ctx.fillText(`FASE ${Math.min(this.phase + 1, 4)} DE 4`, M + 34, 90); ls(ctx, 0);
+    ctx.fillText(`FASE ${Math.min(this.phase + 1, 5)} DE 5`, M + 34, 90); ls(ctx, 0);
     const pct = this.housePct();
     ctx.fillStyle = '#efe4d2'; rr(ctx, M + 450, 77, 150, 14, 7); ctx.fill(); ctx.fillStyle = C.terra; rr(ctx, M + 450, 77, Math.max(14, 150 * pct / 100), 14, 7); ctx.fill();
     ctx.fillStyle = C.muted; ctx.font = `800 17px ${FONT}`; ctx.textAlign = 'right'; ctx.fillText(`casa ${pct}%`, M + 440, 90); ctx.textAlign = 'left';
-    ctx.fillStyle = C.ink; ctx.font = `900 38px ${FONT}`; ctx.fillText(PHASES[Math.min(this.phase, 3)].title, M + 34, 136);
-    ctx.font = `800 21px ${FONT}`;
-    let x = M + 34;
-    (['stone', 'brick', 'tile', 'wood', 'glass'] as ItemType[]).forEach((k) => {
-      const done = this.have[k] >= this.need[k];
-      const txt = `${ITEM_EMOJI[k]} ${this.have[k]}/${this.need[k]}${done ? ' ✓' : ''}`;
-      ctx.fillStyle = done ? C.olive : PHASES[this.phase]?.types.includes(k) ? C.ink : '#b9a690';
-      ctx.fillText(txt, x, 176); x += ctx.measureText(txt).width + 22;
-    });
+    ctx.fillStyle = C.ink; fitText(ctx, finishing ? FINISH_TITLE : PHASES[this.phase].title, M + 34, 136, 570, 900, 38);
+    if (finishing) {
+      // barrinhas das 4 equipes
+      const f = this.finProg();
+      TASKS.forEach((t, i) => {
+        const x = M + 34 + i * 146, v = f[t.id];
+        ctx.fillStyle = C.ink; ctx.font = `22px ${FONT}`; ctx.fillText(t.emoji, x, 180);
+        ctx.fillStyle = '#efe4d2'; rr(ctx, x + 34, 164, 92, 14, 7); ctx.fill();
+        ctx.fillStyle = v >= 1 ? C.olive : t.color; rr(ctx, x + 34, 164, Math.max(14, 92 * v), 14, 7); ctx.fill();
+      });
+    } else {
+      ctx.font = `800 21px ${FONT}`;
+      let x = M + 34;
+      (['stone', 'brick', 'tile', 'wood', 'glass'] as ItemType[]).forEach((k) => {
+        const done = this.have[k] >= this.need[k];
+        const txt = `${ITEM_EMOJI[k]} ${this.have[k]}/${this.need[k]}${done ? ' ✓' : ''}`;
+        ctx.fillStyle = done ? C.olive : PHASES[this.phase]?.types.includes(k) ? C.ink : '#b9a690';
+        ctx.fillText(txt, x, 176); x += ctx.measureText(txt).width + 22;
+      });
+    }
     // relógio
     const tl = Math.ceil(this.timeLeft);
     ctx.fillStyle = tl <= 20 ? C.terra : C.ink; rr(ctx, W / 2 - 100, 44, 200, 84, 42); ctx.fill();
     ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = `900 50px ${FONT}`;
     ctx.fillText(`${Math.floor(tl / 60)}:${String(tl % 60).padStart(2, '0')}`, W / 2, 104);
-    // aviso do desafio
-    const be = this.bannerEvent();
-    if (be) {
-      const info = EVENT_INFO[be.e.type];
-      const msg = `${info.emoji} ${be.soon ? info.soon : info.now}`;
-      ctx.font = `900 28px ${FONT}`; const bw = ctx.measureText(msg).width + 64;
-      ctx.save(); ctx.translate(W / 2, 176); ctx.rotate(-0.012); const pulse = be.soon ? 1 + Math.sin(this.t * 10) * 0.03 : 1; ctx.scale(pulse, pulse);
-      ctx.fillStyle = '#c98a1f'; rr(ctx, -bw / 2, -24, bw, 60, 30); ctx.fill();
-      ctx.fillStyle = be.soon ? C.amber : '#ff9a3c'; rr(ctx, -bw / 2, -30, bw, 60, 30); ctx.fill();
-      ctx.fillStyle = C.ink; ctx.textAlign = 'center'; ctx.fillText(msg, 0, 10); ctx.restore();
+    // desafio de toque (tem prioridade sobre o aviso)
+    const c = this.activeCh();
+    if (c) {
+      const info = CH_INFO[c.kind], v = clamp(c.have / c.need), left = Math.max(0, Math.ceil(c.at + c.dur - this.modeT));
+      const pulse = 1 + Math.sin(this.t * 12) * 0.02;
+      ctx.save(); ctx.translate(W / 2, 282); ctx.scale(pulse, pulse);
+      panel(ctx, -330, -50, 660, 118, 34, '#FFF4E0');
+      ctx.textAlign = 'center'; ctx.fillStyle = C.ink; fitText(ctx, `${info.emoji} ${info.title} Toquem no celular! 📱`, 0, -6, 600, 900, 30);
+      ctx.fillStyle = '#efe4d2'; rr(ctx, -290, 20, 520, 26, 13); ctx.fill();
+      ctx.fillStyle = v >= 1 ? C.olive : C.terra; rr(ctx, -290, 20, Math.max(26, 520 * v), 26, 13); ctx.fill();
+      ctx.fillStyle = C.ink; ctx.font = `900 26px ${FONT}`; ctx.textAlign = 'left'; ctx.fillText(`${left}s`, 248, 43);
+      ctx.restore();
+    } else if (!finishing) {
+      const be = this.bannerEvent();
+      if (be) {
+        const info = EVENT_INFO[be.e.type];
+        const msg = `${info.emoji} ${be.soon ? info.soon : info.now}`;
+        ctx.font = `900 28px ${FONT}`; const bw = ctx.measureText(msg).width + 64;
+        ctx.save(); ctx.translate(W / 2, 176); ctx.rotate(-0.012); const pulse = be.soon ? 1 + Math.sin(this.t * 10) * 0.03 : 1; ctx.scale(pulse, pulse);
+        ctx.fillStyle = '#c98a1f'; rr(ctx, -bw / 2, -24, bw, 60, 30); ctx.fill();
+        ctx.fillStyle = be.soon ? C.amber : '#ff9a3c'; rr(ctx, -bw / 2, -30, bw, 60, 30); ctx.fill();
+        ctx.fillStyle = C.ink; ctx.textAlign = 'center'; ctx.fillText(msg, 0, 10); ctx.restore();
+      }
     }
     this.qrPanel(ctx);
     this.scoreStrip(ctx);
@@ -541,7 +909,7 @@ export class Game {
     const M = 64;
     panel(ctx, W - M - 430, 44, 430, 156);
     if (this.gameQR) ctx.drawImage(this.gameQR, W - M - 414, 60, 124, 124);
-    ctx.textAlign = 'left'; ctx.fillStyle = C.ink; fitText(ctx, 'Escaneie para jogar', W - M - 272, 92, 236, 900, 25);
+    ctx.textAlign = 'left'; ctx.fillStyle = C.ink; fitText(ctx, 'Escaneie e entre já!', W - M - 272, 92, 236, 900, 25);
     ctx.fillStyle = C.olive; fitText(ctx, `${this.players.size} de ${MAX_PLAYERS} jogando · sala ${this.room}`, W - M - 272, 120, 236, 800, 19);
     ctx.fillStyle = C.cream; rr(ctx, W - M - 272, 136, 236, 46, 23); ctx.fill();
     ctx.fillStyle = C.muted; ctx.font = `800 17px ${FONT}`; ctx.fillText('EQUIPE', W - M - 254, 165);
@@ -555,9 +923,9 @@ export class Game {
     const chips = list.map((p, i) => ({ p, i, w: ctx.measureText(`${p.name}  ${p.pts}`).width + 58 }));
     const gap = 10;
     // se não couber numa linha, encolhe
-    let total = chips.reduce((a, c) => a + c.w, 0) + gap * (chips.length - 1) + 40;
+    const total = chips.reduce((a, c) => a + c.w, 0) + gap * (chips.length - 1) + 40;
     const sc = Math.min(1, (W - 120) / total);
-    ctx.save(); ctx.translate(W / 2, 978); ctx.scale(sc, sc); total = total;
+    ctx.save(); ctx.translate(W / 2, 978); ctx.scale(sc, sc);
     const sx = -total / 2, sy = 0;
     panel(ctx, sx, sy, total, 66, 33);
     let cx = sx + 20;
@@ -594,10 +962,10 @@ export class Game {
     }
     ctx.save(); ctx.font = `900 30px ${FONT}`; const sw = ctx.measureText(sub).width;
     ctx.font = `900 60px ${FONT}`; const tw = ctx.measureText(title).width;
-    const bw = Math.max(tw, sw) + 100;
+    const bw = Math.min(W - 120, Math.max(tw, sw) + 100);
     panel(ctx, W / 2 - bw / 2, 80, bw, 190, 40);
-    ctx.textAlign = 'center'; ctx.fillStyle = C.ink; ctx.fillText(title, W / 2, 168);
-    ctx.font = `800 30px ${FONT}`; ctx.fillStyle = C.brown; ctx.fillText(sub, W / 2, 226); ctx.restore();
+    ctx.textAlign = 'center'; ctx.fillStyle = C.ink; fitText(ctx, title, W / 2, 168, bw - 80, 900, 60);
+    ctx.fillStyle = C.brown; fitText(ctx, sub, W / 2, 226, bw - 80, 800, 30); ctx.restore();
   }
 
   private resultsOverlay(ctx: Ctx) {
@@ -606,7 +974,7 @@ export class Game {
     const rowH = list.length > 8 ? 46 : 54, cw = 1100, ch = 272 + Math.max(1, list.length) * rowH, x = W / 2 - cw / 2, y = Math.max(40, H / 2 - ch / 2);
     panel(ctx, x, y, cw, ch, 44);
     ctx.textAlign = 'left'; ctx.fillStyle = C.terra; ctx.font = `900 22px ${FONT}`; ls(ctx, 5); ctx.fillText('RESULTADO', x + 60, y + 70); ls(ctx, 0);
-    ctx.fillStyle = C.ink; ctx.font = `900 50px ${FONT}`; ctx.fillText(this.complete ? 'Casa construída! 🏠' : 'Quase lá!', x + 60, y + 128);
+    ctx.fillStyle = C.ink; ctx.font = `900 50px ${FONT}`; ctx.fillText(this.finished ? 'Casa pronta! ✨' : this.complete ? 'Casa de pé! 🏠' : 'Quase lá!', x + 60, y + 128);
     ctx.textAlign = 'right'; ctx.fillStyle = C.muted; ctx.font = `800 22px ${FONT}`; ctx.fillText('EQUIPE', x + cw - 60, y + 76);
     ctx.fillStyle = C.terra; ctx.font = `900 48px ${FONT}`; ctx.fillText(`${this.results.reduce((a, r) => a + r.pts, 0)} pts`, x + cw - 60, y + 128);
     // cabeçalho da tabela
@@ -623,13 +991,10 @@ export class Game {
       ctx.fillStyle = C.ink; ctx.font = `900 24px ${FONT}`; ctx.fillText(String(r.pts), x + 820, yy + rowH / 2 + 8);
       ctx.fillStyle = C.olive; ctx.fillText(`+${r.suggest} pts`, x + cw - 60, yy + rowH / 2 + 8);
     });
-    ctx.textAlign = 'center'; ctx.fillStyle = C.muted; ctx.font = `800 20px ${FONT}`;
+    ctx.fillStyle = C.muted; ctx.textAlign = 'center';
     const left = Math.max(0, Math.ceil(RESULTS_TIME - this.modeT));
     fitText(ctx, `Adm: lance a sugestão em Adm → Ajustar pontos · nova partida em ${left}s`, W / 2, y + ch - 30, cw - 100, 800, 20);
   }
-
-  /** Na tela de espera: os jogadores já conectados aparecem no rodapé. */
-  joinedNames() { return this.ranking().map((p) => ({ name: p.name, slot: p.slot })); }
 }
 
 export { PHASES, ITEM_LABEL };

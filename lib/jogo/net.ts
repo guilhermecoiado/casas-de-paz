@@ -46,8 +46,22 @@ export interface StateMsg {
   phase?: string;
   suggest?: number;     // pontos sugeridos no app (resultado)
   complete?: boolean;
+  /** Fase de acabamento: a tarefa deste jogador e quanto falta. */
+  fin?: FinState;
+  /** Desafio de toque (terremoto, goteiras): todos tocam rápido para ajudar a equipe. */
+  ch?: ChState;
 }
-export interface BuzzMsg { kind: 'pick' | 'deliver' | 'stomped' | 'stomp' | 'gold' }
+export interface ChState { kind: 'quake' | 'leak'; title: string; emoji: string; prog: number; per: number; left: number }
+export type TaskId = 'paint' | 'light' | 'garden' | 'decor';
+export interface FinState {
+  task: TaskId;
+  helping: boolean;   // já terminou a própria parte e está ajudando outra equipe
+  prog: number;       // 0..1 da barrinha (a própria parte ou a equipe que está ajudando)
+  per: number;        // quanto cada toque enche a barrinha
+  done: boolean;      // casa toda pronta
+}
+export interface TapMsg { n: number }
+export interface BuzzMsg { kind: 'pick' | 'deliver' | 'stomped' | 'stomp' | 'gold' | 'part' | 'finish' | 'alert' | 'storm' | 'boing' }
 
 const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 export const newRoom = () => Array.from({ length: 4 }, () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join('');

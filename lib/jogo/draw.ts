@@ -1,5 +1,7 @@
 /* Desenhos do jogo "Casa na Rocha" (canvas 2D, quadro lógico de 1920×1080). */
 
+import type { TaskId } from './net';
+
 export const W = 1920, H = 1080, TAU = Math.PI * 2;
 export const C = {
   terra: '#C8553D', ink: '#2B2118', cream: '#F7F0E4', amber: '#F2A541', olive: '#5E8C3A', sky: '#4FA3DD',
@@ -40,6 +42,8 @@ export interface PoseOpts {
   guestStar?: boolean;
   scale?: number;
   alpha?: number;
+  tool?: string;        // emoji da ferramenta na mão (acabamento)
+  work?: number;        // 0..1 braço levantado trabalhando
 }
 
 /** Desenha o bonequinho com os pés em (x, y). */
@@ -64,6 +68,7 @@ export function person(ctx: Ctx, x: number, y: number, slot: number, o: PoseOpts
   // braços
   ctx.strokeStyle = ch.color; ctx.lineWidth = 10; ctx.beginPath();
   if (o.carry) { ctx.moveTo(-22, -62); ctx.lineTo(-14, -98); ctx.moveTo(22, -62); ctx.lineTo(14, -98); }
+  else if (o.tool) { const up = o.work ?? 0; ctx.moveTo(-24, -60); ctx.lineTo(-36, -40); ctx.moveTo(24 * face, -60); ctx.lineTo((34 + up * 6) * face, -62 - up * 34); }
   else if (o.air) { ctx.moveTo(-24, -60); ctx.lineTo(-38, -86); ctx.moveTo(24, -60); ctx.lineTo(38, -86); }
   else { ctx.moveTo(-24, -60); ctx.lineTo(-36 - sw * 0.4, -40); ctx.moveTo(24, -60); ctx.lineTo(36 + sw * 0.4, -40); }
   ctx.stroke();
@@ -85,6 +90,7 @@ export function person(ctx: Ctx, x: number, y: number, slot: number, o: PoseOpts
     ctx.beginPath(); ctx.arc(fx, -98, 7, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
   }
   acc(ctx, ch.acc, ch.color, face);
+  if (o.tool) { const up = o.work ?? 0; ctx.save(); ctx.translate((40 + up * 6) * face, -70 - up * 34); ctx.rotate(face * (0.3 - up * 0.6)); ctx.font = `34px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(o.tool, 0, 0); ctx.restore(); }
   // carregando
   if (o.carry) { ctx.save(); ctx.translate(0, -158); item(ctx, o.carry, 0, 0, !!o.carryGold, 0.95); ctx.restore(); }
   ctx.restore();
@@ -123,6 +129,16 @@ export function nameTag(ctx: Ctx, x: number, y: number, name: string, color: str
 /* ---------------- materiais ---------------- */
 
 export type ItemType = 'stone' | 'brick' | 'tile' | 'wood' | 'glass';
+/** Equipes do acabamento (fase 5): cada jogador recebe uma e toca rápido no celular. */
+export const TASKS: { id: TaskId; label: string; verb: string; emoji: string; tool: string; color: string; done: string }[] = [
+  { id: 'paint', label: 'Pintura', verb: 'PINTAR', emoji: '🎨', tool: '🖌️', color: '#E26D9A', done: 'Pintura pronta!' },
+  { id: 'light', label: 'Elétrica', verb: 'ACENDER', emoji: '💡', tool: '💡', color: '#E8A12E', done: 'Luzes acesas!' },
+  { id: 'garden', label: 'Jardim', verb: 'PLANTAR', emoji: '🌳', tool: '🌱', color: '#5E8C3A', done: 'Jardim pronto!' },
+  { id: 'decor', label: 'Decoração', verb: 'DECORAR', emoji: '🎀', tool: '🎀', color: '#C8553D', done: 'Decoração pronta!' },
+];
+export const TASK = Object.fromEntries(TASKS.map((t) => [t.id, t])) as Record<TaskId, (typeof TASKS)[number]>;
+export interface FinProg { paint: number; light: number; garden: number; decor: number } // 0..1
+export const NO_FIN: FinProg = { paint: 0, light: 0, garden: 0, decor: 0 };
 export const ITEM_LABEL: Record<ItemType, string> = { stone: 'pedras', brick: 'tijolos', tile: 'telhas', wood: 'madeiras', glass: 'vidros' };
 export const ITEM_EMOJI: Record<ItemType, string> = { stone: '🪨', brick: '🧱', tile: '🔺', wood: '🪵', glass: '🪟' };
 
@@ -198,10 +214,10 @@ export function scenery(ctx: Ctx, t: number, dark = 0) {
   ctx.strokeStyle = '#6f695f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(1000, 900); ctx.lineTo(1040, 960); ctx.lineTo(1020, 1020); ctx.stroke();
 }
 
-export function platform(ctx: Ctx, p: Plat, dy = 0) {
+export function platform(ctx: Ctx, p: Plat, dy = 0, moving = false) {
   ctx.save(); ctx.translate(0, dy);
-  ctx.fillStyle = '#8b5a2b'; rr(ctx, p.x, p.y, p.w, 26, 10); ctx.fill();
-  ctx.fillStyle = '#a87443'; rr(ctx, p.x + 4, p.y + 3, p.w - 8, 9, 5); ctx.fill();
+  ctx.fillStyle = moving ? '#2F6F9F' : '#8b5a2b'; rr(ctx, p.x, p.y, p.w, 26, 10); ctx.fill();
+  ctx.fillStyle = moving ? '#4FA3DD' : '#a87443'; rr(ctx, p.x + 4, p.y + 3, p.w - 8, 9, 5); ctx.fill();
   ctx.fillStyle = '#5c3a1a'; for (let i = p.x + 30; i < p.x + p.w - 10; i += 60) { ctx.beginPath(); ctx.arc(i, p.y + 18, 3, 0, TAU); ctx.fill(); }
   ctx.restore();
 }
@@ -211,7 +227,8 @@ export function platform(ctx: Ctx, p: Plat, dy = 0) {
 export interface HouseProg { stone: number; brick: number; tile: number; wood: number; glass: number } // 0..1
 const HX0 = 812, HX1 = 1108, BASE = ROCK.top;
 
-export function house(ctx: Ctx, p: HouseProg, t: number, opts: { wobble?: number; fall?: number; outline?: boolean } = {}) {
+export function house(ctx: Ctx, p: HouseProg, t: number, opts: { wobble?: number; fall?: number; outline?: boolean; fin?: FinProg } = {}) {
+  const f = opts.fin ?? NO_FIN;
   ctx.save();
   if (opts.wobble) { ctx.translate(960, BASE); ctx.rotate(Math.sin(t * 9) * 0.03 * opts.wobble); ctx.translate(-960, -BASE); }
   const fall = opts.fall ?? 0;
@@ -235,18 +252,49 @@ export function house(ctx: Ctx, p: HouseProg, t: number, opts: { wobble?: number
     if (x + w > HX1 + 4) continue;
     ctx.fillStyle = (r + c) % 3 ? '#C8553D' : '#B44A34'; rr(ctx, x, y, Math.min(w - 3, HX1 - x), h - 3, 4); ctx.fill();
   }
+  // pintura: o rolo passa da esquerda para a direita cobrindo os tijolos
+  if (f.paint > 0) {
+    const pw = (HX1 - HX0) * f.paint;
+    ctx.save(); ctx.beginPath(); ctx.rect(HX0 - 4, BASE - 330, pw + 4, 300); ctx.clip();
+    ctx.fillStyle = '#FBF1E1'; ctx.fillRect(HX0 - 2, BASE - 322, HX1 - HX0 + 4, 290);
+    ctx.fillStyle = 'rgba(200,170,130,0.12)'; for (let y = BASE - 300; y < BASE - 40; y += 34) ctx.fillRect(HX0, y, HX1 - HX0, 3);
+    ctx.fillStyle = '#E9CFAE'; ctx.fillRect(HX0 - 2, BASE - 322, 14, 290); ctx.fillRect(HX1 - 12, BASE - 322, 14, 290);
+    ctx.fillStyle = C.terra; ctx.fillRect(HX0 - 2, BASE - 58, HX1 - HX0 + 4, 24);
+    ctx.restore();
+    if (f.paint < 1) { // borda molhada + rolo
+      const ex = HX0 + pw;
+      ctx.fillStyle = '#F2DFC4'; ctx.fillRect(ex - 6, BASE - 322, 8, 290);
+      ctx.fillStyle = '#E26D9A'; rr(ctx, ex - 10, BASE - 200 + Math.sin(t * 8) * 60, 22, 60, 8); ctx.fill();
+    }
+  }
   // porta (madeira) e janelas (vidro)
   if (p.wood > 0) {
     const dh = 130 * p.wood;
-    ctx.fillStyle = '#8b5a2b'; rr(ctx, 930, BASE - 34 - dh, 64, dh, [26, 26, 0, 0]); ctx.fill();
+    ctx.fillStyle = f.paint >= 1 ? '#3E6B48' : '#8b5a2b'; rr(ctx, 930, BASE - 34 - dh, 64, dh, [26, 26, 0, 0]); ctx.fill();
     ctx.strokeStyle = '#5c3a1a'; ctx.lineWidth = 3; ctx.stroke();
     if (p.wood >= 1) { ctx.fillStyle = '#F3C64A'; ctx.beginPath(); ctx.arc(982, BASE - 100, 4, 0, TAU); ctx.fill(); }
+    // guirlanda na porta
+    const wr = pop(f.decor, 0.3);
+    if (wr > 0) { ctx.save(); ctx.translate(962, BASE - 128); ctx.scale(wr, wr); ctx.strokeStyle = '#3E6B48'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(0, 0, 13, 0, TAU); ctx.stroke(); ctx.fillStyle = C.terra; for (let i = 0; i < 4; i++) { const a = (i / 4) * TAU + 0.4; ctx.beginPath(); ctx.arc(Math.cos(a) * 13, Math.sin(a) * 13, 3.5, 0, TAU); ctx.fill(); } ctx.restore(); }
   }
+  // placa "Casa de Paz" acima da porta
+  const pl = pop(f.decor, 0.5);
+  if (pl > 0) { ctx.save(); ctx.translate(962, BASE - 282); ctx.scale(pl, pl); ctx.fillStyle = '#8b5a2b'; rr(ctx, -58, -15, 116, 30, 8); ctx.fill(); ctx.fillStyle = '#FBF1E1'; ctx.font = `900 16px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('Casa de Paz', 0, 6); ctx.restore(); }
   for (const [wx, i] of [[848, 0], [1030, 1]] as const) {
     const q = Math.max(0, Math.min(1, p.glass * 2 - i));
     if (q <= 0) continue;
-    ctx.save(); ctx.globalAlpha *= q; ctx.fillStyle = '#ffe28a'; ctx.fillRect(wx, BASE - 230, 56, 56); ctx.restore();
-    ctx.strokeStyle = '#5c3a1a'; ctx.lineWidth = 5; ctx.strokeRect(wx, BASE - 230, 56, 56);
+    if (f.light > 0) glow(ctx, wx + 28, BASE - 202, 70, 0.7 * f.light);
+    ctx.save(); ctx.globalAlpha *= q; ctx.fillStyle = f.light > 0 ? mix('#ffe28a', '#fff4c2', f.light) : '#ffe28a'; ctx.fillRect(wx, BASE - 230, 56, 56); ctx.restore();
+    const sh = pop(f.decor, 0.85);
+    if (sh > 0) { ctx.fillStyle = '#3E6B48'; ctx.fillRect(wx - 6 - 20 * sh, BASE - 232, 20 * sh, 60); ctx.fillRect(wx + 62, BASE - 232, 20 * sh, 60); }
+    ctx.strokeStyle = f.paint >= 1 ? '#fff' : '#5c3a1a'; ctx.lineWidth = 5; ctx.strokeRect(wx, BASE - 230, 56, 56);
+    const fb = pop(f.decor, 0.15);
+    if (fb > 0) {
+      ctx.save(); ctx.translate(wx + 28, BASE - 168); ctx.scale(fb, fb);
+      ctx.fillStyle = '#8b5a2b'; rr(ctx, -34, 0, 68, 14, 4); ctx.fill();
+      for (let i = 0; i < 5; i++) { ctx.fillStyle = ['#E26D9A', '#F2A541', '#fff', '#E25B45', '#7B3FA0'][i]; ctx.beginPath(); ctx.arc(-26 + i * 13, -3, 6, 0, TAU); ctx.fill(); }
+      ctx.restore();
+    }
     ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(wx + 28, BASE - 230); ctx.lineTo(wx + 28, BASE - 174); ctx.moveTo(wx, BASE - 202); ctx.lineTo(wx + 56, BASE - 202); ctx.stroke();
   }
   ctx.restore();
@@ -261,6 +309,20 @@ export function house(ctx: Ctx, p: HouseProg, t: number, opts: { wobble?: number
     }
     ctx.restore();
     if (p.tile >= 1) { ctx.strokeStyle = '#9c2f25'; ctx.lineWidth = 10; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(772, BASE - 330); ctx.lineTo(960, BASE - 476); ctx.lineTo(1148, BASE - 330); ctx.stroke(); }
+  }
+  // varal de luzes no beiral e luminária da porta
+  if (f.light > 0 && !fall) {
+    const pts: [number, number][] = [];
+    const seg = (x0: number, y0: number, x1: number, y1: number, n: number) => { for (let i = 0; i < n; i++) { const k = (i + 0.5) / n; pts.push([x0 + (x1 - x0) * k, y0 + (y1 - y0) * k + Math.sin(k * Math.PI) * 14 + 10]); } };
+    seg(772, BASE - 330, 960, BASE - 476, 8); seg(960, BASE - 476, 1148, BASE - 330, 8); seg(800, BASE - 326, 1120, BASE - 326, 10);
+    ctx.strokeStyle = 'rgba(43,33,24,0.55)'; ctx.lineWidth = 2; ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y - 6) : ctx.moveTo(x, y - 6))); ctx.stroke();
+    const lit = Math.floor(f.light * pts.length);
+    pts.forEach(([x, y], i) => {
+      const on = i < lit, tw = on ? 0.75 + 0.25 * Math.sin(t * 5 + i) : 0;
+      if (on) glow(ctx, x, y, 22, 0.8 * tw);
+      ctx.fillStyle = on ? ['#FFE28A', '#FFB86B', '#FFF4C2'][i % 3] : '#d9cdb8'; ctx.beginPath(); ctx.ellipse(x, y, 6, 8, 0, 0, TAU); ctx.fill();
+    });
+    if (f.light >= 1) { glow(ctx, 1012, BASE - 150, 50, 0.9); ctx.fillStyle = C.ink; rr(ctx, 1004, BASE - 166, 16, 8, 3); ctx.fill(); ctx.fillStyle = '#FFE28A'; rr(ctx, 1006, BASE - 158, 12, 18, 5); ctx.fill(); }
   }
   ctx.restore();
 }
@@ -298,4 +360,91 @@ export function fitText(ctx: Ctx, text: string, x: number, y: number, maxW: numb
   ctx.font = `${weight} ${sz}px ${FONT}`;
   while (sz > 10 && ctx.measureText(text).width > maxW) { sz -= 1; ctx.font = `${weight} ${sz}px ${FONT}`; }
   ctx.fillText(text, x, y);
+}
+
+/** Aparece com um pulinho quando o progresso passa de `at` (0 = escondido, termina em 1). */
+const pop = (v: number, at: number) => {
+  const k = Math.max(0, Math.min(1, (v - at) / 0.12));
+  if (k <= 0) return 0;
+  const c = 2.2; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); // easeOutBack
+};
+
+function tree(ctx: Ctx, x: number, y: number, s: number, t: number) {
+  if (s <= 0) return;
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(Math.sin(t * 1.3 + x) * 0.015);
+  ctx.fillStyle = '#7a4f2a'; rr(ctx, -12, -120, 24, 120, 8); ctx.fill();
+  for (const [cx, cy, r, c] of [[-40, -150, 48, '#5E8C3A'], [40, -150, 48, '#5E8C3A'], [0, -200, 60, '#6E9E45'], [-10, -140, 50, '#4f7a30']] as const) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill(); }
+  ctx.fillStyle = '#E25B45'; for (const [ax, ay] of [[-30, -170], [28, -190], [10, -140], [-50, -130], [46, -140]]) { ctx.beginPath(); ctx.arc(ax, ay, 7, 0, TAU); ctx.fill(); }
+  ctx.restore();
+}
+function bush(ctx: Ctx, x: number, y: number, s: number) {
+  if (s <= 0) return;
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  for (const [cx, cy, r] of [[-26, -18, 24], [0, -30, 30], [26, -18, 24]]) { ctx.fillStyle = '#5E8C3A'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill(); }
+  ctx.fillStyle = '#F3C64A'; for (const [cx, cy] of [[-20, -26], [6, -42], [22, -22]]) { ctx.beginPath(); ctx.arc(cx, cy, 5, 0, TAU); ctx.fill(); }
+  ctx.restore();
+}
+const FLOWERS: [number, string][] = [[90, '#E26D9A'], [1840, '#F2A541'], [220, '#fff'], [1700, '#E25B45'], [370, '#7B3FA0'], [1580, '#E26D9A'], [150, '#F2A541'], [1780, '#fff'], [300, '#E25B45'], [1650, '#7B3FA0'], [440, '#E26D9A'], [1500, '#F2A541'], [40, '#7B3FA0'], [1880, '#E26D9A'], [520, '#fff'], [1420, '#E25B45']];
+
+/** Acabamento fora da casa (jardim, escada na rocha, cerquinha). Desenhado antes das plataformas. */
+export function finishBack(ctx: Ctx, f: FinProg, t: number) {
+  if (!f.garden && !f.decor) return;
+  // escada de pedra esculpida na rocha, até a porta
+  const st = pop(f.decor, 0.0);
+  if (st > 0) {
+    ctx.save(); ctx.globalAlpha *= Math.min(1, st);
+    const steps = [[1040, 260], [1000, 220], [960, 180], [920, 140], [884, 104]];
+    steps.forEach(([y, w], i) => { ctx.fillStyle = i % 2 ? '#E3DCCF' : '#D6CEBF'; rr(ctx, 962 - w / 2, y - 4, w, 40, 6); ctx.fill(); ctx.strokeStyle = 'rgba(80,72,64,0.35)'; ctx.lineWidth = 3; ctx.stroke(); });
+    ctx.restore();
+  }
+  // cerquinha branca e caixa de correio
+  const fe = pop(f.decor, 0.68);
+  if (fe > 0) {
+    ctx.save(); ctx.globalAlpha *= Math.min(1, fe);
+    for (const [a, b] of [[560, 700], [1230, 1370]]) {
+      ctx.fillStyle = '#fff'; ctx.fillRect(a, GROUND - 46, b - a, 7); ctx.fillRect(a, GROUND - 24, b - a, 7);
+      for (let x = a; x <= b - 10; x += 22) { ctx.beginPath(); ctx.moveTo(x, GROUND); ctx.lineTo(x, GROUND - 56); ctx.lineTo(x + 6, GROUND - 64); ctx.lineTo(x + 12, GROUND - 56); ctx.lineTo(x + 12, GROUND); ctx.fill(); }
+    }
+    ctx.fillStyle = '#6b5643'; ctx.fillRect(1395, GROUND - 70, 8, 70); ctx.fillStyle = C.terra; rr(ctx, 1380, GROUND - 98, 40, 30, [14, 14, 4, 4]); ctx.fill();
+    ctx.restore();
+  }
+  // jardim: árvores crescem, arbustos e flores pelo chão
+  const g = f.garden;
+  const grow = (a: number, b: number) => { const k = Math.max(0, Math.min(1, (g - a) / (b - a))); return k <= 0 ? 0 : 1 - Math.pow(1 - k, 3); };
+  tree(ctx, 470, GROUND + 4, grow(0, 0.3), t);
+  tree(ctx, 1480, GROUND + 4, grow(0.15, 0.45) * 0.9, t);
+  bush(ctx, 668, GROUND + 6, grow(0.4, 0.55));
+  bush(ctx, 1262, GROUND + 6, grow(0.45, 0.6));
+  const nf = Math.floor(Math.max(0, (g - 0.5) / 0.5) * FLOWERS.length + (g >= 1 ? FLOWERS.length : 0));
+  FLOWERS.slice(0, nf).forEach(([x, c]) => {
+    ctx.strokeStyle = '#5E8C3A'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x, GROUND + 4); ctx.lineTo(x, GROUND - 22); ctx.stroke();
+    ctx.fillStyle = c; for (let i = 0; i < 5; i++) { const a = (i / 5) * TAU; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 7, GROUND - 26 + Math.sin(a) * 7, 6, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = C.amber; ctx.beginPath(); ctx.arc(x, GROUND - 26, 4, 0, TAU); ctx.fill();
+  });
+}
+
+/** Cama elástica no chão (squish 0..1 quando alguém acabou de quicar). */
+export function trampoline(ctx: Ctx, x: number, w: number, squish: number) {
+  const top = GROUND - 40 + squish * 16;
+  ctx.save();
+  ctx.strokeStyle = '#6b5643'; ctx.lineWidth = 5;
+  for (const lx of [x + 12, x + w - 12]) { ctx.beginPath(); ctx.moveTo(lx, GROUND + 4); ctx.lineTo(lx, top + 6); ctx.stroke(); }
+  ctx.strokeStyle = '#9aa0a6'; ctx.lineWidth = 3; ctx.beginPath();
+  for (let i = 0; i <= 6; i++) { const yy = top + 8 + ((GROUND - top - 8) * i) / 6; ctx.lineTo(x + w / 2 + (i % 2 ? 14 : -14), yy); }
+  ctx.stroke();
+  ctx.fillStyle = C.terra; rr(ctx, x, top - 4, w, 12, 6); ctx.fill();
+  ctx.fillStyle = C.amber; rr(ctx, x + 8, top - 2, w - 16, 5, 3); ctx.fill();
+  ctx.restore();
+}
+
+/** Balão que atravessa o céu trazendo material dourado. */
+export function balloon(ctx: Ctx, x: number, y: number, t: number, hasItem: boolean) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(t * 1.7) * 0.05);
+  ctx.strokeStyle = 'rgba(43,33,24,0.6)'; ctx.lineWidth = 2;
+  if (hasItem) { ctx.beginPath(); ctx.moveTo(0, 46); ctx.lineTo(0, 82); ctx.stroke(); }
+  ctx.fillStyle = C.terra; ctx.beginPath(); ctx.ellipse(0, 0, 40, 48, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = C.amber; ctx.beginPath(); ctx.ellipse(0, 0, 14, 48, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.ellipse(-16, -18, 8, 14, -0.4, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#9c3f2b'; ctx.beginPath(); ctx.moveTo(-6, 46); ctx.lineTo(6, 46); ctx.lineTo(0, 54); ctx.fill();
+  ctx.restore();
 }
