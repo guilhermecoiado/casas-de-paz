@@ -106,24 +106,25 @@ export class GameAudio {
     }
   }
 
+  /** Trilha da partida: animada, mas sem bateria (arpejo saltitante, base suave e melodia). */
   private playStep(n: number, t: number, s: number) {
     const bar = Math.floor(n / 16) % 4, k = n % 16, part = Math.floor(n / 64) % 2;
-    const root = ROOTS[bar];
-    // bateria
-    if (k % 8 === 0) this.kick(t);
-    if (k === 6 || k === 14) this.kick(t);
-    if (k % 8 === 4) this.snare(t);
-    if (k % 2 === 0) this.hat(t, k % 4 === 2 ? 0.14 : 0.07);
-    // baixo saltitante
-    if (k % 2 === 0) this.tone(mtof(root + (k % 4 === 2 ? 12 : 0)), t, s * 1.8, 'triangle', 0.38, this.music);
-    // acordes no contratempo
-    if (k % 4 === 2) CHORDS[bar].forEach((m) => this.tone(mtof(m), t, s * 1.6, 'square', 0.045, this.music));
-    // melodia (alterna A e B a cada 4 compassos)
+    const root = ROOTS[bar], ch = CHORDS[bar];
+    // base: nota longa e macia no começo e no meio do compasso
+    if (k === 0 || k === 8) this.tone(mtof(root), t, s * 8, 'sine', 0.32, this.music, { attack: 0.04 });
+    // colchão de acorde bem suave
+    if (k === 0) ch.forEach((m) => this.tone(mtof(m), t, s * 16, 'sine', 0.035, this.music, { attack: 0.5 }));
+    // arpejo em semicolcheias: dá o movimento sem batida
+    const arp = [ch[0], ch[1], ch[2], ch[0] + 12, ch[2] + 12, ch[0] + 12, ch[2], ch[1]];
+    this.tone(mtof(arp[k % 8] + 12), t, s * 2.2, 'triangle', k % 4 === 0 ? 0.05 : 0.032, this.music);
+    // melodia (alterna A e B a cada 4 compassos), ligada e com leve vibrato
     if (k % 2 === 0) {
       const mel = part ? MELODY_B : MELODY;
       const m = mel[bar * 8 + k / 2];
-      if (m != null) { this.tone(mtof(m), t, s * 1.7, 'square', 0.06, this.music); this.tone(mtof(m + 12), t, s * 1.2, 'sine', 0.025, this.music); }
+      if (m != null) { this.tone(mtof(m), t, s * 2.6, 'sine', 0.085, this.music, { attack: 0.02, vib: 3 }); this.tone(mtof(m), t, s * 2.2, 'triangle', 0.03, this.music, { attack: 0.02 }); }
     }
+    // brilho de sininho no começo de cada compasso
+    if (k === 0) this.tone(mtof(ch[2] + 24), t, s * 6, 'sine', 0.03, this.music, { attack: 0.01 });
   }
 
   private calmStep(n: number, t: number, s: number) {
@@ -132,7 +133,6 @@ export class GameAudio {
     if (k === 0) { this.tone(mtof(ROOTS[bar]), t, s * 15, 'triangle', 0.3, this.music, { attack: 0.05 }); ch.forEach((m) => this.tone(mtof(m), t, s * 15, 'sine', 0.06, this.music, { attack: 0.3 })); }
     if (k % 2 === 0) { const arp = [ch[0], ch[1], ch[2], ch[0] + 12, ch[2], ch[1], ch[0] + 12, ch[2]][k / 2]; this.tone(mtof(arp + 12), t, s * 3, 'triangle', 0.05, this.music); }
     if (k % 4 === 0) { const m = BELL[(bar * 4 + k / 4) % BELL.length]; if (m != null) this.tone(mtof(m + 12), t, s * 6, 'sine', 0.07, this.music); }
-    if (k % 4 === 2) this.hat(t, 0.04);
   }
 
   /* ---------------- efeitos ---------------- */

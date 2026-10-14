@@ -526,3 +526,48 @@ export function balloon(ctx: Ctx, x: number, y: number, t: number, hasItem: bool
   ctx.fillStyle = '#9c3f2b'; ctx.beginPath(); ctx.moveTo(-6, 46); ctx.lineTo(6, 46); ctx.lineTo(0, 54); ctx.fill();
   ctx.restore();
 }
+
+/* ---------------- desmoronamento ---------------- */
+
+export interface Debris { x: number; y: number; w: number; h: number; kind: ItemType; color: string; vx: number; vy: number; rot: number; vr: number; delay: number; hits: number }
+
+/** Quebra a casa (no estado em que está) em pedaços soltos, na mesma posição do desenho. */
+export function houseDebris(p: HouseProg): Debris[] {
+  const out: Debris[] = [];
+  const add = (x: number, y: number, w: number, h: number, kind: ItemType, color: string) => {
+    const cx = x + w / 2, cy = y + h / 2;
+    out.push({ x: cx, y: cy, w, h, kind, color, vx: 0, vy: 0, rot: 0, vr: 0, delay: Math.max(0, (cy - (BASE - 480)) / 480) * 2.2 + Math.random() * 0.5, hits: 0 });
+  };
+  const ns = Math.round(p.stone * 9);
+  for (let i = 0; i < ns; i++) add(800 + i * 36, BASE - 34, 34, 34, 'stone', ['#bdb7ac', '#d3cdc2', '#a9a398'][i % 3]);
+  const rows = 13, perRow = 8, nb = Math.round(p.brick * rows * perRow);
+  let k = 0;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < perRow; c++) {
+    if (k++ >= nb) continue;
+    const w = 38, h = 22, off = r % 2 ? 19 : 0, x = HX0 + c * w + off, y = BASE - 34 - (r + 1) * h;
+    if (x + w > HX1 + 4) continue;
+    add(x, y, Math.min(w - 3, HX1 - x), h - 3, 'brick', (r + c) % 3 ? '#C8553D' : '#B44A34');
+  }
+  if (p.wood > 0) { const dh = 130 * p.wood; add(930, BASE - 34 - dh, 32, dh, 'wood', '#8b5a2b'); add(962, BASE - 34 - dh, 32, dh, 'wood', '#7a4f26'); }
+  for (const [wx, i] of [[848, 0], [1030, 1]] as const) if (p.glass * 2 - i > 0) add(wx, BASE - 230, 56, 56, 'glass', '#ffe28a');
+  if (p.tile > 0) {
+    const top = BASE - 330 - 146 * p.tile;
+    for (let y = BASE - 330; y > top - 18; y -= 18) for (let x = 770 + ((y / 18) % 2) * 14; x < 1150; x += 28) {
+      const half = ((y - (BASE - 476)) / 146) * 188; // meia largura do telhado nessa altura
+      if (Math.abs(x - 960) > half - 6 || y < BASE - 476) continue;
+      add(x - 15, y - 15, 30, 15, 'tile', ((x + y) / 14) % 3 < 1 ? '#c23d31' : '#D9483B');
+    }
+  }
+  return out;
+}
+
+export function drawDebris(ctx: Ctx, d: Debris) {
+  ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.rot);
+  ctx.fillStyle = d.color;
+  if (d.kind === 'tile') { ctx.beginPath(); ctx.arc(0, d.h / 2, d.w / 2, Math.PI, 0); ctx.fill(); }
+  else {
+    rr(ctx, -d.w / 2, -d.h / 2, d.w, d.h, d.kind === 'stone' ? 8 : 4); ctx.fill();
+    if (d.kind === 'stone' || d.kind === 'glass' || d.kind === 'wood') { ctx.strokeStyle = d.kind === 'stone' ? '#4a4540' : '#5c3a1a'; ctx.lineWidth = d.kind === 'glass' ? 5 : 3; ctx.stroke(); }
+  }
+  ctx.restore();
+}

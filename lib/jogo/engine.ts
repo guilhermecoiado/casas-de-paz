@@ -3,8 +3,8 @@
 import type { BuzzMsg, ChState, FinState, Mode, PowerId, StateMsg, TaskId } from './net';
 import {
   C, CHARS, FONT, GROUND, H, ITEM_EMOJI, ITEM_LABEL, NO_FIN, PLATS, POWERS, QTY_STYLE, ROCK, TASK, TASKS, TAU, W,
-  ant, balloon, bee, bolt, boulder, finishBack, fitText, glow, house, item, panel, person, platform, powerBubble, rr, scaffold, scenery, trampoline,
-  type Ctx, type FinProg, type HouseProg, type ItemType, type Plat,
+  ant, balloon, bee, bolt, boulder, drawDebris, finishBack, houseDebris, fitText, glow, house, item, panel, person, platform, powerBubble, rr, scaffold, scenery, trampoline,
+  type Ctx, type Debris, type FinProg, type HouseProg, type ItemType, type Plat,
 } from './draw';
 
 // espaçamento entre letras (nem todo navegador tem; sem ele só fica junto)
@@ -16,6 +16,8 @@ export const MAX_PLAYERS = 12;
 const PLAY_TIME = 240;      // 4 minutos
 const LOBBY_TIME = 20;
 const FINALE_TIME = 8;
+const FINALE_FALL = 11.5;  // quando a casa não aguenta: versículo e desmoronamento
+const COLLAPSE_AT = 4.2;
 const RESULTS_TIME = 30;
 
 const GRAV = 2600, JUMP = -1130, CUT = -420, MAXV = 430, TRAMP_V = -1720;
@@ -136,6 +138,7 @@ export class Game {
   banner: { text: string; t: number; color: string } | null = null;
   results: Result[] = [];
   shake = 0;
+  debris: Debris[] = [];
   shakeAmp = 16;
   quakeT = 0;
   screenFx: { c: string; t: number; d: number; a: number; vig: boolean }[] = [];
@@ -338,6 +341,7 @@ export class Game {
 
   private toFinale() {
     this.setMode('finale');
+    this.debris = [];
     this.players.forEach((p) => { p.carry = null; p.work = 0; p.fx = NO_FX(); p.power = null; });
     this.clearHazards();
     this.sfx('storm'); this.buzzAll('storm');
@@ -411,7 +415,7 @@ export class Game {
       power: play && p.power ? p.power : undefined,
       fx: play ? this.fxText(p) : undefined,
       fxs: play ? (Object.keys(p.fx) as (keyof Fx)[]).filter((k) => p.fx[k] > 0) : undefined,
-      env: play ? this.events.filter((e) => this.modeT >= e.at && this.modeT < e.at + e.dur && this.phase < PHASES.length).map((e) => e.type) : this.mode === 'finale' && this.modeT < 4.6 ? ['storm'] : undefined,
+      env: play ? this.events.filter((e) => this.modeT >= e.at && this.modeT < e.at + e.dur && this.phase < PHASES.length).map((e) => e.type) : this.mode === 'finale' && this.modeT < (this.complete ? 4.6 : 8) ? ['storm'] : undefined,
     };
   }
 
@@ -444,8 +448,19 @@ export class Game {
       if (this.modeT >= PLAY_TIME || (this.finished && this.t - this.finishedAt > 3.5)) this.toFinale();
     } else if (this.mode === 'finale') {
       for (const k of [1.5, 2.6, 3.7]) if (this.modeT >= k) this.once(`th${k}`, () => this.sfx('thunder'));
-      if (this.modeT >= 4.6) this.once('end', () => this.sfx(this.complete ? 'standing' : 'fall'));
-      if (this.modeT >= FINALE_TIME) this.toResults();
+      if (this.complete) {
+        if (this.modeT >= 4.6) this.once('end', () => this.sfx('standing'));
+        if (this.modeT >= FINALE_TIME) this.toResults();
+      } else {
+        // a casa não estava na rocha: primeiro o versículo, depois ela despedaça
+        if (this.modeT >= COLLAPSE_AT) this.once('collapse', () => {
+          this.debris = houseDebris(this.progress());
+          this.sfx('fall'); this.sfx('jolt'); this.buzzAll('quake');
+          this.shake = 1.2; this.shakeAmp = 34; this.screen('#ffffff', 0.35, 0.4);
+        });
+        this.stepDebris(dt);
+        if (this.modeT >= FINALE_FALL) this.toResults();
+      }
     } else if (this.mode === 'results') {
       if (this.modeT >= RESULTS_TIME) { if (this.players.size) this.toLobby(15); else this.toAttract(); }
     }
@@ -903,6 +918,27 @@ export class Game {
     }
   }
 
+  /** Pedaços da casa caindo: telhado primeiro, depois as paredes, rolando pela rocha até o chão. */
+  private stepDebris(dt: number) {
+    const k = this.modeT - COLLAPSE_AT;
+    for (const d of this.debris) {
+      if (k < d.delay) { if (Math.random() < dt * 2) d.rot = (Math.random() - 0.5) * 0.06; continue; }
+      if (d.hits === 0 && d.vy === 0 && d.vx === 0) {
+        // solta: espalha para os lados e gira
+        d.vx = (d.x - 960) * 1.1 + (Math.random() - 0.5) * 260; d.vy = -60 - Math.random() * 260; d.vr = (Math.random() - 0.5) * 9;
+        if (Math.random() < 0.15) this.sfx('crash');
+      }
+      if (d.hits >= 3) continue;
+      d.vy += GRAV * 0.75 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.rot += d.vr * dt;
+      const floor = (rockSurface(d.x) ?? GROUND) - Math.min(d.w, d.h) / 2;
+      if (d.y >= floor) {
+        d.y = floor; d.hits++;
+        if (d.hits === 1) { for (let i = 0; i < 3; i++) this.sparks.push({ x: d.x, y: d.y, vx: (Math.random() - 0.5) * 260, vy: -80 - Math.random() * 160, t: 0.2, c: '#b9a690' }); this.shake = Math.max(this.shake, 0.15); }
+        if (Math.abs(d.vy) > 220 && d.hits < 3) { d.vy = -d.vy * 0.32; d.vx *= 0.6; d.vr *= 0.5; } else { d.hits = 3; d.vr = 0; }
+      }
+    }
+  }
+
   private dropFrom(p: Player) { if (p.carry) { this.drop(p); } }
   private drop(p: Player, dir: number = p.face) {
     const it = p.carry; if (!it) return;
@@ -1032,8 +1068,14 @@ export class Game {
     TRAMPS.forEach((t, i) => trampoline(ctx, t.x, t.w, this.tramp[i]));
     // a casa
     const prog = this.progress();
-    const fall = finale && !this.complete ? Math.max(0, Math.min(1, (fk - 3.2) / 1.6)) : 0;
-    house(ctx, prog, this.t, { wobble: finale && fk > 1 ? (this.complete ? 0.5 : 2) : quake ? 1 : 0, fall, fin });
+    if (this.debris.length) {
+      // desmoronando: só o contorno do que era e os pedaços caindo
+      house(ctx, { stone: 0, brick: 0, tile: 0, wood: 0, glass: 0 }, this.t, { fin });
+      this.debris.forEach((d) => drawDebris(ctx, d));
+    } else {
+      const shaking = finale && fk > 1 ? (this.complete ? 0.5 : 1 + Math.min(2.5, (fk - 1) * 0.9)) : quake ? 1 : 0;
+      house(ctx, prog, this.t, { wobble: shaking, fin });
+    }
     if (fin.decor < 1) scaffold(ctx);
     // avisos de raio (no chão, atrás de todo mundo)
     this.bolts.forEach((b) => { if (b.t < 1.1) bolt(ctx, b.x, b.y, b.t / 1.1, this.t); });
@@ -1094,14 +1136,15 @@ export class Game {
         ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x0 + (wind.dir ?? 1) * len, yy); ctx.stroke();
       }
     }
-    if (this.rain.length || (finale && fk < 5)) {
-      if (finale && fk < 5) for (let i = 0; i < 10; i++) this.rain.push({ x: Math.random() * (W + 300), y: -20 });
+    const raining = finale && fk < (this.complete ? 5 : 9);
+    if (this.rain.length || raining) {
+      if (raining) for (let i = 0; i < 10; i++) this.rain.push({ x: Math.random() * (W + 300), y: -20 });
       this.rain.forEach((d) => { ctx.strokeStyle = d.light ? 'rgba(220,235,250,0.55)' : 'rgba(200,225,245,0.75)'; ctx.lineWidth = d.light ? 2 : 3; ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - (d.light ? 3 : 8), d.y + (d.light ? 14 : 26)); ctx.stroke(); });
       if (finale) this.rain.forEach((d) => { d.y += 1500 / 60; d.x -= 5; });
       this.rain = this.rain.filter((d) => d.y < H);
     }
     if (this.active('fog')) this.drawFog(ctx);
-    if (finale && fk > 1.4 && fk < 4.2 && Math.floor(fk * 7) % 9 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(0, 0, W, H); }
+    if (finale && fk > 1.4 && fk < (this.complete ? 4.2 : 7) && Math.floor(fk * 7) % 9 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(0, 0, W, H); }
     this.floaters.forEach((f) => {
       ctx.save(); ctx.globalAlpha = 1 - f.t / 1.4; ctx.font = `900 30px ${FONT}`; ctx.textAlign = 'center'; ctx.lineWidth = 6; ctx.strokeStyle = '#fff';
       const y = f.y - f.t * 60; ctx.strokeText(f.text, f.x, y); ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, y); ctx.restore();
@@ -1279,10 +1322,9 @@ export class Game {
 
   private finaleOverlay(ctx: Ctx, fk: number) {
     let title = 'Vem a tempestade…', sub = 'Será que a casa aguenta?';
-    if (fk > 4.6) {
-      if (this.complete) { title = 'A casa na rocha ficou de pé! 🙌'; sub = '“Se o Senhor não edificar a casa, em vão trabalham os que a edificam.” · Sl 127:1'; }
-      else { title = 'A tempestade levou parte da casa…'; sub = 'Faltou pouco! Bora de novo?'; }
-    }
+    if (this.complete && fk > 4.6) { title = 'A casa na rocha ficou de pé! 🙌'; sub = '“Se o Senhor não edificar a casa, em vão trabalham os que a edificam.” · Sl 127:1'; }
+    if (!this.complete && fk > 1.3 && fk <= COLLAPSE_AT) { title = 'A casa não ficou pronta na rocha…'; sub = '“Caiu a chuva, transbordaram os rios, sopraram os ventos e deram contra aquela casa…”'; }
+    if (!this.complete && fk > COLLAPSE_AT) { title = '“…e ela caiu. E foi grande a sua queda.”'; sub = 'Mateus 7:27 · Faltou pouco! Bora de novo?'; }
     ctx.save(); ctx.font = `900 30px ${FONT}`; const sw = ctx.measureText(sub).width;
     ctx.font = `900 60px ${FONT}`; const tw = ctx.measureText(title).width;
     const bw = Math.min(W - 120, Math.max(tw, sw) + 100);
