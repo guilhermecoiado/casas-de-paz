@@ -257,7 +257,7 @@ export const PLATS: Plat[] = [
   { x: 300, y: 790, w: 190 },
   { x: 140, y: 640, w: 300 },
   { x: 520, y: 500, w: 240 },
-  { x: 860, y: 400, w: 200 },
+  { x: 870, y: 338, w: 180 }, // bem acima do telhado: daqui não dá para entregar
   { x: 1220, y: 520, w: 260 },
   { x: 1430, y: 790, w: 190 },
   { x: 1540, y: 660, w: 300 },

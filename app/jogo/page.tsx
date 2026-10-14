@@ -25,6 +25,8 @@ function TV() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hint, setHint] = useState(true);
   const [soundOn, setSoundOn] = useState(false);
+  const [photo, setPhoto] = useState<'off' | 'can' | 'on'>('off');
+  const gameRef = useRef<Game | null>(null);
 
   useEffect(() => {
     const cv = canvasRef.current!;
@@ -34,6 +36,7 @@ function TV() {
     const bots = Math.min(12, Number(params.get('bots') || 0));
     const game = new Game();
     game.room = room;
+    gameRef.current = game;
     if (bots) (window as unknown as { __game?: Game }).__game = game; // só no modo de teste
     const assets: AttractAssets = { checkinQR: null, checkinCode: null, gameQR: null, room, groupName: 'Growth' };
     let alive = true;
@@ -49,7 +52,7 @@ function TV() {
     qr(joinUrl).then((img) => { assets.gameQR = img; game.gameQR = img; });
     // QR do check-in: só se esta TV estiver logada como adm do grupo
     if (groupId) {
-      supabase.from('groups').select('name').eq('id', groupId).maybeSingle().then(({ data }) => { if (data?.name) assets.groupName = data.name as string; });
+      supabase.from('groups').select('name').eq('id', groupId).maybeSingle().then(({ data }) => { if (data?.name) { assets.groupName = data.name as string; game.groupName = data.name as string; } });
       supabase.rpc('admin_checkin_code', { p_group: groupId, p_rotate: false }).then(async ({ data }) => {
         if (!data) return;
         assets.checkinCode = data as string;
@@ -104,6 +107,7 @@ function TV() {
     resize(); window.addEventListener('resize', resize);
 
     let last = performance.now(), acc = 0, raf = 0;
+    let photoRef: 'off' | 'can' | 'on' = 'off';
     const frame = (now: number) => {
       if (!alive) return;
       acc += Math.min(0.1, (now - last) / 1000); last = now;
@@ -113,6 +117,8 @@ function TV() {
       ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
       audio.setTrack(game.mode === 'play' ? 'play' : game.mode === 'finale' ? 'none' : 'calm');
       if (game.mode === 'attract') renderAttract(ctx, game.t, assets); else game.render(ctx);
+      const ph = game.mode === 'results' && game.complete ? (game.photo ? 'on' : 'can') : 'off';
+      if (ph !== photoRef) { photoRef = ph; setPhoto(ph); }
       ctx.restore();
       raf = requestAnimationFrame(frame);
     };
@@ -122,6 +128,7 @@ function TV() {
     const onKey = (e: KeyboardEvent) => {
       unlock();
       if (e.key.toLowerCase() === 'm') audio.toggleMute();
+      if (e.key.toLowerCase() === 'c') game.togglePhoto();
       if (e.key === 'Enter' || e.key === ' ') game.startNow();
       if (e.key.toLowerCase() === 'f') document.documentElement.requestFullscreen?.().catch(() => {});
     };
@@ -146,6 +153,15 @@ function TV() {
         <div className="pointer-events-none absolute left-4 top-4 whitespace-nowrap rounded-full bg-ink/70 px-4 py-2 text-sm font-bold text-white">
           {soundOn ? 'Clique para tela cheia · Enter começa na hora · M liga/desliga o som' : '🔊 Clique na tela para ligar o som e a tela cheia'}
         </div>
+      )}
+      {photo !== 'off' && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); gameRef.current?.togglePhoto(); }}
+          className={`absolute bottom-6 right-6 whitespace-nowrap rounded-full px-6 py-3 text-lg font-black shadow-lg transition-opacity ${photo === 'on' ? 'bg-white/70 text-ink opacity-40 hover:opacity-100' : 'bg-terra text-white'}`}
+        >
+          {photo === 'on' ? '↩ Voltar ao placar' : '📸 Ver a casa pronta (C)'}
+        </button>
       )}
     </div>
   );

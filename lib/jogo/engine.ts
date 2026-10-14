@@ -15,7 +15,7 @@ const pickOne = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 export const MAX_PLAYERS = 12;
 const PLAY_TIME = 240;      // 4 minutos
 const LOBBY_TIME = 20;
-const FINALE_TIME = 8;
+const FINALE_TIME = 11;   // casa de pé: versículo fica mais tempo na tela
 const FINALE_FALL = 11.5;  // quando a casa não aguenta: versículo e desmoronamento
 const COLLAPSE_AT = 4.2;
 const RESULTS_TIME = 30;
@@ -23,7 +23,8 @@ const RESULTS_TIME = 30;
 const GRAV = 2600, JUMP = -1130, CUT = -420, MAXV = 430, TRAMP_V = -1720;
 // degraus invisíveis no andaime (ajudam a subir da rocha)
 const SOLID_PLATS: Plat[] = [...PLATS, { x: 1128, y: 718, w: 76 }, { x: 1128, y: 618, w: 76 }];
-const ZONE = { x0: 790, x1: 1130, top: ROCK.top - 520 };
+// entrega só valendo dentro da casa (abaixo do telhado), nunca de cima da plataforma do topo
+const ZONE = { x0: 790, x1: 1130, top: ROCK.top - 340 };
 const TRAMPS = [{ x: 36, w: 116 }, { x: 1768, w: 116 }];
 const QUOTA = 60;     // toques da parte de cada um no acabamento
 const CH_TAPS = 20;   // toques por jogador para vencer um desafio de toque
@@ -138,6 +139,9 @@ export class Game {
   banner: { text: string; t: number; color: string } | null = null;
   results: Result[] = [];
   shake = 0;
+  /** Modo foto: no resultado, esconde o placar para ver (e fotografar) a casa. */
+  photo = false;
+  groupName = '';
   debris: Debris[] = [];
   shakeAmp = 16;
   quakeT = 0;
@@ -155,7 +159,8 @@ export class Game {
   private screen(c: string, d: number, a: number, vig = false) { this.screenFx.push({ c, t: 0, d, a, vig }); }
   private buzzAll(kind: BuzzMsg['kind']) { this.players.forEach((p) => this.onBuzz(p.id, kind)); }
   private once(key: string, fn: () => void) { if (!this.fired.has(key)) { this.fired.add(key); fn(); } }
-  private setMode(m: Mode) { this.mode = m; this.modeT = 0; this.fired.clear(); }
+  private setMode(m: Mode) { this.mode = m; this.modeT = 0; this.fired.clear(); this.photo = false; }
+  togglePhoto() { if (this.mode === 'results') this.photo = !this.photo; }
   private clearHazards() { this.items = []; this.ants = []; this.balloon = null; this.shots = []; this.swarms = []; this.boulders = []; this.bolts = []; }
 
   /* ---------------- jogadores ---------------- */
@@ -462,6 +467,7 @@ export class Game {
         if (this.modeT >= FINALE_FALL) this.toResults();
       }
     } else if (this.mode === 'results') {
+      if (this.photo) this.modeT -= dt; // enquanto tiram foto, o placar espera
       if (this.modeT >= RESULTS_TIME) { if (this.players.size) this.toLobby(15); else this.toAttract(); }
     }
 
@@ -882,7 +888,7 @@ export class Game {
     const pick = (s: [number, number][]) => s[i % s.length];
     switch (p.task) {
       case 'paint': return pick([[846, ROCK.top], [1078, ROCK.top], [884, ROCK.top], [1040, ROCK.top], [810, ROCK.top], [1112, ROCK.top]]);
-      case 'light': return pick([[960, 400], [1350, 520], [640, 500], [900, 400], [1420, 520], [700, 500]]);
+      case 'light': return pick([[960, 338], [1350, 520], [640, 500], [910, 338], [1420, 520], [700, 500]]);
       case 'garden': return pick([[520, GROUND], [1430, GROUND], [380, GROUND], [1570, GROUND], [260, GROUND], [1690, GROUND]]);
       default: return pick([[672, GROUND], [1252, GROUND], [600, GROUND], [1320, GROUND], [560, GROUND], [1380, GROUND]]);
     }
@@ -1156,7 +1162,7 @@ export class Game {
     if (this.mode === 'play') this.hud(ctx);
     if (this.banner && this.mode === 'play') this.bannerFlash(ctx);
     if (finale) this.finaleOverlay(ctx, fk);
-    if (this.mode === 'results') this.resultsOverlay(ctx);
+    if (this.mode === 'results') { if (this.photo) this.photoCaption(ctx); else this.resultsOverlay(ctx); }
     if (this.mode !== 'play' && this.mode !== 'results') this.scoreStrip(ctx, this.mode === 'finale');
     // flashes de tela (raio, poderes, entrega dourada…)
     for (const f of this.screenFx) {
@@ -1331,6 +1337,18 @@ export class Game {
     panel(ctx, W / 2 - bw / 2, 80, bw, 190, 40);
     ctx.textAlign = 'center'; ctx.fillStyle = C.ink; fitText(ctx, title, W / 2, 168, bw - 80, 900, 60);
     ctx.fillStyle = C.brown; fitText(ctx, sub, W / 2, 226, bw - 80, 800, 30); ctx.restore();
+  }
+
+  private photoCaption(ctx: Ctx) {
+    const date = new Date().toLocaleDateString('pt-BR');
+    const title = this.finished ? 'Casa na Rocha ✨' : this.complete ? 'Casa na Rocha 🏠' : 'Casa na Rocha';
+    const sub = [this.groupName, date, `${this.results.length} construtores · ${this.results.reduce((a, r) => a + r.pts, 0)} pts`].filter(Boolean).join(' · ');
+    ctx.save(); ctx.font = `900 54px ${FONT}`; const tw = ctx.measureText(title).width; ctx.font = `800 26px ${FONT}`; const sw = ctx.measureText(sub).width;
+    const bw = Math.min(W - 200, Math.max(tw, sw) + 100);
+    panel(ctx, W / 2 - bw / 2, 60, bw, 150, 40);
+    ctx.textAlign = 'center'; ctx.fillStyle = C.ink; fitText(ctx, title, W / 2, 132, bw - 80, 900, 54);
+    ctx.fillStyle = C.brown; fitText(ctx, sub, W / 2, 178, bw - 80, 800, 26);
+    ctx.restore();
   }
 
   private resultsOverlay(ctx: Ctx) {
