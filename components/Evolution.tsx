@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Check, Gift, Lock, Sparkles } from 'lucide-react';
 import { useGroup } from '@/lib/group-context';
 import {
-  ACH_LABEL, KIND_LABEL, PATHS, RARITY, REWARDS, TEAM_PHRASES, isUnlocked, kitItems, rewardThreshold,
+  ACH_LABEL, KIND_LABEL, PATHS, RARITY, REWARDS, TEAM_PHRASES, isUnlocked, kitSize, rewardThreshold,
   type PathInfo, type Reward,
 } from '@/lib/rewards';
 import { GROUP_UNLOCKS } from '@/lib/game';
@@ -136,7 +136,7 @@ function RewardRow({ r, last, url, name, member, titleId, onEquip, saving }: Pro
 }
 
 function KitRow({ path, unlockedAll, active, onEquipKit, saving }: { path: PathInfo; unlockedAll: boolean; active: boolean; onEquipKit: Props['onEquipKit']; saving: string | null }) {
-  const n = kitItems(path.id).length;
+  const n = kitSize(path.id);
   return (
     <div className={`relative mt-2 overflow-hidden rounded-2xl p-3 ${active ? 'bg-ink text-white' : 'bg-cream'}`}>
       {active && <div className="absolute inset-y-0 right-0 w-24"><KitFx kit={path.id} /></div>}

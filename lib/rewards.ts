@@ -220,6 +220,18 @@ export function kitItems(path: PathId) {
   return REWARDS.filter((r) => r.path === path && r.kind !== 'phrase');
 }
 
+/** Quantos itens o kit pede: um de cada tipo (ex.: o Semeador tem 2 títulos, mas só se usa 1 → 5 itens). */
+export function kitSize(path: PathId) {
+  return new Set(kitItems(path).map((r) => r.kind)).size;
+}
+
+/** Kit ativo: para cada tipo do caminho, pelo menos um item desse tipo está em uso. */
+export function kitComplete(path: PathId, worn: Set<string | null>) {
+  const kinds = new Map<string, boolean>();
+  for (const r of kitItems(path)) kinds.set(r.kind, (kinds.get(r.kind) ?? false) || worn.has(r.id));
+  return Array.from(kinds.values()).every(Boolean);
+}
+
 export interface Look {
   title: string;
   titleId: string;
@@ -253,7 +265,7 @@ export function equipped(g: Group, m: Member | undefined, p: Progress): Look {
   };
   const worn = new Set([look.titleId, look.avatarFrame, look.tileFrame, look.tileColor, look.tileAnim]);
   for (const path of PATHS) {
-    if (kitItems(path.id).every((r) => worn.has(r.id))) look.kit = path.id;
+    if (kitComplete(path.id, worn)) look.kit = path.id;
   }
   return look;
 }
