@@ -69,6 +69,7 @@ function TV() {
       ch.on('broadcast', { event: 'in' }, ({ payload }) => game.setInput(id, payload as InputMsg))
         .on('broadcast', { event: 'tap' }, ({ payload }) => game.tap(id, Number((payload as TapMsg)?.n) || 0))
         .on('broadcast', { event: 'pw' }, () => game.usePower(id))
+        .on('broadcast', { event: 'lvl' }, ({ payload }) => game.setLevel(Number((payload as { n?: number })?.n)))
         .on('broadcast', { event: 'ping' }, () => game.touch(id))
         .on('broadcast', { event: 'bye' }, () => { game.removePlayer(id); closePlayer(id); })
         .subscribe();
@@ -129,6 +130,7 @@ function TV() {
       unlock();
       if (e.key.toLowerCase() === 'm') audio.toggleMute();
       if (e.key.toLowerCase() === 'c') game.togglePhoto();
+      if (e.key === '1' || e.key === '2') game.setLevel(Number(e.key));
       if (e.key === 'Enter' || e.key === ' ') game.startNow();
       if (e.key.toLowerCase() === 'f') document.documentElement.requestFullscreen?.().catch(() => {});
     };

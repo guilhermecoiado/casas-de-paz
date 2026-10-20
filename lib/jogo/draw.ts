@@ -199,6 +199,8 @@ export const POWERS: Record<PowerId, { label: string; emoji: string; self: boole
   fire: { label: 'Fogo', emoji: '🔥', self: false, color: '#F26B1D', rgb: '255,150,60', dur: 5, use: 'JOGAR' },
   magnet: { label: 'Ímã', emoji: '🧲', self: true, color: '#C8553D', rgb: '255,160,150', dur: 6, use: 'USAR' },
   shield: { label: 'Escudo', emoji: '🛡️', self: true, color: '#2F8FD0', rgb: '120,190,255', dur: 8, use: 'USAR' },
+  wings: { label: 'Asas', emoji: '🕊️', self: true, color: '#8C9C2E', rgb: '220,240,170', dur: 6, use: 'USAR' },
+  double: { label: 'Pontos x2', emoji: '💎', self: true, color: '#7B3FA0', rgb: '210,170,250', dur: 10, use: 'USAR' },
 };
 
 /** Bolha de poder caindo/parada. */
@@ -270,9 +272,9 @@ function cloud(ctx: Ctx, x: number, y: number, s: number, a = 1) {
 }
 
 /** Céu, colinas, chão e rocha. `dark` 0..1 escurece para a tempestade. */
-export function scenery(ctx: Ctx, t: number, dark = 0) {
+export function scenery(ctx: Ctx, t: number, dark = 0, dusk = false) {
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, mix('#CFE6F2', '#4a5a6e', dark)); g.addColorStop(0.55, mix('#F4EBDD', '#7d8794', dark)); g.addColorStop(1, mix('#F7F0E4', '#9aa0a6', dark));
+  g.addColorStop(0, mix(dusk ? '#F2B48C' : '#CFE6F2', '#4a5a6e', dark)); g.addColorStop(0.55, mix(dusk ? '#F8DDBF' : '#F4EBDD', '#7d8794', dark)); g.addColorStop(1, mix('#F7F0E4', '#9aa0a6', dark));
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   // sol
   ctx.save(); ctx.globalAlpha = 1 - dark;
@@ -282,7 +284,7 @@ export function scenery(ctx: Ctx, t: number, dark = 0) {
   cloud(ctx, ((220 + drift) % (W + 400)) - 200, 250, 1.2, 0.9 - dark * 0.3);
   cloud(ctx, ((900 + drift * 0.7) % (W + 400)) - 200, 210, 0.9, 0.8 - dark * 0.3);
   cloud(ctx, ((1260 + drift * 0.85) % (W + 400)) - 200, 300, 1.1, 0.85 - dark * 0.3);
-  ctx.fillStyle = mix('#B9CF9A', '#5f6b55', dark); ctx.beginPath(); ctx.moveTo(0, 800); ctx.quadraticCurveTo(300, 640, 640, 760); ctx.quadraticCurveTo(980, 860, 1300, 720); ctx.quadraticCurveTo(1650, 600, 1920, 760); ctx.lineTo(1920, 1080); ctx.lineTo(0, 1080); ctx.fill();
+  ctx.fillStyle = mix(dusk ? '#A9C28A' : '#B9CF9A', '#5f6b55', dark); ctx.beginPath(); ctx.moveTo(0, 800); ctx.quadraticCurveTo(300, 640, 640, 760); ctx.quadraticCurveTo(980, 860, 1300, 720); ctx.quadraticCurveTo(1650, 600, 1920, 760); ctx.lineTo(1920, 1080); ctx.lineTo(0, 1080); ctx.fill();
   ctx.fillStyle = mix('#9DBB7C', '#4f5c48', dark); ctx.beginPath(); ctx.moveTo(0, 880); ctx.quadraticCurveTo(420, 760, 900, 860); ctx.quadraticCurveTo(1400, 960, 1920, 840); ctx.lineTo(1920, 1080); ctx.lineTo(0, 1080); ctx.fill();
   ctx.fillStyle = mix('#E9D3A8', '#8f8670', dark); ctx.fillRect(0, GROUND, W, H - GROUND);
   ctx.fillStyle = mix('#7FAE52', '#4c6b38', dark); rr(ctx, -20, GROUND - 12, W + 40, 26, 13); ctx.fill();
@@ -304,51 +306,61 @@ export function platform(ctx: Ctx, p: Plat, dy = 0, moving = false) {
 
 export interface HouseProg { stone: number; brick: number; tile: number; wood: number; glass: number } // 0..1
 const HX0 = 812, HX1 = 1108, BASE = ROCK.top;
+/** Cores da casa de cada tela. */
+export interface HouseTheme { brick: [string, string]; tile: [string, string]; ridge: string; wall: string; door: string; shutter: string }
+export const THEME_ROCHA: HouseTheme = { brick: ['#C8553D', '#B44A34'], tile: ['#c23d31', '#D9483B'], ridge: '#9c2f25', wall: '#FBF1E1', door: '#3E6B48', shutter: '#3E6B48' };
+export const THEME_GRANDE: HouseTheme = { brick: ['#D9A441', '#C48E2E'], tile: ['#2F5F95', '#3E77B5'], ridge: '#1F4570', wall: '#EAF3F8', door: '#2F5F95', shutter: '#C8553D' };
+/** Altura extra do 2º andar. */
+export const STORY2 = 198;
 
-export function house(ctx: Ctx, p: HouseProg, t: number, opts: { wobble?: number; fall?: number; outline?: boolean; fin?: FinProg } = {}) {
+export function house(ctx: Ctx, p: HouseProg, t: number, opts: { wobble?: number; fall?: number; outline?: boolean; fin?: FinProg; stories?: 1 | 2; theme?: HouseTheme } = {}) {
   const f = opts.fin ?? NO_FIN;
+  const S = opts.stories === 2 ? STORY2 : 0, T = opts.theme ?? THEME_ROCHA;
   ctx.save();
   if (opts.wobble) { ctx.translate(960, BASE); ctx.rotate(Math.sin(t * 9) * 0.03 * opts.wobble); ctx.translate(-960, -BASE); }
   const fall = opts.fall ?? 0;
   // contorno do que falta
   if (opts.outline !== false) {
     ctx.save(); ctx.setLineDash([14, 12]); ctx.strokeStyle = 'rgba(43,33,24,0.3)'; ctx.lineWidth = 5;
-    ctx.strokeRect(HX0, BASE - 334, HX1 - HX0, 300);
-    ctx.beginPath(); ctx.moveTo(780, BASE - 334); ctx.lineTo(960, BASE - 470); ctx.lineTo(1140, BASE - 334); ctx.stroke();
+    ctx.strokeRect(HX0, BASE - 334 - S, HX1 - HX0, 300 + S);
+    ctx.beginPath(); ctx.moveTo(780, BASE - 334 - S); ctx.lineTo(960, BASE - 470 - S); ctx.lineTo(1140, BASE - 334 - S); ctx.stroke();
     ctx.restore();
   }
   // fundação (9 pedras)
   const ns = Math.round(p.stone * 9);
   for (let i = 0; i < ns; i++) { ctx.fillStyle = ['#bdb7ac', '#d3cdc2', '#a9a398'][i % 3]; rr(ctx, 800 + i * 36, BASE - 34, 34, 34, 8); ctx.fill(); ctx.strokeStyle = '#4a4540'; ctx.lineWidth = 3; ctx.stroke(); }
   // paredes: 13 fileiras de tijolo, preenchendo tijolo a tijolo
-  const rows = 13, perRow = 8, totalB = rows * perRow, nb = Math.round(p.brick * totalB);
+  const rows = 13 + (S ? 9 : 0), perRow = 8, totalB = rows * perRow, nb = Math.round(p.brick * totalB);
   let k = 0;
   ctx.save(); if (fall) ctx.translate(fall * 40, fall * fall * 400);
   for (let r = 0; r < rows; r++) for (let c = 0; c < perRow; c++) {
     if (k++ >= nb) continue;
     const w = 38, h = 22, off = r % 2 ? 19 : 0, x = HX0 + c * w + off, y = BASE - 34 - (r + 1) * h;
     if (x + w > HX1 + 4) continue;
-    ctx.fillStyle = (r + c) % 3 ? '#C8553D' : '#B44A34'; rr(ctx, x, y, Math.min(w - 3, HX1 - x), h - 3, 4); ctx.fill();
+    ctx.fillStyle = (r + c) % 3 ? T.brick[0] : T.brick[1]; rr(ctx, x, y, Math.min(w - 3, HX1 - x), h - 3, 4); ctx.fill();
   }
+  // 2º andar: viga de madeira separando os andares
+  if (S && nb > 13 * perRow) { ctx.fillStyle = '#8b5a2b'; rr(ctx, HX0 - 10, BASE - 34 - 13 * 22 - 5, HX1 - HX0 + 20, 12, 4); ctx.fill(); }
   // pintura: o rolo passa da esquerda para a direita cobrindo os tijolos
   if (f.paint > 0) {
     const pw = (HX1 - HX0) * f.paint;
-    ctx.save(); ctx.beginPath(); ctx.rect(HX0 - 4, BASE - 330, pw + 4, 300); ctx.clip();
-    ctx.fillStyle = '#FBF1E1'; ctx.fillRect(HX0 - 2, BASE - 322, HX1 - HX0 + 4, 290);
-    ctx.fillStyle = 'rgba(200,170,130,0.12)'; for (let y = BASE - 300; y < BASE - 40; y += 34) ctx.fillRect(HX0, y, HX1 - HX0, 3);
-    ctx.fillStyle = '#E9CFAE'; ctx.fillRect(HX0 - 2, BASE - 322, 14, 290); ctx.fillRect(HX1 - 12, BASE - 322, 14, 290);
+    ctx.save(); ctx.beginPath(); ctx.rect(HX0 - 4, BASE - 330 - S, pw + 4, 300 + S); ctx.clip();
+    ctx.fillStyle = T.wall; ctx.fillRect(HX0 - 2, BASE - 322 - S, HX1 - HX0 + 4, 290 + S);
+    ctx.fillStyle = 'rgba(200,170,130,0.12)'; for (let y = BASE - 300 - S; y < BASE - 40; y += 34) ctx.fillRect(HX0, y, HX1 - HX0, 3);
+    ctx.fillStyle = '#E9CFAE'; ctx.fillRect(HX0 - 2, BASE - 322 - S, 14, 290 + S); ctx.fillRect(HX1 - 12, BASE - 322 - S, 14, 290 + S);
+    if (S) { ctx.fillStyle = '#8b5a2b'; ctx.fillRect(HX0 - 2, BASE - 34 - 13 * 22 - 5, HX1 - HX0 + 4, 12); }
     ctx.fillStyle = C.terra; ctx.fillRect(HX0 - 2, BASE - 58, HX1 - HX0 + 4, 24);
     ctx.restore();
     if (f.paint < 1) { // borda molhada + rolo
       const ex = HX0 + pw;
-      ctx.fillStyle = '#F2DFC4'; ctx.fillRect(ex - 6, BASE - 322, 8, 290);
+      ctx.fillStyle = '#F2DFC4'; ctx.fillRect(ex - 6, BASE - 322 - S, 8, 290 + S);
       ctx.fillStyle = '#E26D9A'; rr(ctx, ex - 10, BASE - 200 + Math.sin(t * 8) * 60, 22, 60, 8); ctx.fill();
     }
   }
   // porta (madeira) e janelas (vidro)
   if (p.wood > 0) {
     const dh = 130 * p.wood;
-    ctx.fillStyle = f.paint >= 1 ? '#3E6B48' : '#8b5a2b'; rr(ctx, 930, BASE - 34 - dh, 64, dh, [26, 26, 0, 0]); ctx.fill();
+    ctx.fillStyle = f.paint >= 1 ? T.door : '#8b5a2b'; rr(ctx, 930, BASE - 34 - dh, 64, dh, [26, 26, 0, 0]); ctx.fill();
     ctx.strokeStyle = '#5c3a1a'; ctx.lineWidth = 3; ctx.stroke();
     if (p.wood >= 1) { ctx.fillStyle = '#F3C64A'; ctx.beginPath(); ctx.arc(982, BASE - 100, 4, 0, TAU); ctx.fill(); }
     // guirlanda na porta
@@ -358,35 +370,37 @@ export function house(ctx: Ctx, p: HouseProg, t: number, opts: { wobble?: number
   // placa "Casa de Paz" acima da porta
   const pl = pop(f.decor, 0.5);
   if (pl > 0) { ctx.save(); ctx.translate(962, BASE - 282); ctx.scale(pl, pl); ctx.fillStyle = '#8b5a2b'; rr(ctx, -58, -15, 116, 30, 8); ctx.fill(); ctx.fillStyle = '#FBF1E1'; ctx.font = `900 16px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('Casa de Paz', 0, 6); ctx.restore(); }
-  for (const [wx, i] of [[848, 0], [1030, 1]] as const) {
-    const q = Math.max(0, Math.min(1, p.glass * 2 - i));
+  const wins: [number, number, number][] = S ? [[848, 0, 0], [1030, 1, 0], [848, 2, S], [1030, 3, S]] : [[848, 0, 0], [1030, 1, 0]];
+  for (const [wx, i, oy] of wins) {
+    const q = Math.max(0, Math.min(1, p.glass * wins.length - i));
     if (q <= 0) continue;
-    if (f.light > 0) glow(ctx, wx + 28, BASE - 202, 70, 0.7 * f.light);
-    ctx.save(); ctx.globalAlpha *= q; ctx.fillStyle = f.light > 0 ? mix('#ffe28a', '#fff4c2', f.light) : '#ffe28a'; ctx.fillRect(wx, BASE - 230, 56, 56); ctx.restore();
+    if (f.light > 0) glow(ctx, wx + 28, BASE - oy - 202, 70, 0.7 * f.light);
+    ctx.save(); ctx.globalAlpha *= q; ctx.fillStyle = f.light > 0 ? mix('#ffe28a', '#fff4c2', f.light) : '#ffe28a'; ctx.fillRect(wx, BASE - oy - 230, 56, 56); ctx.restore();
     const sh = pop(f.decor, 0.85);
-    if (sh > 0) { ctx.fillStyle = '#3E6B48'; ctx.fillRect(wx - 6 - 20 * sh, BASE - 232, 20 * sh, 60); ctx.fillRect(wx + 62, BASE - 232, 20 * sh, 60); }
-    ctx.strokeStyle = f.paint >= 1 ? '#fff' : '#5c3a1a'; ctx.lineWidth = 5; ctx.strokeRect(wx, BASE - 230, 56, 56);
+    if (sh > 0) { ctx.fillStyle = T.shutter; ctx.fillRect(wx - 6 - 20 * sh, BASE - oy - 232, 20 * sh, 60); ctx.fillRect(wx + 62, BASE - oy - 232, 20 * sh, 60); }
+    ctx.strokeStyle = f.paint >= 1 ? '#fff' : '#5c3a1a'; ctx.lineWidth = 5; ctx.strokeRect(wx, BASE - oy - 230, 56, 56);
     const fb = pop(f.decor, 0.15);
     if (fb > 0) {
-      ctx.save(); ctx.translate(wx + 28, BASE - 168); ctx.scale(fb, fb);
+      ctx.save(); ctx.translate(wx + 28, BASE - oy - 168); ctx.scale(fb, fb);
       ctx.fillStyle = '#8b5a2b'; rr(ctx, -34, 0, 68, 14, 4); ctx.fill();
       for (let i = 0; i < 5; i++) { ctx.fillStyle = ['#E26D9A', '#F2A541', '#fff', '#E25B45', '#7B3FA0'][i]; ctx.beginPath(); ctx.arc(-26 + i * 13, -3, 6, 0, TAU); ctx.fill(); }
       ctx.restore();
     }
-    ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(wx + 28, BASE - 230); ctx.lineTo(wx + 28, BASE - 174); ctx.moveTo(wx, BASE - 202); ctx.lineTo(wx + 56, BASE - 202); ctx.stroke();
+    ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(wx + 28, BASE - oy - 230); ctx.lineTo(wx + 28, BASE - oy - 174); ctx.moveTo(wx, BASE - oy - 202); ctx.lineTo(wx + 56, BASE - oy - 202); ctx.stroke();
   }
   ctx.restore();
-  // telhado: fileiras de telha de baixo para cima
+  // telhado: fileiras de telha de baixo para cima (sobe junto com o 2º andar)
+  ctx.save(); ctx.translate(0, -S);
   if (p.tile > 0) {
     ctx.save(); if (fall) { ctx.translate(-fall * 60, fall * fall * 520); }
     ctx.beginPath(); ctx.moveTo(772, BASE - 330); ctx.lineTo(960, BASE - 476); ctx.lineTo(1148, BASE - 330); ctx.closePath(); ctx.clip();
     const top = BASE - 330 - 146 * p.tile;
     for (let y = BASE - 330; y > top - 18; y -= 18) for (let x = 770 + ((y / 18) % 2) * 14; x < 1150; x += 28) {
-      ctx.fillStyle = ((x + y) / 14) % 3 < 1 ? '#c23d31' : '#D9483B';
+      ctx.fillStyle = ((x + y) / 14) % 3 < 1 ? T.tile[0] : T.tile[1];
       ctx.beginPath(); ctx.arc(x, y, 15, Math.PI, 0); ctx.fill();
     }
     ctx.restore();
-    if (p.tile >= 1) { ctx.strokeStyle = '#9c2f25'; ctx.lineWidth = 10; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(772, BASE - 330); ctx.lineTo(960, BASE - 476); ctx.lineTo(1148, BASE - 330); ctx.stroke(); }
+    if (p.tile >= 1) { ctx.strokeStyle = T.ridge; ctx.lineWidth = 10; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(772, BASE - 330); ctx.lineTo(960, BASE - 476); ctx.lineTo(1148, BASE - 330); ctx.stroke(); }
   }
   // varal de luzes no beiral e luminária da porta
   if (f.light > 0 && !fall) {
@@ -400,8 +414,9 @@ export function house(ctx: Ctx, p: HouseProg, t: number, opts: { wobble?: number
       if (on) glow(ctx, x, y, 22, 0.8 * tw);
       ctx.fillStyle = on ? ['#FFE28A', '#FFB86B', '#FFF4C2'][i % 3] : '#d9cdb8'; ctx.beginPath(); ctx.ellipse(x, y, 6, 8, 0, 0, TAU); ctx.fill();
     });
-    if (f.light >= 1) { glow(ctx, 1012, BASE - 150, 50, 0.9); ctx.fillStyle = C.ink; rr(ctx, 1004, BASE - 166, 16, 8, 3); ctx.fill(); ctx.fillStyle = '#FFE28A'; rr(ctx, 1006, BASE - 158, 12, 18, 5); ctx.fill(); }
+    if (f.light >= 1) { glow(ctx, 1012, BASE - 150 + S, 50, 0.9); ctx.fillStyle = C.ink; rr(ctx, 1004, BASE - 166 + S, 16, 8, 3); ctx.fill(); ctx.fillStyle = '#FFE28A'; rr(ctx, 1006, BASE - 158 + S, 12, 18, 5); ctx.fill(); }
   }
+  ctx.restore();
   ctx.restore();
 }
 
@@ -532,30 +547,32 @@ export function balloon(ctx: Ctx, x: number, y: number, t: number, hasItem: bool
 export interface Debris { x: number; y: number; w: number; h: number; kind: ItemType; color: string; vx: number; vy: number; rot: number; vr: number; delay: number; hits: number }
 
 /** Quebra a casa (no estado em que está) em pedaços soltos, na mesma posição do desenho. */
-export function houseDebris(p: HouseProg): Debris[] {
+export function houseDebris(p: HouseProg, stories: 1 | 2 = 1, T: HouseTheme = THEME_ROCHA): Debris[] {
+  const S = stories === 2 ? STORY2 : 0;
   const out: Debris[] = [];
   const add = (x: number, y: number, w: number, h: number, kind: ItemType, color: string) => {
     const cx = x + w / 2, cy = y + h / 2;
-    out.push({ x: cx, y: cy, w, h, kind, color, vx: 0, vy: 0, rot: 0, vr: 0, delay: Math.max(0, (cy - (BASE - 480)) / 480) * 2.2 + Math.random() * 0.5, hits: 0 });
+    out.push({ x: cx, y: cy, w, h, kind, color, vx: 0, vy: 0, rot: 0, vr: 0, delay: Math.max(0, (cy - (BASE - 480 - S)) / (480 + S)) * 2.2 + Math.random() * 0.5, hits: 0 });
   };
   const ns = Math.round(p.stone * 9);
   for (let i = 0; i < ns; i++) add(800 + i * 36, BASE - 34, 34, 34, 'stone', ['#bdb7ac', '#d3cdc2', '#a9a398'][i % 3]);
-  const rows = 13, perRow = 8, nb = Math.round(p.brick * rows * perRow);
+  const rows = 13 + (S ? 9 : 0), perRow = 8, nb = Math.round(p.brick * rows * perRow);
   let k = 0;
   for (let r = 0; r < rows; r++) for (let c = 0; c < perRow; c++) {
     if (k++ >= nb) continue;
     const w = 38, h = 22, off = r % 2 ? 19 : 0, x = HX0 + c * w + off, y = BASE - 34 - (r + 1) * h;
     if (x + w > HX1 + 4) continue;
-    add(x, y, Math.min(w - 3, HX1 - x), h - 3, 'brick', (r + c) % 3 ? '#C8553D' : '#B44A34');
+    add(x, y, Math.min(w - 3, HX1 - x), h - 3, 'brick', (r + c) % 3 ? T.brick[0] : T.brick[1]);
   }
   if (p.wood > 0) { const dh = 130 * p.wood; add(930, BASE - 34 - dh, 32, dh, 'wood', '#8b5a2b'); add(962, BASE - 34 - dh, 32, dh, 'wood', '#7a4f26'); }
-  for (const [wx, i] of [[848, 0], [1030, 1]] as const) if (p.glass * 2 - i > 0) add(wx, BASE - 230, 56, 56, 'glass', '#ffe28a');
+  const wins: [number, number, number][] = S ? [[848, 0, 0], [1030, 1, 0], [848, 2, S], [1030, 3, S]] : [[848, 0, 0], [1030, 1, 0]];
+  for (const [wx, i, oy] of wins) if (p.glass * wins.length - i > 0) add(wx, BASE - 230 - oy, 56, 56, 'glass', '#ffe28a');
   if (p.tile > 0) {
     const top = BASE - 330 - 146 * p.tile;
     for (let y = BASE - 330; y > top - 18; y -= 18) for (let x = 770 + ((y / 18) % 2) * 14; x < 1150; x += 28) {
       const half = ((y - (BASE - 476)) / 146) * 188; // meia largura do telhado nessa altura
       if (Math.abs(x - 960) > half - 6 || y < BASE - 476) continue;
-      add(x - 15, y - 15, 30, 15, 'tile', ((x + y) / 14) % 3 < 1 ? '#c23d31' : '#D9483B');
+      add(x - 15, y - 15 - S, 30, 15, 'tile', ((x + y) / 14) % 3 < 1 ? T.tile[0] : T.tile[1]);
     }
   }
   return out;
@@ -570,4 +587,33 @@ export function drawDebris(ctx: Ctx, d: Debris) {
     if (d.kind === 'stone' || d.kind === 'glass' || d.kind === 'wood') { ctx.strokeStyle = d.kind === 'stone' ? '#4a4540' : '#5c3a1a'; ctx.lineWidth = d.kind === 'glass' ? 5 : 3; ctx.stroke(); }
   }
   ctx.restore();
+}
+
+/** Urso que anda pelo chão (tela 2). */
+export function bear(ctx: Ctx, x: number, y: number, dir: number, t: number, scared: boolean) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(dir, 1);
+  const step = Math.sin(t * 10) * 6;
+  ctx.fillStyle = '#6B4226';
+  for (const lx of [-38, -14, 16, 40]) { rr(ctx, lx - 9, -40 + (lx % 2 ? step : -step) * 0.3, 18, 40, 7); ctx.fill(); }
+  ctx.beginPath(); ctx.ellipse(0, -62, 62, 40, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(62, -82, 30, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(48, -108, 11, 0, TAU); ctx.arc(76, -108, 11, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#C9A27A'; ctx.beginPath(); ctx.ellipse(84, -76, 14, 11, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(94, -80, 5, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(66, -90, 4, 0, TAU); ctx.fill();
+  if (scared) { ctx.fillStyle = '#fff'; ctx.font = `900 30px ${FONT}`; ctx.fillText('!', 50, -126); }
+  ctx.restore();
+}
+
+/** Água do dilúvio (desenhada por cima de quem está dentro). */
+export function water(ctx: Ctx, y: number, t: number) {
+  if (y >= H) return;
+  ctx.save();
+  ctx.fillStyle = 'rgba(70,140,200,0.5)';
+  ctx.beginPath(); ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 40) ctx.lineTo(x, y + Math.sin(t * 3 + x * 0.02) * 6);
+  ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 4; ctx.beginPath();
+  for (let x = 0; x <= W; x += 40) { const yy = y + Math.sin(t * 3 + x * 0.02) * 6; if (x) ctx.lineTo(x, yy); else ctx.moveTo(x, yy); }
+  ctx.stroke(); ctx.restore();
 }

@@ -56,12 +56,14 @@ export interface StateMsg {
   fx?: string;
   /** Efeitos ativos no bonequinho (para o controle ficar congelado, pegando fogo…). */
   fxs?: string[];
+  /** Tela escolhida (1 ou 2). */
+  level?: number;
   /** Desafios acontecendo agora na TV (terremoto, chuva, neblina…). */
   env?: string[];
 }
 export interface ChState { kind: 'quake' | 'leak'; title: string; emoji: string; prog: number; per: number; left: number }
 export type TaskId = 'paint' | 'light' | 'garden' | 'decor';
-export type PowerId = 'freeze' | 'speed' | 'giant' | 'shrink' | 'fire' | 'magnet' | 'shield';
+export type PowerId = 'freeze' | 'speed' | 'giant' | 'shrink' | 'fire' | 'magnet' | 'shield' | 'wings' | 'double';
 export interface FinState {
   task: TaskId;
   helping: boolean;   // já terminou a própria parte e está ajudando outra equipe

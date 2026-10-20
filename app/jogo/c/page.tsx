@@ -222,6 +222,20 @@ function Pad() {
         </div>
       </header>
       <p className={`shrink-0 truncate px-6 pt-2 text-center text-[14px] font-extrabold ${lost || st?.fx ? 'text-terra' : 'text-[#6b5643]'}`}>{lost ? 'Reconectando…' : st?.fx ?? status}</p>
+      {st?.mode === 'lobby' && (
+        <div className="flex shrink-0 justify-center gap-2 px-6 pt-2">
+          {([[1, 'Tela 1 · Casa na Rocha'], [2, 'Tela 2 · Casa Grande']] as const).map(([n, label]) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => { send('lvl', { n }); vibrate(15); setSt((x) => (x ? { ...x, level: n } : x)); }}
+              className={`chip whitespace-nowrap !px-4 !py-2 !text-sm ${(st.level ?? 1) === n ? 'bg-terra text-white' : 'bg-white text-[#6b5643]'}`}
+            >
+              {(st.level ?? 1) === n ? '✓ ' : ''}{label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="relative flex min-h-0 flex-1" style={{ paddingLeft: 'max(env(safe-area-inset-left), 28px)', paddingRight: 'max(env(safe-area-inset-right), 28px)', paddingBottom: 'max(env(safe-area-inset-bottom), 16px)' }}>
         {st?.mode === 'play' && st.ch ? (
@@ -387,6 +401,8 @@ function FxLayer({ fxs, env, onBreak }: { fxs: Set<string>; env: Set<string>; on
       {fxs.has('giant') && <div className="pointer-events-none absolute inset-0 z-20">{badge('🍄', '#E25B45')}</div>}
       {fxs.has('tiny') && <div className="pointer-events-none absolute inset-0 z-20" style={{ boxShadow: 'inset 0 0 80px rgba(123,63,160,.45)' }}>{badge('🔻', '#7B3FA0')}</div>}
       {fxs.has('slow') && <div className="pointer-events-none absolute inset-0 z-20">{badge('🐌', '#8A6F57')}</div>}
+      {fxs.has('wings') && <div className="pointer-events-none absolute inset-0 z-20" style={{ boxShadow: 'inset 0 0 80px rgba(200,230,140,.6)' }}>{badge('🕊️', '#8C9C2E')}</div>}
+      {fxs.has('double') && <div className="pointer-events-none absolute inset-0 z-20" style={{ boxShadow: 'inset 0 0 80px rgba(170,120,230,.55)', animation: 'cdp-glow 1s ease-in-out infinite' }}>{badge('💎', '#7B3FA0')}</div>}
       {fxs.has('frozen') && (
         <button
           type="button"
