@@ -175,6 +175,49 @@ function drawPhrase(ctx: CanvasRenderingContext2D, phrase: string, px: number, p
   ctx.restore();
 }
 
+/**
+ * Foto do post com a frase aplicada: recorta no formato do feed (4:5, 1080×1350),
+ * igual ao que o feed mostra, e escreve a frase embaixo com margem (nunca é cortada).
+ */
+export async function phrasePhoto(file: Blob, phrase: string): Promise<Blob> {
+  if (typeof document !== 'undefined' && document.fonts) {
+    await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1200))]);
+  }
+  const img = await fileToImage(file);
+  const W = 1080, H = 1350;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d')!;
+  const ir = img.naturalWidth / img.naturalHeight, fr = W / H;
+  let sw = img.naturalWidth, sh = img.naturalHeight, sx = 0, sy = 0;
+  if (ir > fr) { sw = sh * fr; sx = (img.naturalWidth - sw) / 2; } else { sh = sw / fr; sy = (img.naturalHeight - sh) / 2; }
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+  // escurece de leve a parte de baixo para a frase sempre aparecer
+  const g = ctx.createLinearGradient(0, H * 0.58, 0, H);
+  g.addColorStop(0, 'rgba(20,12,6,0)');
+  g.addColorStop(1, 'rgba(20,12,6,0.7)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, H * 0.58, W, H * 0.42);
+  // sempre em uma linha: a letra diminui até caber com margem (o tile da tela inicial corta um pouco dos lados)
+  const safe = W - 2 * 110;
+  let size = 88;
+  ctx.font = `italic 700 ${size}px Fraunces, Georgia, serif`;
+  while (ctx.measureText(phrase).width > safe && size > 30) { size -= 2; ctx.font = `italic 700 ${size}px Fraunces, Georgia, serif`; }
+  const y = H - 96;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#FFD56B';
+  ctx.font = `700 ${Math.round(Math.max(size, 44) * 0.42)}px Nunito, system-ui, sans-serif`;
+  ctx.fillText('✦', W / 2, y - size * 1.05);
+  ctx.font = `italic 700 ${size}px Fraunces, Georgia, serif`;
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 16;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(phrase, W / 2, y);
+  return canvasToBlob(c, 0.9);
+}
+
 /** Gera a foto com a moldura "Casa de Paz" em 1080×1350 (formato retrato do Instagram). */
 export async function frameImage(source: Blob | string, o: FrameOptions): Promise<Blob> {
   if (typeof document !== 'undefined' && document.fonts) {

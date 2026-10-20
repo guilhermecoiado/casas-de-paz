@@ -10,7 +10,8 @@ import { useGroup } from '@/lib/group-context';
 import { Puzzle } from 'lucide-react';
 import { ACTIONS, WEEKDAYS, actionAvailability, actionPoints, dailyMax, formatDate, weekdayOf, type ActionInfo } from '@/lib/game';
 import { ProgressBar } from '@/components/ui';
-import { compressImage } from '@/lib/image';
+import { compressImage, phrasePhoto } from '@/lib/image';
+import { availablePhrases } from '@/lib/rewards';
 import { ShareSheet } from '@/components/ShareSheet';
 import { StreakCard } from '@/components/StreakCard';
 import { CheckinGate } from '@/components/CheckinGate';
@@ -38,7 +39,7 @@ const MIN_TEXT: Partial<Record<ActionType, number>> = { evangelism: 10, encourag
 export default function Postar() {
   const router = useRouter();
   const toast = useToast();
-  const { group, posts, me, today, profiles, reload, stats, unlocked } = useGroup();
+  const { group, posts, me, today, profiles, reload, stats, unlocked, progress } = useGroup();
   const [challenged, setChallenged] = useState<boolean | null>(null);
   useEffect(() => {
     supabase.from('challenges').select('id').eq('group_id', group.id).eq('user_id', me).eq('local_date', today).eq('archived', false).limit(1)
@@ -46,6 +47,21 @@ export default function Postar() {
   }, [group.id, me, today]);
   const [action, setAction] = useState<ActionInfo | null>(null);
   const [photo, setPhoto] = useState<Blob | null>(null);
+  // frase desbloqueada aplicada na foto (a foto final já sai no formato do feed)
+  const phrases = useMemo(() => availablePhrases(group, progress(me), unlocked), [group, progress, me, unlocked]);
+  const [phrase, setPhrase] = useState<string | null>(null);
+  const [withPhrase, setWithPhrase] = useState<Blob | null>(null);
+  const [phraseBusy, setPhraseBusy] = useState(false);
+  useEffect(() => {
+    if (!photo || !phrase) { setWithPhrase(null); return; }
+    let alive = true;
+    setPhraseBusy(true);
+    phrasePhoto(photo, phrase)
+      .then((b) => { if (alive) setWithPhrase(b); })
+      .catch(() => { if (alive) setWithPhrase(null); })
+      .finally(() => { if (alive) setPhraseBusy(false); });
+    return () => { alive = false; };
+  }, [photo, phrase]);
   const [text, setText] = useState('');
   const [guests, setGuests] = useState(0);
   const [guestNames, setGuestNames] = useState<string[]>([]);
@@ -80,9 +96,10 @@ export default function Postar() {
     try {
       let photoUrl: string | null = null;
       let small: Blob | null = null;
-      if (photo) {
-        small = await compressImage(photo);
-        const thumb = await compressImage(photo, 480, 0.72);
+      const finalPhoto = photo && phrase ? (withPhrase ?? await phrasePhoto(photo, phrase)) : photo;
+      if (finalPhoto) {
+        small = await compressImage(finalPhoto, 1350);
+        const thumb = await compressImage(finalPhoto, 480, 0.72);
         photoUrl = await uploadPostImage(me, small, thumb);
       }
       const { data, error } = await supabase.rpc('submit_post', {
@@ -246,8 +263,24 @@ export default function Postar() {
               value={photo}
               onChange={setPhoto}
               cameraOnly={action.type === 'checkin'}
+              display={phrase ? withPhrase : null}
               label={action.type === 'checkin' ? 'Tire uma foto agora no local' : action.photo === 'optional' ? 'Foto (opcional)' : 'Foto do momento'}
             />
+          )}
+
+          {photo && phrases.length > 0 && (
+            <div>
+              <p className="flex items-center gap-2 text-sm font-extrabold text-[#6b5643]">
+                Frase na foto {phraseBusy && <Spinner className="h-4 w-4 text-terra" />}
+              </p>
+              <div className="no-scrollbar -mx-4 mt-2 flex gap-2 overflow-x-auto px-4 pb-1">
+                <button type="button" onClick={() => setPhrase(null)} className={`chip shrink-0 !px-3.5 !py-2 !text-sm ${phrase === null ? 'bg-ink text-white' : 'bg-white text-[#6b5643]'}`}>Sem frase</button>
+                {phrases.map((p) => (
+                  <button key={p} type="button" onClick={() => setPhrase(p)} className={`chip shrink-0 whitespace-nowrap !px-3.5 !py-2 !text-sm ${phrase === p ? 'bg-terra text-white' : 'bg-white text-[#6b5643]'}`}>{p}</button>
+                ))}
+              </div>
+              <p className="mt-1 truncate text-[11px] font-bold text-[#a8927a]">A prévia acima mostra a foto como vai ficar no feed</p>
+            </div>
           )}
 
           {action.type === 'checkin' && (

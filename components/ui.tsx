@@ -81,9 +81,11 @@ export function Sheet({
 /* ---------------- Seletor de foto (câmera / galeria) ---------------- */
 
 export function PhotoPicker({
-  value, onChange, cameraOnly = false, round = false, label = 'Adicionar foto',
+  value, onChange, cameraOnly = false, round = false, label = 'Adicionar foto', display,
 }: {
   value: Blob | null;
+  /** O que mostrar na prévia (ex.: a foto já com a frase); se vazio, mostra a própria foto. */
+  display?: Blob | null;
   onChange: (f: Blob | null) => void;
   cameraOnly?: boolean;
   round?: boolean;
@@ -102,11 +104,12 @@ export function PhotoPicker({
   };
 
   useEffect(() => {
-    if (!value) return setPreview(null);
-    const u = URL.createObjectURL(value);
+    const shown = display ?? value;
+    if (!shown) return setPreview(null);
+    const u = URL.createObjectURL(shown);
     setPreview(u);
     return () => URL.revokeObjectURL(u);
-  }, [value]);
+  }, [value, display]);
 
   const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
