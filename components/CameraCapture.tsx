@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Camera, RefreshCw, X } from 'lucide-react';
 
 /*
@@ -63,6 +64,14 @@ export function CameraCapture({
 
   useEffect(() => () => stop(), [stop]);
 
+  // tela cheia de verdade: nada da página por trás rola enquanto a câmera está aberta
+  useEffect(() => {
+    const html = document.documentElement, body = document.body;
+    const prev = [html.style.overflow, body.style.overflow, body.style.overscrollBehavior];
+    html.style.overflow = 'hidden'; body.style.overflow = 'hidden'; body.style.overscrollBehavior = 'none';
+    return () => { [html.style.overflow, body.style.overflow, body.style.overscrollBehavior] = prev; };
+  }, []);
+
   const shoot = () => {
     const v = videoRef.current;
     if (!v || !v.videoWidth || busy) return;
@@ -84,8 +93,9 @@ export function CameraCapture({
     }, 'image/jpeg', 0.92);
   };
 
-  return (
-    <div className="fixed inset-0 z-[90] flex flex-col bg-black text-white">
+  // vai direto para o <body>: assim cobre o celular inteiro, por cima do cabeçalho da página
+  return createPortal(
+    <div className="fixed left-0 top-0 z-[200] flex w-screen flex-col overflow-hidden bg-black text-white" style={{ height: '100dvh', touchAction: 'none' }}>
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <video
           ref={videoRef}
@@ -133,6 +143,7 @@ export function CameraCapture({
           <RefreshCw size={22} />
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
