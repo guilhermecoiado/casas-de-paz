@@ -34,6 +34,19 @@ export async function compressImage(file: Blob, max = 1080, quality = 0.82): Pro
   return canvasToBlob(c, quality);
 }
 
+/** Espelha a foto na horizontal (selfie que saiu invertida). */
+export async function flipImage(file: Blob): Promise<Blob> {
+  const img = await fileToImage(file);
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const ctx = c.getContext('2d')!;
+  ctx.translate(c.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(img, 0, 0);
+  return canvasToBlob(c, 0.92);
+}
+
 /** Recorte quadrado central para o avatar. */
 export async function squareAvatar(file: Blob, size = 512): Promise<Blob> {
   const img = await fileToImage(file);

@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Camera, ImagePlus, Loader2, X } from 'lucide-react';
+import { Camera, FlipHorizontal2, ImagePlus, Loader2, X } from 'lucide-react';
+import { CameraCapture, canUseInAppCamera } from './CameraCapture';
+import { flipImage } from '@/lib/image';
 import { AvatarOrnaments } from './Cosmetics';
 import { AvatarFrameArt, hasAvatarArt } from './AvatarFrameArt';
 
@@ -90,6 +92,14 @@ export function PhotoPicker({
   const camRef = useRef<HTMLInputElement>(null);
   const galRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [cam, setCam] = useState(false);
+  const [flipping, setFlipping] = useState(false);
+  const openCamera = () => { if (canUseInAppCamera()) setCam(true); else camRef.current?.click(); };
+  const flip = async () => {
+    if (!value || flipping) return;
+    setFlipping(true);
+    try { onChange(await flipImage(value)); } finally { setFlipping(false); }
+  };
 
   useEffect(() => {
     if (!value) return setPreview(null);
@@ -108,6 +118,14 @@ export function PhotoPicker({
     <div>
       <input ref={camRef} type="file" accept="image/*" capture={round ? 'user' : 'environment'} className="hidden" onChange={pick} />
       <input ref={galRef} type="file" accept="image/*" className="hidden" onChange={pick} />
+      {cam && (
+        <CameraCapture
+          facing={round ? 'user' : 'environment'}
+          onCapture={(b) => { setCam(false); onChange(b); }}
+          onClose={() => setCam(false)}
+          onFallback={() => { setCam(false); camRef.current?.click(); }}
+        />
+      )}
       {preview ? (
         <div className={`relative mx-auto overflow-hidden bg-sand ${round ? 'h-36 w-36 rounded-full' : 'aspect-[4/5] w-full rounded-3xl'}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -120,12 +138,22 @@ export function PhotoPicker({
           >
             <X size={16} />
           </button>
+          <button
+            type="button"
+            onClick={flip}
+            disabled={flipping}
+            className={`absolute flex items-center gap-1 rounded-full bg-ink/70 text-white ${round ? 'bottom-2 left-1/2 -translate-x-1/2 p-2' : 'bottom-3 right-3 whitespace-nowrap px-3 py-2 text-xs font-extrabold'}`}
+            aria-label="Espelhar foto"
+          >
+            {flipping ? <Loader2 size={16} className="animate-spin" /> : <FlipHorizontal2 size={16} />}
+            {!round && 'Espelhar'}
+          </button>
         </div>
       ) : (
         <div className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed border-[#e2cfb6] bg-white/60 ${round ? 'mx-auto h-36 w-36 rounded-full' : 'aspect-[4/5] w-full rounded-3xl'}`}>
           {!round && <p className="text-sm font-bold text-[#8A6F57]">{label}</p>}
           <div className={`flex ${round ? 'flex-col gap-1' : 'gap-3'}`}>
-            <button type="button" onClick={() => camRef.current?.click()} className={round ? 'flex items-center gap-1 text-sm font-extrabold text-terra' : 'btn-primary'}>
+            <button type="button" onClick={openCamera} className={round ? 'flex items-center gap-1 text-sm font-extrabold text-terra' : 'btn-primary'}>
               <Camera size={round ? 16 : 20} /> Câmera
             </button>
             {!cameraOnly && (
