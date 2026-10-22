@@ -60,6 +60,8 @@ export interface StateMsg {
   fxs?: string[];
   /** Segundos que faltam para a baleia cuspir (só para quem foi engolido). */
   eaten?: number;
+  /** Altura do dilúvio na TV (0..1): o celular enche de água junto. */
+  flood?: number;
   /** Tela escolhida (1 ou 2). */
   level?: number;
   /** Desafios acontecendo agora na TV (terremoto, chuva, neblina…). */

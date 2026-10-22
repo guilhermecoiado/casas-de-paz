@@ -260,6 +260,8 @@ export class Game {
     if (d) amt *= 1 - 0.92 * (d.ok ? 1 : clamp(d.have / Math.max(1, d.need)));
     return GROUND + 40 - (GROUND + 40 - 470) * amt; // sobe até um pouco mais da metade da tela
   }
+  /** Quanto o dilúvio subiu (0..1), para o celular mostrar a água. */
+  floodAmt() { const y = this.waterY(); return y >= H ? 0 : clamp((GROUND + 40 - y) / (GROUND + 40 - 470)); }
   /** Modo foto: no resultado, esconde o placar para ver (e fotografar) a casa. */
   photo = false;
   groupName = '';
@@ -573,6 +575,7 @@ export class Game {
       powerLeft: play && p.power ? Math.max(0, Math.ceil(30 - (this.t - p.powerT))) : undefined,
       fx: play ? this.fxText(p) : undefined,
       level: this.level,
+      flood: play && this.waterY() < H ? Math.round(this.floodAmt() * 100) / 100 : undefined,
       eaten: play && p.eaten > 0 ? Math.max(1, Math.ceil(p.eaten)) : undefined,
       fxs: play ? (Object.keys(p.fx) as (keyof Fx)[]).filter((k) => p.fx[k] > 0) : undefined,
       env: play ? this.events.filter((e) => this.modeT >= e.at && this.modeT < e.at + e.dur && this.phase < PHASES.length).map((e) => e.type) : this.mode === 'finale' && this.modeT < (this.complete ? 4.6 : 8) ? ['storm'] : undefined,
@@ -737,7 +740,10 @@ export class Game {
     // urso: anda do seu lado da rocha; encostar dói (-3), pular na cabeça espanta (+3)
     const bearOn = !!this.active('bear');
     for (const b of this.bears) {
-      if (!bearOn) b.scared = true;
+      // assustado (ou fim do evento): foge correndo pelo chão para a borda do seu lado, sem atravessar rocha nem rio
+      const leftSide = this.level === 1 ? b.x < 960 : b.y === GROUND;
+      if (!bearOn && !b.scared) { b.scared = true; }
+      if (b.scared) b.dir = (leftSide ? -1 : 1) as 1 | -1;
       b.x += b.dir * (b.scared ? 430 : 165) * dt;
       if (!b.scared) {
         const left = this.level === 1 ? b.x < 960 : b.y === GROUND;
@@ -749,7 +755,7 @@ export class Game {
         const dx = Math.abs(p.x - b.x);
         if (b.scared || dx > 80) continue;
         if (p.vy > 100 && p.y > b.y - 150 && p.y < b.y - 80) {
-          b.scared = true; b.dir = (p.x < b.x ? 1 : -1) as 1 | -1; p.vy = -950; p.jumps = 1; p.pts += 3;
+          b.scared = true; p.vy = -950; p.jumps = 1; p.pts += 3;
           this.float(p.x, p.y - 190, 'Urso espantado! +3', CHARS[p.slot].color); this.onBuzz(p.id, 'stomp'); this.sfx('stomp');
         } else if (p.y > b.y - 70 && p.y < b.y + 4 && dx < 64) {
           const had = p.carry;

@@ -287,6 +287,7 @@ function Pad() {
       </div>
       </div>
       {/* efeitos e clima: tela inteira, por cima de tudo e sem tremer junto */}
+      {st?.flood != null && st.flood > 0.02 && <Flood level={st.flood} />}
       <FxLayer fxs={fxs} env={env} onBreak={() => tap(0)} />
       {st?.eaten != null && <WhaleBelly left={st.eaten} />}
       {flash && (
@@ -370,6 +371,9 @@ const FX_CSS = `
 @keyframes cdp-wobbleall{0%,100%{transform:rotate(0) scale(1)}25%{transform:rotate(-1.4deg) scale(1.07)}75%{transform:rotate(1.4deg) scale(1.07)}}
 @keyframes cdp-drop{from{transform:translate(0,-12vh) rotate(12deg)}to{transform:translate(-22vh,112vh) rotate(12deg)}}
 @keyframes cdp-splash{0%,70%{transform:scale(.2);opacity:0}80%{opacity:.8}100%{transform:scale(1.3);opacity:0}}
+@keyframes cdp-wave{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes cdp-bubble{from{transform:translateY(0);opacity:.9}to{transform:translateY(-60vh);opacity:0}}
+@keyframes cdp-fishy{from{left:-10%;transform:scaleX(-1)}to{left:110%;transform:scaleX(-1)}}
 @keyframes cdp-wobble{0%,100%{transform:rotate(0)}25%{transform:rotate(-2.5deg) scale(.98)}75%{transform:rotate(2.5deg) scale(.98)}}
 @keyframes cdp-flame{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-14px) scale(1.18)}}
 @keyframes cdp-rain{from{background-position:0 0}to{background-position:-60px 240px}}
@@ -446,6 +450,26 @@ function Rain({ light }: { light: boolean }) {
       {Array.from({ length: light ? 6 : 14 }, (_, i) => (
         <span key={`s${i}`} className="absolute rounded-[50%] border-2 border-[#5a8cc3]/70" style={{ left: `${(i * 53) % 96}%`, bottom: `${2 + ((i * 29) % 30)}%`, width: 26, height: 8, animation: `cdp-splash ${light ? 1.6 : 0.9}s ease-out infinite`, animationDelay: `${(i * 0.23) % 1}s` }} />
       ))}
+    </div>
+  );
+}
+
+/** Dilúvio no celular: a água sobe junto com a da TV (e desce quando a equipe escoa). */
+function Flood({ level }: { level: number }) {
+  const h = 8 + level * 62; // % da tela
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] overflow-hidden transition-[height] duration-500 ease-out" style={{ height: `${h}%` }}>
+      <div className="absolute inset-0 top-[14px]" style={{ background: 'linear-gradient(rgba(70,140,200,.4), rgba(40,95,150,.58))' }} />
+      {[0, 1].map((k) => (
+        <svg key={k} className="absolute left-0 top-0 h-[30px]" style={{ width: '200%', animation: `cdp-wave ${k ? 3.4 : 2.2}s linear infinite`, opacity: k ? 0.6 : 1 }} viewBox="0 0 200 30" preserveAspectRatio="none">
+          <path d="M0 15 Q12.5 3 25 15 T50 15 T75 15 T100 15 T125 15 T150 15 T175 15 T200 15 V30 H0 Z" fill={k ? 'rgba(120,180,230,.6)' : 'rgba(70,140,200,.55)'} />
+          <path d="M0 15 Q12.5 3 25 15 T50 15 T75 15 T100 15 T125 15 T150 15 T175 15 T200 15" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="2" />
+        </svg>
+      ))}
+      {Array.from({ length: 9 }, (_, i) => (
+        <span key={i} className="absolute rounded-full border-2 border-white/70" style={{ left: `${(i * 41) % 96}%`, bottom: '-6%', width: 8 + (i % 3) * 6, height: 8 + (i % 3) * 6, animation: `cdp-bubble ${2.2 + (i % 4) * 0.5}s linear ${i * 0.35}s infinite` }} />
+      ))}
+      <span className="absolute text-2xl" style={{ bottom: '18%', animation: 'cdp-fishy 6s linear infinite' }}>🐟</span>
     </div>
   );
 }
