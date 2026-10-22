@@ -1,5 +1,6 @@
 'use client';
 
+import { WhaleBelly } from './WhaleBelly';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -284,6 +285,7 @@ function Pad() {
           </div>
         )}
         <FxLayer fxs={fxs} env={env} onBreak={() => tap(0)} />
+        {st?.eaten != null && <WhaleBelly left={st.eaten} />}
         {flash && (
           <div className="pointer-events-none absolute inset-x-0 top-1 z-50 text-center">
             <span className="inline-block whitespace-nowrap rounded-full bg-ink px-5 py-1.5 text-xl font-black text-white">{flash}</span>

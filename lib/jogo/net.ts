@@ -58,6 +58,8 @@ export interface StateMsg {
   fx?: string;
   /** Efeitos ativos no bonequinho (para o controle ficar congelado, pegando fogo…). */
   fxs?: string[];
+  /** Segundos que faltam para a baleia cuspir (só para quem foi engolido). */
+  eaten?: number;
   /** Tela escolhida (1 ou 2). */
   level?: number;
   /** Desafios acontecendo agora na TV (terremoto, chuva, neblina…). */

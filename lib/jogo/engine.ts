@@ -572,6 +572,7 @@ export class Game {
       powerLeft: play && p.power ? Math.max(0, Math.ceil(30 - (this.t - p.powerT))) : undefined,
       fx: play ? this.fxText(p) : undefined,
       level: this.level,
+      eaten: play && p.eaten > 0 ? Math.max(1, Math.ceil(p.eaten)) : undefined,
       fxs: play ? (Object.keys(p.fx) as (keyof Fx)[]).filter((k) => p.fx[k] > 0) : undefined,
       env: play ? this.events.filter((e) => this.modeT >= e.at && this.modeT < e.at + e.dur && this.phase < PHASES.length).map((e) => e.type) : this.mode === 'finale' && this.modeT < (this.complete ? 4.6 : 8) ? ['storm'] : undefined,
     };
