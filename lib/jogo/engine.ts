@@ -2,7 +2,7 @@
 
 import type { BuzzMsg, ChState, FinState, Mode, PowerId, StateMsg, TaskId } from './net';
 import {
-  C, CHARS, FONT, GROUND, H, ITEM_EMOJI, ITEM_LABEL, NO_FIN, PLATS, POWERS, STORY2, THEME_GRANDE, THEME_ROCHA, bear, water, QTY_STYLE, ROCK, TASK, TASKS, TAU, W,
+  C, CHARS, CLIFF, FONT, whale, GROUND, H, ITEM_EMOJI, ITEM_LABEL, NO_FIN, PLATS, POWERS, RIVER, STORY2, THEME_ROCHA, THEME_VALE, WIND, bear, cliffSurface, finishBack2, riverWater, scenery2, seesaw, water, windColumn, QTY_STYLE, ROCK, TASK, TASKS, TAU, W,
   ant, balloon, bee, bolt, boulder, drawDebris, finishBack, houseDebris, fitText, glow, house, item, panel, person, platform, powerBubble, rr, scaffold, scenery, trampoline,
   type Ctx, type Debris, type FinProg, type HouseTheme, type HouseProg, type ItemType, type Plat,
 } from './draw';
@@ -24,15 +24,21 @@ const GRAV = 2600, JUMP = -1130, CUT = -420, MAXV = 430, TRAMP_V = -1720;
 const STEPS: Plat[] = [{ x: 1128, y: 718, w: 76 }, { x: 1128, y: 618, w: 76 }];
 // entrega só valendo dentro da casa (abaixo do telhado), nunca de cima da plataforma do topo
 const ZONE = { x0: 790, x1: 1130 };
+/** Quadro do saguão (QR menor + miniaturas das telas); fica à esquerda da casa da tela 2. */
+const LOBBY = { x0: 400, y: 70, w: 1000, h: 270 };
+const LOBBY_QR = { x: LOBBY.x0 + 30, y: LOBBY.y + 40, s: 170 };
 const QUOTA = 60;     // toques da parte de cada um no acabamento
 const CH_TAPS = 20;   // toques por jogador para vencer um desafio de toque
 /** Pontos por entrega: pacote maior vale mais. */
 const DELIVER_PTS: Record<number, number> = { 1: 2, 4: 6, 10: 12 };
 
 /* ---------------- telas (fases do jogo) ---------------- */
-interface MoverDef { x: number; y: number; w: number; vertical: boolean; rail?: [number, number] }
+interface MoverDef { x: number; y: number; w: number; vertical: boolean; rail?: [number, number]; kind?: Plat['kind'] }
 interface Level {
-  id: 1 | 2; name: string; plats: Plat[]; tramps: { x: number; w: number }[]; movers: (t: number) => MoverDef[];
+  id: 1 | 2; name: string; plats: Plat[]; tramps: { x: number; w: number }[]; movers: (t: number, see: number) => MoverDef[];
+  /** Casa: centro, altura do chão dela e quanto o desenho anda em relação à tela 1. */
+  site: { cx: number; top: number; dx: number; dy: number };
+  ground: [number, number][]; paint: number[]; garden: [number, number][]; decor: [number, number][];
   stories: 1 | 2; theme: HouseTheme; dusk: boolean; playTime: number; powers: PowerId[]; needMul: Record<ItemType, number>;
   lightSpots: [number, number][]; bag: EventType[]; slots: number[]; fixed: { at: number; type: EventType; dur: number }[];
 }
@@ -44,6 +50,10 @@ export const LEVELS: Record<1 | 2, Level> = {
       { x: 1290 + ((Math.sin(a * 0.5) + 1) / 2) * 340, y: 330, w: 170, vertical: false, rail: [1290, 1800] },
       { x: 18, y: 475 + Math.sin(a * 0.65) * 150, w: 112, vertical: true },
     ],
+    site: { cx: 960, top: ROCK.top, dx: 0, dy: 0 }, ground: [[160, 660], [1250, 1760]],
+    paint: [846, 1078, 884, 1040, 810, 1112],
+    garden: [[520, GROUND], [1430, GROUND], [380, GROUND], [1570, GROUND], [260, GROUND], [1690, GROUND]],
+    decor: [[672, GROUND], [1252, GROUND], [600, GROUND], [1320, GROUND], [560, GROUND], [1380, GROUND]],
     stories: 1, theme: THEME_ROCHA, dusk: false, playTime: 240, powers: BASE_POWERS,
     needMul: { stone: 1, brick: 1, tile: 1, wood: 1, glass: 1 },
     lightSpots: [[960, 338], [1350, 520], [640, 500], [910, 338], [1420, 520], [700, 500]],
@@ -52,21 +62,35 @@ export const LEVELS: Record<1 | 2, Level> = {
     fixed: [{ at: 98, type: 'quake', dur: 7 }, { at: 132, type: 'rain', dur: 14 }],
   },
   2: {
-    id: 2, name: 'Casa Grande', tramps: [{ x: 590, w: 110 }, { x: 1232, w: 110 }],
+    id: 2, name: 'Vale do Rio', tramps: [],
     plats: [
-      { x: 80, y: 780, w: 200 }, { x: 330, y: 660, w: 220 }, { x: 120, y: 520, w: 200 }, { x: 420, y: 400, w: 220 },
-      { x: 1250, y: 680, w: 220 }, { x: 1460, y: 540, w: 200 }, { x: 1180, y: 420, w: 220 }, { x: 1600, y: 790, w: 220 }, { x: 1660, y: 380, w: 200 },
+      // galhos da árvore gigante
+      { x: 225, y: 800, w: 170, kind: 'branch' }, { x: 40, y: 680, w: 140, kind: 'branch' }, { x: 225, y: 560, w: 190, kind: 'branch' },
+      { x: 30, y: 440, w: 150, kind: 'branch' }, { x: 225, y: 350, w: 170, kind: 'branch' },
+      // nuvens que somem, tábuas que quebram e o píer na frente da rocha
+      { x: 700, y: 260, w: 150, kind: 'cloud' }, { x: 1230, y: 270, w: 140, kind: 'cloud' },
+      { x: 1070, y: 610, w: 120, kind: 'board' }, { x: 1210, y: 470, w: 110, kind: 'board' },
+      { x: 1030, y: 900, w: 220, kind: 'deck' },
     ],
-    movers: (a) => [
-      { x: 1200 + ((Math.sin(a * 0.6) + 1) / 2) * 420, y: 280, w: 150, vertical: false, rail: [1200, 1770] },
-      { x: 18, y: 460 + Math.sin(a * 0.7) * 170, w: 100, vertical: true },
+    movers: (a, k) => [
+      { x: 680, y: 650 + Math.sin(a * 0.8) * 55, w: 160, vertical: false, kind: 'isle' },
+      { x: 900, y: 500 + Math.sin(a * 0.8 + 2.2) * 55, w: 150, vertical: false, kind: 'isle' },
+      { x: 830, y: 340 + Math.sin(a * 1.4) * 8, w: 360, vertical: false, kind: 'bridge' },
+      { x: 650 + ((Math.sin(a * 0.45) + 1) / 2) * 220, y: 940, w: 150, vertical: false, kind: 'boat' },
+      { x: 250, y: 895 + 30 * k, w: 95, vertical: false, kind: 'see' },
+      { x: 355, y: 895 - 30 * k, w: 95, vertical: false, kind: 'see' },
     ],
-    stories: 2, theme: THEME_GRANDE, dusk: true, playTime: 270, powers: [...BASE_POWERS, 'wings', 'double', 'wings', 'double'],
-    needMul: { stone: 1.2, brick: 1.7, tile: 1, wood: 1, glass: 1.6 },
-    lightSpots: [[530, 400], [1290, 420], [220, 520], [1560, 540], [440, 660], [1360, 680]],
+    site: { cx: 1600, top: CLIFF.top, dx: 640, dy: CLIFF.top - ROCK.top }, ground: [[40, 620], [700, 1220], [1400, 1880]],
+    paint: [1486, 1718, 1524, 1680, 1450, 1752],
+    garden: [[1450, CLIFF.top], [1840, CLIFF.top], [520, GROUND], [90, GROUND], [1880, CLIFF.top], [600, GROUND]],
+    decor: [[1480, CLIFF.top], [1760, CLIFF.top], [1120, 900], [1180, 900], [1820, CLIFF.top], [560, GROUND]],
+    stories: 2, theme: THEME_VALE, dusk: true, playTime: 270, powers: [...BASE_POWERS, 'wings', 'double', 'wings', 'double'],
+    needMul: { stone: 1.1, brick: 1.4, tile: 0.95, wood: 1, glass: 1.3 },
+    lightSpots: [[310, 800], [1130, 900], [300, 560], [1300, 778], [110, 680], [1420, CLIFF.top]],
     bag: ['drizzle', 'wind', 'boulders', 'ants', 'bees', 'fog', 'lightning', 'bear', 'bear', 'boulders', 'quake', 'bees', 'wind'],
-    slots: [14, 28, 42, 56, 70, 84, 112, 150, 166, 182, 198, 214, 232],
-    fixed: [{ at: 98, type: 'quake', dur: 7 }, { at: 126, type: 'flood', dur: 22 }],
+    slots: [14, 28, 42, 56, 84, 112, 150, 166, 198, 214, 232],
+    // grande desafio da tela 2: a baleia pula do rio duas vezes na partida
+    fixed: [{ at: 98, type: 'quake', dur: 7 }, { at: 126, type: 'flood', dur: 22 }, { at: 70, type: 'whale', dur: 9 }, { at: 182, type: 'whale', dur: 9 }],
   },
 };
 
@@ -81,7 +105,7 @@ export function rockSurface(x: number): number | null {
 export type Sfx =
   | 'jump' | 'jump2' | 'boing' | 'pick' | 'gold' | 'deliver' | 'deliverBig' | 'phase' | 'stomp' | 'join' | 'alert' | 'wind' | 'quake' | 'rain'
   | 'thunder' | 'tap' | 'chWin' | 'chFail' | 'part' | 'task' | 'finished' | 'storm' | 'standing' | 'fall' | 'results' | 'beep' | 'go' | 'balloon' | 'ant'
-  | 'power' | 'zap' | 'jolt' | 'crack' | 'freeze' | 'fire' | 'grow' | 'shrink' | 'speed' | 'shield' | 'block' | 'magnet' | 'bees' | 'boulder' | 'crash' | 'lightning' | 'ouch' | 'fog' | 'drizzle';
+  | 'power' | 'zap' | 'jolt' | 'crack' | 'freeze' | 'fire' | 'grow' | 'shrink' | 'speed' | 'shield' | 'block' | 'magnet' | 'bees' | 'boulder' | 'crash' | 'lightning' | 'ouch' | 'fog' | 'drizzle' | 'splash' | 'gulp';
 
 interface Input { l: boolean; r: boolean; j: boolean }
 type Fx = { frozen: number; fast: number; giant: number; tiny: number; burn: number; magnet: number; shield: number; slow: number; wings: number; double: number };
@@ -89,23 +113,25 @@ const NO_FX = (): Fx => ({ frozen: 0, fast: 0, giant: 0, tiny: 0, burn: 0, magne
 export interface Player {
   id: string; slot: number; name: string; bot?: boolean;
   x: number; y: number; vx: number; vy: number; onGround: boolean; coyote: number; face: 1 | -1;
-  jumps: number; boost: boolean; mover: number;
+  jumps: number; boost: boolean; mover: number; plat: number;
   input: Input; prevJ: boolean; carry: Item | null; pts: number; picks: number; delivered: number;
   dizzy: number; walk: number; lastSeen: number; happy: number;
   task: TaskId | null; helping: boolean; mine: number; taps: number; budget: number; budgetT: number; work: number; chTaps: number;
   power: PowerId | null; powerT: number; fx: Fx; size: number; hitCd: number;
+  /** Segundos que ainda faltam dentro da baleia. */
+  eaten: number;
 }
 interface Item { id: number; type: ItemType; qty: number; x: number; y: number; vx: number; vy: number; rest: boolean; age: number; onGroundFloor: boolean; mover: number; float?: boolean; power?: PowerId; pulled?: boolean }
 interface Ant { x: number; dir: 1 | -1; carry: Item | null; flee: boolean }
 interface Floater { x: number; y: number; text: string; color: string; t: number }
-interface Mover { x: number; y: number; w: number; px: number; py: number; vertical: boolean; rail?: [number, number] }
+interface Mover { x: number; y: number; w: number; px: number; py: number; vertical: boolean; rail?: [number, number]; kind?: Plat['kind'] }
 interface Balloon { x: number; y: number; dir: 1 | -1; item: Item | null }
 interface Shot { x: number; y: number; from: string; to: string; power: PowerId; t: number }
 interface Swarm { x: number; y: number; target: string | null; t: number }
 interface Boulder { x: number; dir: 1 | -1; rot: number }
 interface Bolt { x: number; y: number; t: number; hit: boolean }
 type Ghost = Pick<Player, 'x' | 'y' | 'pts' | 'picks' | 'delivered' | 'task' | 'helping' | 'mine' | 'taps' | 'slot' | 'power'>;
-type EventType = 'wind' | 'quake' | 'rain' | 'ants' | 'drizzle' | 'fog' | 'bees' | 'boulders' | 'lightning' | 'bear' | 'flood';
+type EventType = 'wind' | 'quake' | 'rain' | 'ants' | 'drizzle' | 'fog' | 'bees' | 'boulders' | 'lightning' | 'bear' | 'flood' | 'whale';
 interface GameEvent { at: number; type: EventType; dur: number; dir?: 1 | -1; started?: boolean }
 interface TapCh { kind: 'quake' | 'leak' | 'drain'; at: number; dur: number; need: number; have: number; started?: boolean; ended?: boolean; ok?: boolean }
 
@@ -128,6 +154,7 @@ const EVENT_INFO: Record<EventType, { soon: string; now: string; emoji: string; 
   lightning: { soon: 'Raios chegando!', now: 'Raios! Saiam do círculo vermelho', emoji: '⚡', dur: 10, sfx: 'thunder' },
   bear: { soon: 'Tem um urso vindo!', now: 'Urso! Pule na cabeça dele para espantar', emoji: '🐻', dur: 14, sfx: 'boulder' },
   flood: { soon: 'Vem um dilúvio!', now: 'Dilúvio! Subam nas plataformas', emoji: '🌊', dur: 18, sfx: 'rain' },
+  whale: { soon: 'Tem algo enorme se mexendo no rio…', now: 'Baleia! Fiquem longe da água', emoji: '🐳', dur: 9, sfx: 'alert' },
 };
 const CH_INFO: Record<TapCh['kind'], { title: string; emoji: string; ok: string; fail: string }> = {
   quake: { title: 'Segurem a casa!', emoji: '🌋', ok: 'A casa ficou firme! 💪', fail: 'Caiu um pedaço… 😬' },
@@ -138,6 +165,28 @@ const CH_INFO: Record<TapCh['kind'], { title: string; emoji: string; ok: string;
 const needFor = (n: number): Record<ItemType, number> => ({ stone: 15 + 8 * n, brick: 26 + 13 * n, tile: 20 + 10 * n, wood: 8 + 5 * n, glass: 5 + 3 * n });
 /** Pacote sorteado: a maioria x1, alguns x4 e poucos x10. */
 const rollQty = () => { const r = Math.random(); return r < 0.08 ? 10 : r < 0.36 ? 4 : 1; };
+
+/** Miniatura de uma tela (cenário, plataformas e a casa pronta) para a escolha no saguão. */
+const thumbs = new Map<number, HTMLCanvasElement>();
+function stageThumb(n: 1 | 2, w: number, h: number): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  const key = n * 10000 + w;
+  const hit = thumbs.get(key); if (hit) return hit;
+  const cv = document.createElement('canvas'); cv.width = w * 2; cv.height = h * 2;
+  const ctx = cv.getContext('2d'); if (!ctx) return null;
+  ctx.scale((w * 2) / W, (h * 2) / H);
+  const L = LEVELS[n], full = { paint: 1, light: 1, garden: 1, decor: 1 };
+  if (n === 2) { scenery2(ctx, 0, 0); finishBack2(ctx, full, 0); windColumn(ctx, 0); } else { scenery(ctx, 0, 0, L.dusk); finishBack(ctx, full, 0); }
+  L.plats.forEach((pl) => platform(ctx, pl, 0, false, 0, false, 0));
+  const ms = L.movers(0, 0);
+  ms.forEach((m) => { if (m.kind !== 'see') platform(ctx, m, 0, true, 0, false, 0); });
+  if (n === 2) seesaw(ctx, ms[ms.length - 2], ms[ms.length - 1]);
+  L.tramps.forEach((t) => trampoline(ctx, t.x, t.w, 0));
+  house(ctx, { stone: 1, brick: 1, tile: 1, wood: 1, glass: 1 }, 0, { fin: full, stories: L.stories, theme: L.theme, dx: L.site.dx, dy: L.site.dy, outline: false });
+  if (n === 2) riverWater(ctx, 0);
+  thumbs.set(key, cv);
+  return cv;
+}
 
 export interface Result { id: string; slot: number; name: string; pts: number; delivered: number; suggest: number }
 
@@ -181,9 +230,25 @@ export class Game {
   results: Result[] = [];
   shake = 0;
   level: 1 | 2 = 1;
-  bears: { x: number; dir: 1 | -1; scared: boolean }[] = [];
+  /** Gangorra (-1..1) e plataformas que somem/quebram (tela 2). */
+  see = 0; seeTo = 0;
+  frag: { t: number; gone: number }[] = [];
+  whale: { x: number; y: number; vx: number; vy: number; t: number; ph: 'warn' | 'jump'; dir: 1 | -1; tx: number; caught: string | null } | null = null;
+  whaleN = 0; whaleT = 0;
+  spits: { x: number; t: number; dir: 1 | -1 }[] = [];
+  bears: { x: number; y: number; dir: 1 | -1; scared: boolean }[] = [];
   get lv() { return LEVELS[this.level]; }
-  private solid() { return [...this.lv.plats, ...STEPS]; }
+  private solid() { return this.level === 1 ? [...this.lv.plats, ...STEPS] : this.lv.plats; }
+  private gone(i: number) { return (this.frag[i]?.gone ?? 0) > 0; }
+  /** Chão firme da rocha/penhasco em x (null fora dela). */
+  surf(x: number) { return this.level === 1 ? rockSurface(x) : cliffSurface(x); }
+  /** Chão de baixo: o leito do rio na tela 2, senão o chão. */
+  floorAt(x: number) { return this.level === 2 && x > RIVER.x0 && x < RIVER.x1 ? RIVER.bed : GROUND; }
+  inRiver(x: number) { return this.level === 2 && x > RIVER.x0 && x < RIVER.x1; }
+  /** Nível da água em x: dilúvio ou o rio. */
+  waterAt(x: number) { return Math.min(this.waterY(), this.inRiver(x) ? RIVER.top : H + 50); }
+  /** Empurra para fora da rocha/penhasco. */
+  private pushOut(x: number) { return this.level === 1 ? (x < 965 ? ROCK.x0 - 10 : ROCK.x1 + 10) : CLIFF.x0 - 10; }
   /** Altura da água do dilúvio (abaixo da tela = sem água). */
   waterY() {
     const e = this.active('flood');
@@ -217,7 +282,10 @@ export class Game {
   private once(key: string, fn: () => void) { if (!this.fired.has(key)) { this.fired.add(key); fn(); } }
   private setMode(m: Mode) { this.mode = m; this.modeT = 0; this.fired.clear(); this.photo = false; }
   togglePhoto() { if (this.mode === 'results') this.photo = !this.photo; }
-  private clearHazards() { this.bears = []; this.items = []; this.ants = []; this.balloon = null; this.shots = []; this.swarms = []; this.boulders = []; this.bolts = []; }
+  private clearHazards() {
+    this.whale = null; this.whaleN = 0; this.spits = [];
+    this.players.forEach((p) => { if (p.eaten > 0) { p.eaten = 0; p.x = 500; p.y = GROUND; p.vx = 0; p.vy = 0; } });
+    this.bears = []; this.items = []; this.ants = []; this.balloon = null; this.shots = []; this.swarms = []; this.boulders = []; this.bolts = []; }
 
   /* ---------------- jogadores ---------------- */
 
@@ -234,11 +302,11 @@ export class Game {
     const p: Player = {
       id, slot, name: (name || `Jogador ${slot + 1}`).slice(0, 12), bot,
       x: g?.x ?? (Math.random() < 0.5 ? sx : W - sx), y: g ? g.y - 2 : -60, vx: 0, vy: 0, onGround: false, coyote: 0, face: 1,
-      jumps: 0, boost: false, mover: -1,
+      jumps: 0, boost: false, mover: -1, plat: -1,
       input: { l: false, r: false, j: false }, prevJ: false, carry: null, pts: g?.pts ?? 0, picks: g?.picks ?? 0, delivered: g?.delivered ?? 0,
       dizzy: 0, walk: 0, lastSeen: this.t, happy: 0,
       task: g?.task ?? null, helping: g?.helping ?? false, mine: g?.mine ?? 0, taps: g?.taps ?? 0, budget: 20, budgetT: this.t, work: 0, chTaps: 0,
-      power: g?.power ?? null, powerT: this.t, fx: NO_FX(), size: 1, hitCd: 0,
+      power: g?.power ?? null, powerT: this.t, fx: NO_FX(), size: 1, hitCd: 0, eaten: 0,
     };
     this.ghosts.delete(id);
     this.players.set(id, p);
@@ -373,7 +441,7 @@ export class Game {
   private wipe() {
     this.clearHazards(); this.resetHouse();
     this.debris = []; this.rain = []; this.sparks = []; this.floaters = []; this.screenFx = []; this.shake = 0; this.banner = null; this.results = [];
-    this.events = []; this.chs = [];
+    this.events = []; this.chs = []; this.frag = []; this.see = 0; this.seeTo = 0;
     this.players.forEach((p) => {
       const sx = 120 + Math.random() * 520;
       Object.assign(p, { x: Math.random() < 0.5 ? sx : W - sx, y: -60, vx: 0, vy: 0, onGround: false, mover: -1, jumps: 0, carry: null, dizzy: 0, happy: 0,
@@ -386,7 +454,7 @@ export class Game {
   setLevel(n: number) {
     const lv = (n === 2 ? 2 : 1) as 1 | 2;
     if (this.level === lv || (this.mode !== 'lobby' && this.mode !== 'attract')) return;
-    this.level = lv; this.movers = []; this.updateMovers(); this.updateMovers();
+    this.level = lv; this.movers = []; this.see = 0; this.seeTo = 0; this.frag = []; this.updateMovers(); this.updateMovers();
     this.wipe(); this.sfx('join');
     if (this.mode === 'lobby') this.countdown = Math.max(this.countdown, 10);
   }
@@ -465,6 +533,7 @@ export class Game {
 
   private fxText(p: Player): string | undefined {
     const f = p.fx;
+    if (p.eaten > 0) return `Dentro da baleia! Sai em ${Math.ceil(p.eaten)}s 🐳`;
     if (f.frozen > 0) return 'Você está congelado! ❄️';
     if (f.burn > 0) return 'Pegando fogo! Mais lento 🔥';
     if (f.tiny > 0) return 'Você está minúsculo! 🔻';
@@ -515,8 +584,10 @@ export class Game {
     this.shake = Math.max(0, this.shake - dt);
     this.shakeAmp += (16 - this.shakeAmp) * Math.min(1, dt * 3);
     this.screenFx.forEach((f) => (f.t += dt)); this.screenFx = this.screenFx.filter((f) => f.t < f.d);
+    this.see += (this.seeTo - this.see) * Math.min(1, dt * 14);
     this.updateMovers();
     this.tramp = this.tramp.map((v) => Math.max(0, v - dt * 5));
+    this.stepFragile(dt);
     // quem sumiu (celular fechou) sai depois de um tempo
     this.players.forEach((p) => { if (!p.bot && this.t - p.lastSeen > (this.mode === 'play' ? 25 : 12)) this.removePlayer(p.id); });
 
@@ -543,7 +614,7 @@ export class Game {
       } else {
         // a casa não estava na rocha: primeiro o versículo, depois ela despedaça
         if (this.modeT >= COLLAPSE_AT) this.once('collapse', () => {
-          this.debris = houseDebris(this.progress(), this.lv.stories, this.lv.theme);
+          this.debris = houseDebris(this.progress(), this.lv.stories, this.lv.theme, this.lv.site.dx, this.lv.site.dy);
           this.sfx('fall'); this.sfx('jolt'); this.buzzAll('quake');
           this.shake = 1.2; this.shakeAmp = 34; this.screen('#ffffff', 0.35, 0.4);
         });
@@ -567,6 +638,12 @@ export class Game {
         const target = p.fx.giant > 0 ? 1.55 : p.fx.tiny > 0 ? 0.55 : 1;
         p.size += (target - p.size) * Math.min(1, dt * 8);
         if (p.fx.burn > 0 && Math.random() < dt * 14) this.sparks.push({ x: p.x + (Math.random() - 0.5) * 40 * p.size, y: p.y - 120 * p.size, vx: (Math.random() - 0.5) * 60, vy: -260, t: 0.2, c: Math.random() < 0.5 ? '#F26B1D' : '#F2C230' });
+        if (p.eaten > 0) {
+          p.eaten -= dt; p.vx = 0; p.vy = 0; p.carry = null;
+          if (this.whale?.caught === p.id) { p.x = this.whale.x; p.y = this.whale.y; } else { p.x = clamp(p.x, RIVER.x0 + 60, RIVER.x1 - 60); p.y = RIVER.bed + 200; }
+          if (p.eaten <= 0) this.spit(p);
+          return;
+        }
         if (finishing && p.task) this.stepStation(p, dt); else this.stepPlayer(p, dt);
       });
       this.stepStomps();
@@ -581,7 +658,7 @@ export class Game {
   /** Plataformas que se movem: uma vai e volta no alto à direita, um elevador sobe e desce à esquerda. */
   private updateMovers() {
     const a = this.t;
-    const now = this.lv.movers(a);
+    const now = this.lv.movers(a, this.see);
     this.movers = now.map((m, i) => ({ ...m, px: this.movers[i]?.x ?? m.x, py: this.movers[i]?.y ?? m.y }));
   }
 
@@ -610,11 +687,12 @@ export class Game {
         // quem está carregando pode deixar cair
         const chance = e.type === 'wind' ? 0.3 : e.type === 'quake' ? 0.4 : 0;
         this.players.forEach((p) => { if (p.carry && Math.random() < chance) { this.drop(p); this.float(p.x, p.y - 170, 'Ops!', C.terra); } });
-        if (e.type === 'ants') this.ants.push({ x: -40, dir: 1, carry: null, flee: false }, { x: W + 40, dir: -1, carry: null, flee: false });
+        if (e.type === 'ants') { this.ants.push({ x: -40, dir: 1, carry: null, flee: false }); if (this.level === 1) this.ants.push({ x: W + 40, dir: -1, carry: null, flee: false }); }
         if (e.type === 'bees') { const n = this.players.size > 4 ? 2 : 1; for (let i = 0; i < n; i++) this.swarms.push({ x: i ? W + 60 : -60, y: 300, target: null, t: 0 }); }
         if (e.type === 'boulders') this.boulderT = 0;
-        if (e.type === 'bear') this.bears.push({ x: -90, dir: 1, scared: false }, { x: W + 90, dir: -1, scared: false }); // um de cada lado
+        if (e.type === 'bear') this.bears.push({ x: -90, y: GROUND, dir: 1, scared: false }, { x: W + 90, y: this.level === 2 ? CLIFF.top : GROUND, dir: -1, scared: false }); // um de cada lado
         if (e.type === 'lightning') this.boltT = 0.6;
+        if (e.type === 'whale') { this.whaleN = 2; this.whaleT = 0.3; }
         this.sfx(EVENT_INFO[e.type].sfx);
         if (e.type === 'quake') { this.buzzAll('storm'); this.quakeT = 0.4; }
       }
@@ -650,24 +728,26 @@ export class Game {
 
   /** Abelhas, pedras rolando e raios. */
   private stepHazards(dt: number) {
-    const live = Array.from(this.players.values());
+    const live = Array.from(this.players.values()).filter((p) => p.eaten <= 0);
+    this.stepWhale(dt, live);
     // urso: anda do seu lado da rocha; encostar dói (-3), pular na cabeça espanta (+3)
     const bearOn = !!this.active('bear');
     for (const b of this.bears) {
       if (!bearOn) b.scared = true;
       b.x += b.dir * (b.scared ? 430 : 165) * dt;
       if (!b.scared) {
-        const left = b.x < 960, lo = left ? 60 : ROCK.x1 + 80, hi = left ? ROCK.x0 - 80 : W - 60;
+        const left = this.level === 1 ? b.x < 960 : b.y === GROUND;
+        const [lo, hi] = this.level === 1 ? (left ? [60, ROCK.x0 - 80] : [ROCK.x1 + 80, W - 60]) : left ? [60, RIVER.x0 - 70] : [1420, W - 60];
         if (b.x > hi && b.dir > 0 && (left || b.x < W)) b.dir = -1;
         if (b.x < lo && b.dir < 0 && (!left || b.x > 0)) b.dir = 1;
       }
       for (const p of live) {
         const dx = Math.abs(p.x - b.x);
         if (b.scared || dx > 80) continue;
-        if (p.vy > 100 && p.y > GROUND - 150 && p.y < GROUND - 80) {
+        if (p.vy > 100 && p.y > b.y - 150 && p.y < b.y - 80) {
           b.scared = true; b.dir = (p.x < b.x ? 1 : -1) as 1 | -1; p.vy = -950; p.jumps = 1; p.pts += 3;
           this.float(p.x, p.y - 190, 'Urso espantado! +3', CHARS[p.slot].color); this.onBuzz(p.id, 'stomp'); this.sfx('stomp');
-        } else if (p.y > GROUND - 70 && dx < 64) {
+        } else if (p.y > b.y - 70 && p.y < b.y + 4 && dx < 64) {
           const had = p.carry;
           if (this.ouch(p, { knock: (p.x < b.x ? -1 : 1) * 900, lose: 3, dizzy: 1.4, text: 'Urso! -3 🐻', buzz: 'rock' }) && had) this.items = this.items.filter((i) => i !== had);
         }
@@ -696,15 +776,15 @@ export class Game {
     // pedras rolando pelo chão (dos dois lados até a rocha)
     if (this.active('boulders')) {
       this.boulderT -= dt;
-      if (this.boulderT <= 0) { this.boulderT = 1.6 + Math.random() * 1.2; const dir = (Math.random() < 0.5 ? 1 : -1) as 1 | -1; this.boulders.push({ x: dir > 0 ? -40 : W + 40, dir, rot: 0 }); this.sfx('boulder'); }
+      if (this.boulderT <= 0) { this.boulderT = 1.6 + Math.random() * 1.2; const dir = (this.level === 2 || Math.random() < 0.5 ? 1 : -1) as 1 | -1; this.boulders.push({ x: dir > 0 ? -40 : W + 40, dir, rot: 0 }); this.sfx('boulder'); }
     }
     for (const b of this.boulders) {
       b.x += b.dir * 520 * dt; b.rot += b.dir * 520 * dt / 34;
       for (const p of live) if (Math.abs(p.x - b.x) < 40 * Math.max(1, p.size) && p.y > GROUND - 50 && p.y <= GROUND + 2) this.ouch(p, { knock: b.dir * 650, dizzy: 1, lose: 1, text: 'Pedrada! -1', buzz: 'rock' }) && this.screen('#6b5643', 0.3, 0.2, true);
     }
     this.boulders = this.boulders.filter((b) => {
-      const hitRock = (b.dir > 0 && b.x > ROCK.x0 - 30) || (b.dir < 0 && b.x < ROCK.x1 + 30);
-      if (hitRock) { this.burst(b.x, GROUND - 30, '#8f887d', 14); this.sfx('crash'); }
+      const hitRock = this.level === 2 ? b.x > RIVER.x0 : (b.dir > 0 && b.x > ROCK.x0 - 30) || (b.dir < 0 && b.x < ROCK.x1 + 30);
+      if (hitRock) { this.burst(b.x, GROUND - 30, this.level === 2 ? '#9fd0f0' : '#8f887d', 14); this.sfx('crash'); }
       return !hitRock && b.x > -80 && b.x < W + 80;
     });
     // raios: marcam um círculo vermelho embaixo de alguém e caem 1,1s depois
@@ -738,6 +818,53 @@ export class Game {
     this.shots = this.shots.filter((s) => s.t < 3);
   }
 
+  /** Baleia (tela 2): pula do rio com a boca aberta; quem ela pega fica 20s lá dentro e sai com 10% a menos. */
+  private stepWhale(dt: number, live: Player[]) {
+    if (this.active('whale') && !this.whale && this.whaleN > 0) {
+      this.whaleT -= dt;
+      if (this.whaleT <= 0) {
+        this.whaleN--; this.whaleT = 3.2;
+        // mira em quem está mais perto do rio
+        let tg: Player | null = null, bd = Infinity;
+        for (const p of live) { const d = Math.max(0, RIVER.x0 - p.x, p.x - RIVER.x1) + Math.abs(p.y - 820) * 0.4; if (d < bd) { bd = d; tg = p; } }
+        const tx = tg && bd < 420 ? tg.x : RIVER.x0 + 100 + Math.random() * (RIVER.x1 - RIVER.x0 - 200);
+        const x = clamp(tx + (Math.random() < 0.5 ? -1 : 1) * 160, RIVER.x0 + 90, RIVER.x1 - 90);
+        this.whale = { x, y: RIVER.top + 70, vx: 0, vy: 0, t: 0, ph: 'warn', dir: tx < x ? -1 : 1, tx, caught: null };
+        this.sfx('alert');
+      }
+    }
+    const w = this.whale;
+    if (!w) { this.spits.forEach((s) => (s.t += dt)); this.spits = this.spits.filter((s) => s.t < 1.6); return; }
+    w.t += dt;
+    if (w.ph === 'warn') {
+      if (Math.random() < dt * 30) this.sparks.push({ x: w.x + (Math.random() - 0.5) * 140, y: RIVER.top, vx: 0, vy: -200 - Math.random() * 200, t: 0.4, c: 'rgba(255,255,255,0.9)' });
+      if (w.t >= 1.2) { w.ph = 'jump'; w.vy = -1260; w.vx = clamp((w.tx - w.x) / 0.85, -520, 520); this.sfx('splash'); this.burst(w.x, RIVER.top, '#9fd0f0', 26); }
+    } else {
+      w.x += w.vx * dt; w.y += w.vy * dt; w.vy += 1500 * dt;
+      if (!w.caught && w.vy < 300) {
+        const mx = w.x + w.dir * 70, my = w.y - 50;
+        for (const p of live) {
+          if (p.fx.shield > 0 || Math.hypot(p.x - mx, p.y - 70 * p.size - my) > 95) continue;
+          w.caught = p.id; p.eaten = 20; p.carry = null; p.power = null; p.fx = NO_FX(); p.dizzy = 0;
+          this.float(p.x, p.y - 200, `${p.name} foi engolido! 🐳`, C.terra);
+          this.onBuzz(p.id, 'rock'); this.sfx('gulp'); this.screen('#2F5F95', 0.6, 0.35, true); this.shake = 0.3;
+          break;
+        }
+      }
+      if (w.vy > 0 && w.y > RIVER.top + 120) { this.burst(w.x, RIVER.top, '#9fd0f0', 30); this.sfx('splash'); this.shake = 0.25; this.whale = null; }
+    }
+    this.spits.forEach((s) => (s.t += dt)); this.spits = this.spits.filter((s) => s.t < 1.6);
+  }
+  /** A baleia volta e cospe o jogador com 10% a menos de pontos. */
+  private spit(p: Player) {
+    const x = clamp(p.x, RIVER.x0 + 120, RIVER.x1 - 120), dir = (x < (RIVER.x0 + RIVER.x1) / 2 ? -1 : 1) as 1 | -1;
+    this.spits.push({ x, t: 0, dir });
+    const lose = Math.ceil(p.pts * 0.1);
+    p.pts -= lose; p.eaten = 0; p.x = x + dir * 60; p.y = RIVER.top - 40; p.vy = -1500; p.vx = dir * 420; p.onGround = false; p.mover = -1; p.boost = true; p.jumps = 1; p.dizzy = 1;
+    this.float(p.x, p.y - 220, `Cuspido! -${lose} 🐳`, C.terra);
+    this.onBuzz(p.id, 'boing'); this.sfx('splash'); this.burst(x, RIVER.top, '#9fd0f0', 24);
+  }
+
   /** Desafios de toque: todo mundo toca rápido no celular para salvar a obra. */
   private stepChallenges() {
     for (const c of this.chs) {
@@ -751,7 +878,7 @@ export class Game {
         const info = CH_INFO[c.kind];
         if (c.ok) {
           this.players.forEach((p) => { if (p.chTaps > 0) { p.pts += 3; p.happy = 1.2; this.float(p.x, p.y - 190, '+3', CHARS[p.slot].color); } });
-          this.flash(info.ok, C.olive); this.burst(960, ROCK.top - 260, C.olive, 36); this.sfx('chWin'); this.screen(C.olive, 0.6, 0.3, true);
+          this.flash(info.ok, C.olive); this.burst(this.lv.site.cx, this.lv.site.top - 260, C.olive, 36); this.sfx('chWin'); this.screen(C.olive, 0.6, 0.3, true);
         } else {
           PHASES[this.phase]?.types.forEach((k) => (this.have[k] = Math.max(0, this.have[k] - Math.ceil(this.need[k] * 0.15))));
           this.flash(info.fail, C.terra); this.shake = 0.6; this.shakeAmp = 30; this.sfx('chFail'); this.screen(C.terra, 0.7, 0.35, true);
@@ -775,9 +902,9 @@ export class Game {
   }
 
   private spots(): [number, number][] {
-    return [[160, 660], [1250, 1760], ...this.lv.plats.map((p) => [p.x + 24, p.x + p.w - 24] as [number, number]),
+    return [...this.lv.ground, ...this.lv.plats.map((p) => [p.x + 24, p.x + p.w - 24] as [number, number]),
       ...this.lv.tramps.map((t) => [t.x + 20, t.x + t.w - 20] as [number, number]),
-      ...this.movers.map((m) => [m.x + 20, m.x + m.w - 20] as [number, number])];
+      ...this.movers.filter((m) => m.kind !== 'see').map((m) => [m.x + 20, m.x + m.w - 20] as [number, number])];
   }
 
   private stepSpawn(dt: number) {
@@ -824,13 +951,14 @@ export class Game {
   /** Onde algo que está caindo pousa (plataformas, plataformas móveis, rocha, chão). */
   private land(x: number, prevY: number, y: number, vy: number) {
     if (vy < 0) return null;
-    const r = { y: Infinity, m: -1, tramp: -1 };
-    const take = (py: number, m: number) => { if (py < r.y) { r.y = py; r.m = m; } };
-    for (const p of this.solid()) if (x > p.x - 14 && x < p.x + p.w + 14 && prevY <= p.y + 1 && y >= p.y) take(p.y, -1);
+    const r = { y: Infinity, m: -1, tramp: -1, pi: -1 };
+    const take = (py: number, m: number, pi = -1) => { if (py < r.y) { r.y = py; r.m = m; r.pi = pi; } };
+    this.solid().forEach((p, i) => { if (!this.gone(i) && x > p.x - 14 && x < p.x + p.w + 14 && prevY <= p.y + 1 && y >= p.y) take(p.y, -1, i); });
     this.movers.forEach((m, i) => { if (x > m.x - 10 && x < m.x + m.w + 10 && prevY <= Math.max(m.py, m.y) + 1 && y >= m.y) take(m.y, i); });
-    const rs = rockSurface(x);
+    const rs = this.surf(x);
     if (rs != null && prevY <= rs + 1 && y >= rs) take(rs, -1);
-    if (y >= GROUND) take(GROUND, -1);
+    const fl = this.floorAt(x);
+    if (y >= fl) take(fl, -1);
     if (r.y === Infinity) return null;
     if (r.y === GROUND && r.m === -1) r.tramp = this.lv.tramps.findIndex((t) => x > t.x && x < t.x + t.w);
     return r;
@@ -844,7 +972,7 @@ export class Game {
     const dir = frozen ? 0 : (p.input.r ? 1 : 0) - (p.input.l ? 1 : 0);
     const stunned = p.dizzy > 0 || frozen;
     p.dizzy = Math.max(0, p.dizzy - dt); p.happy = Math.max(0, p.happy - dt);
-    const wy = this.waterY(), wet = p.y > wy + 20, swim = p.y > wy + 40 && !p.onGround;
+    const wy = this.waterAt(p.x), wet = p.y > wy + 20, swim = p.y > wy + 40 && !p.onGround;
     const spd = (f.fast > 0 ? 1.6 : 1) * (f.burn > 0 ? 0.55 : 1) * (f.tiny > 0 ? 0.8 : 1) * (f.slow > 0 ? 0.6 : 1) * (this.active('drizzle') ? 0.72 : 1) * (wet ? 0.55 : 1);
     const acc = (p.onGround ? (rain ? 900 : 3400) : 1900) * Math.max(0.7, spd);
     if (dir && !stunned) { p.vx += dir * acc * dt; p.face = dir as 1 | -1; }
@@ -870,23 +998,34 @@ export class Game {
     // em cima de plataforma que se move: vai junto
     if (p.onGround && p.mover >= 0) { const m = this.movers[p.mover]; p.x += m.x - m.px; p.y = m.y; }
     p.vy += GRAV * (swim ? 0.2 : 1) * dt;
+    // coluna de vento (tela 2): leva para cima
+    if (this.level === 2 && p.x > WIND.x0 && p.x < WIND.x1 && p.y > WIND.top && !frozen) {
+      const k = clamp((p.y - WIND.top) / 140);
+      p.vy = Math.max(-760, p.vy - 5200 * k * dt); p.onGround = false; p.mover = -1; p.boost = true; p.jumps = 1;
+      if (Math.random() < dt * 8) this.sparks.push({ x: p.x + (Math.random() - 0.5) * 50, y: p.y - 20, vx: 0, vy: -300, t: 0.3, c: '#ffffff' });
+    }
     if (swim) { p.vy = Math.min(p.vy, 160) * (1 - 1.2 * dt); if (Math.random() < dt * 3) this.sparks.push({ x: p.x, y: p.y - 120, vx: 0, vy: -120, t: 0.4, c: 'rgba(255,255,255,0.8)' }); }
-    const prevY = p.y;
+    const prevY = p.y, prevX = p.x, hitV = p.vy;
     p.x += p.vx * dt; p.y += p.vy * dt;
     p.x = Math.max(30, Math.min(W - 30, p.x));
     const land = this.land(p.x, prevY, p.y, p.vy);
+    p.plat = -1;
     if (land) {
-      p.y = land.y; p.vy = 0; p.onGround = true; p.mover = land.m; p.jumps = 0;
+      p.y = land.y; p.vy = 0; p.onGround = true; p.mover = land.m; p.jumps = 0; p.plat = land.pi;
+      const mk = land.m >= 0 ? this.movers[land.m].kind : undefined;
+      if (mk === 'bridge' && hitV > 650 && !frozen) { p.vy = -hitV * 0.55; p.onGround = false; p.mover = -1; p.boost = true; p.jumps = 1; this.sfx('boing'); }
+      if (mk === 'see' && hitV > 380) this.seesawHit(land.m === this.movers.length - 2 ? 1 : -1);
       if (land.tramp >= 0 && !frozen) { // cama elástica: lá vai para o alto
         p.vy = TRAMP_V; p.onGround = false; p.boost = true; p.jumps = 1; p.mover = -1;
         this.tramp[land.tramp] = 1; this.sfx('boing'); this.onBuzz(p.id, 'boing');
       }
     } else { p.onGround = false; p.mover = -1; }
     // rocha: dá para subir a rampa andando; se bater de lado, para na parede
-    const rs = rockSurface(p.x);
-    if (rs != null && p.y > rs + 2) {
-      if (p.y - rs <= 36 && p.vy >= 0) { p.y = rs; p.vy = 0; p.onGround = true; p.jumps = 0; p.mover = -1; }
-      else { p.x = p.x < (ROCK.x0 + ROCK.x1) / 2 ? ROCK.x0 - 18 : ROCK.x1 + 18; p.vx = 0; }
+    const rs = Math.min(this.surf(p.x) ?? Infinity, this.floorAt(p.x));
+    if (p.y > rs + 2) {
+      if (p.y - rs <= 40 && p.vy >= 0) { p.y = rs; p.vy = 0; p.onGround = true; p.jumps = 0; p.mover = -1; }
+      else if (p.y <= Math.min(this.surf(prevX) ?? Infinity, this.floorAt(prevX)) + 40) { p.x = prevX; p.vx = 0; }
+      else p.y = rs;
     }
     p.walk = p.onGround && Math.abs(p.vx) > 30 ? p.walk + dt * 14 * Math.min(1.6, spd) : 0;
     if (f.fast > 0 && Math.abs(p.vx) > 200 && Math.random() < 0.5) this.sparks.push({ x: p.x - p.face * 30, y: p.y - 60 * p.size - Math.random() * 60, vx: -p.face * 200, vy: -40, t: 0.4, c: '#ffffff' });
@@ -919,7 +1058,8 @@ export class Game {
       }
     }
     // entregar na obra (o bonequinho continua onde está)
-    if (p.carry && p.x > ZONE.x0 && p.x < ZONE.x1 && p.y <= ROCK.top + 2 && p.y > ROCK.top - 340 - (this.lv.stories === 2 ? STORY2 : 0)) {
+    const S = this.lv.site, zx = S.cx - 960;
+    if (p.carry && p.x > ZONE.x0 + zx && p.x < ZONE.x1 + zx && p.y <= S.top + 2 && p.y > S.top - 340 - (this.lv.stories === 2 ? STORY2 : 0)) {
       const it = p.carry; p.carry = null;
       const types = this.currentTypes();
       const type = types.includes(it.type) ? it.type : types[0];
@@ -927,17 +1067,48 @@ export class Game {
       const pts = (DELIVER_PTS[it.qty] ?? 2) * (p.fx.double > 0 ? 2 : 1);
       p.pts += pts; p.delivered += it.qty; p.happy = 1;
       this.float(p.x, p.y - 190 * p.size, `+${pts}${it.qty > 1 ? ` (${it.qty} de uma vez!)` : ''}`, CHARS[p.slot].color);
-      this.burst(960, ROCK.top - 200, it.qty >= 10 ? '#F3C64A' : it.qty >= 4 ? '#4FA3DD' : C.terra, 10 + it.qty * 2);
+      this.burst(this.lv.site.cx, this.lv.site.top - 200, it.qty >= 10 ? '#F3C64A' : it.qty >= 4 ? '#4FA3DD' : C.terra, 10 + it.qty * 2);
       this.onBuzz(p.id, it.qty >= 4 ? 'deliverBig' : 'deliver'); this.sfx(it.qty >= 4 ? 'deliverBig' : 'deliver');
       if (it.qty >= 10) this.screen('#F3C64A', 0.5, 0.3, true);
       this.checkPhase();
     }
   }
 
+  /** Alguém caiu numa ponta da gangorra: ela desce e quem está na outra ponta voa. */
+  private seesawHit(k: number) {
+    if (this.seeTo === k) return;
+    this.seeTo = k;
+    const other = k === 1 ? this.movers.length - 1 : this.movers.length - 2;
+    let flew = false;
+    this.players.forEach((q) => { if (q.onGround && q.mover === other) { q.vy = -1750; q.onGround = false; q.mover = -1; q.boost = true; q.jumps = 1; flew = true; this.onBuzz(q.id, 'boing'); this.float(q.x, q.y - 190, 'Voooa! 🚀', CHARS[q.slot].color); } });
+    this.items.forEach((it) => { if (it.rest && it.mover === other) { it.rest = false; it.mover = -1; it.vy = -1500; it.vx = (Math.random() - 0.5) * 300; } });
+    this.sfx(flew ? 'boing' : 'stomp');
+  }
+
+  /** Nuvens que somem e tábuas que quebram depois de pisar (voltam sozinhas). */
+  private stepFragile(dt: number) {
+    if (this.level !== 2) return;
+    this.lv.plats.forEach((pp, i) => {
+      if (pp.kind !== 'cloud' && pp.kind !== 'board') return;
+      const f = (this.frag[i] ??= { t: 0, gone: 0 });
+      if (f.gone > 0) { f.gone -= dt; if (f.gone <= 0) { f.gone = 0; f.t = 0; } return; }
+      let on = false;
+      this.players.forEach((p) => { if (p.onGround && p.plat === i) on = true; });
+      if (!on) { f.t = Math.max(0, f.t - dt * 0.6); return; }
+      f.t += dt;
+      if (f.t < this.fragLim(pp)) return;
+      f.gone = pp.kind === 'cloud' ? 3 : 4; f.t = 0;
+      this.sfx(pp.kind === 'cloud' ? 'fog' : 'crack');
+      this.burst(pp.x + pp.w / 2, pp.y + 10, pp.kind === 'cloud' ? '#ffffff' : '#a87443', 14);
+      this.items.forEach((it) => { if (it.rest && it.mover < 0 && Math.abs(it.y - pp.y) < 4 && it.x > pp.x - 14 && it.x < pp.x + pp.w + 14) it.rest = false; });
+    });
+  }
+  private fragLim(pp: Plat) { return pp.kind === 'cloud' ? 1.3 : 0.9; }
+
   private checkPhase() {
     while (this.phase < PHASES.length && PHASES[this.phase].types.every((k) => this.have[k] >= this.need[k])) {
       this.phase++;
-      this.burst(960, ROCK.top - 300, C.amber, 40); this.screen('#ffffff', 0.4, 0.35);
+      this.burst(this.lv.site.cx, this.lv.site.top - 300, C.amber, 40); this.screen('#ffffff', 0.4, 0.35);
       const next = PHASES[this.phase];
       // material que sobrou da fase anterior vira o da próxima
       if (next) {
@@ -979,7 +1150,7 @@ export class Game {
         p.mine++;
         if (p.mine >= QUOTA) { p.helping = true; p.pts += 5; p.happy = 1.2; this.float(p.x, p.y - 200, 'Parte pronta! +5', CHARS[p.slot].color); this.onBuzz(p.id, 'part'); this.sfx('part'); }
       }
-      if (f.have === f.need) { const T = TASK[p.task]; this.flash(`${T.emoji} ${T.done}`, T.color); this.burst(960, ROCK.top - 260, T.color, 30); this.sfx('task'); }
+      if (f.have === f.need) { const T = TASK[p.task]; this.flash(`${T.emoji} ${T.done}`, T.color); this.burst(this.lv.site.cx, this.lv.site.top - 260, T.color, 30); this.sfx('task'); }
     }
     p.work = 1;
     const T = TASK[p.task ?? 'paint'];
@@ -1001,10 +1172,10 @@ export class Game {
     const i = Math.max(0, crew.indexOf(p));
     const pick = (s: [number, number][]) => s[i % s.length];
     switch (p.task) {
-      case 'paint': return pick([[846, ROCK.top], [1078, ROCK.top], [884, ROCK.top], [1040, ROCK.top], [810, ROCK.top], [1112, ROCK.top]]);
+      case 'paint': return pick(this.lv.paint.map((x) => [x, this.lv.site.top] as [number, number]));
       case 'light': return pick(this.lv.lightSpots);
-      case 'garden': return pick([[520, GROUND], [1430, GROUND], [380, GROUND], [1570, GROUND], [260, GROUND], [1690, GROUND]]);
-      default: return pick([[672, GROUND], [1252, GROUND], [600, GROUND], [1320, GROUND], [560, GROUND], [1380, GROUND]]);
+      case 'garden': return pick(this.lv.garden);
+      default: return pick(this.lv.decor);
     }
   }
   private stepStation(p: Player, dt: number) {
@@ -1013,7 +1184,7 @@ export class Game {
     p.x += dx * k; p.y += dy * k; p.vx = 0; p.vy = 0; p.mover = -1; p.carry = null;
     p.onGround = Math.abs(dy) < 8;
     p.walk = Math.abs(dx) > 8 ? p.walk + dt * 14 : 0;
-    p.face = Math.abs(dx) > 8 ? (Math.sign(dx) as 1 | -1) : p.x < 960 ? 1 : -1;
+    p.face = Math.abs(dx) > 8 ? (Math.sign(dx) as 1 | -1) : p.x < this.lv.site.cx ? 1 : -1;
     p.happy = Math.max(0, p.happy - dt); p.dizzy = 0;
   }
 
@@ -1045,12 +1216,12 @@ export class Game {
       if (k < d.delay) { if (Math.random() < dt * 2) d.rot = (Math.random() - 0.5) * 0.06; continue; }
       if (d.hits === 0 && d.vy === 0 && d.vx === 0) {
         // solta: espalha para os lados e gira
-        d.vx = (d.x - 960) * 1.1 + (Math.random() - 0.5) * 260; d.vy = -60 - Math.random() * 260; d.vr = (Math.random() - 0.5) * 9;
+        d.vx = (d.x - this.lv.site.cx) * 1.1 + (Math.random() - 0.5) * 260; d.vy = -60 - Math.random() * 260; d.vr = (Math.random() - 0.5) * 9;
         if (Math.random() < 0.15) this.sfx('crash');
       }
       if (d.hits >= 3) continue;
       d.vy += GRAV * 0.75 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.rot += d.vr * dt;
-      const floor = (rockSurface(d.x) ?? GROUND) - Math.min(d.w, d.h) / 2;
+      const floor = Math.min(this.surf(d.x) ?? Infinity, this.floorAt(d.x)) - Math.min(d.w, d.h) / 2;
       if (d.y >= floor) {
         d.y = floor; d.hits++;
         if (d.hits === 1) { for (let i = 0; i < 3; i++) this.sparks.push({ x: d.x, y: d.y, vx: (Math.random() - 0.5) * 260, vy: -80 - Math.random() * 160, t: 0.2, c: '#b9a690' }); this.shake = Math.max(this.shake, 0.15); }
@@ -1088,10 +1259,11 @@ export class Game {
         if (it.x < m.x - 6 || it.x > m.x + m.w + 6) { it.rest = false; it.mover = -1; }
         continue;
       }
-      const wy = this.waterY();
-      if (it.y > wy - 4 && wy < H) { // boia no dilúvio e vai com a correnteza
+      const wy = this.waterAt(it.x);
+      if (it.y > wy - 4 && wy < H) { // boia (dilúvio ou rio) e vai com a correnteza
         it.rest = false; it.mover = -1; it.vy = 0; it.y = wy + Math.sin(this.t * 3 + it.id) * 4; it.x += Math.sin(this.t * 0.7 + it.id) * 40 * dt;
-        const rs0 = rockSurface(it.x); if (rs0 != null && it.y > rs0) it.x = it.x < 965 ? ROCK.x0 - 10 : ROCK.x1 + 10;
+        if (this.waterY() >= H) it.x = clamp(it.x, RIVER.x0 + 20, RIVER.x1 - 20);
+        const rs0 = this.surf(it.x); if (rs0 != null && it.y > rs0) it.x = this.pushOut(it.x);
         continue;
       }
       if (wind && it.rest) { it.vx += (wind.dir ?? 1) * 260 * dt; it.rest = Math.abs(it.vx) < 5; }
@@ -1103,8 +1275,8 @@ export class Game {
         const land = this.land(it.x, prevY, it.y, it.vy);
         if (land && land.tramp >= 0) { it.y = land.y - 1; it.vy = -1100; this.tramp[land.tramp] = 0.7; }
         else if (land) { it.y = land.y; it.vy = 0; it.vx *= 0.5; it.mover = land.m; if (Math.abs(it.vx) < 20) { it.vx = 0; it.rest = true; } it.onGroundFloor = land.y === GROUND; }
-        const rs = rockSurface(it.x);
-        if (rs != null && it.y > rs + 2) { it.x = it.x < 965 ? ROCK.x0 - 10 : ROCK.x1 + 10; it.vx = -it.vx * 0.4; }
+        const rs = this.surf(it.x);
+        if (rs != null && it.y > rs + 2) { it.x = this.pushOut(it.x); it.vx = -it.vx * 0.4; }
       }
     }
     // material esquecido some depois de um tempo
@@ -1114,6 +1286,7 @@ export class Game {
   private stepAnts(dt: number) {
     for (const a of this.ants) {
       a.x += a.dir * (a.flee ? 260 : 120) * dt;
+      if (this.level === 2 && a.dir > 0 && a.x > RIVER.x0 - 30) a.dir = -1;
       if (!a.carry && !a.flee) {
         const it = this.items.find((i) => !i.power && i.rest && i.onGroundFloor && Math.abs(i.x - a.x) < 22);
         if (it) { this.items = this.items.filter((i) => i !== it); a.carry = it; }
@@ -1134,7 +1307,7 @@ export class Game {
     }
     this.ants = this.ants.filter((a) => a.x > -80 && a.x < W + 80);
     const ev = this.active('ants');
-    if (ev && this.ants.length < 3 && Math.random() < dt * 0.6) this.ants.push(Math.random() < 0.5 ? { x: -40, dir: 1, carry: null, flee: false } : { x: W + 40, dir: -1, carry: null, flee: false });
+    if (ev && this.ants.length < 3 && Math.random() < dt * 0.6) this.ants.push(Math.random() < 0.5 || this.level === 2 ? { x: -40, dir: 1, carry: null, flee: false } : { x: W + 40, dir: -1, carry: null, flee: false });
   }
 
   private botThink(p: Player) {
@@ -1145,7 +1318,7 @@ export class Game {
     }
     if (p.power && Math.random() < 0.006) this.usePower(p.id);
     let tx: number, ty: number;
-    if (p.carry) { tx = 960; ty = ROCK.top; }
+    if (p.carry) { tx = this.lv.site.cx; ty = this.lv.site.top; }
     else {
       let best: Item | null = null, bd = 1e9;
       const pool = this.balloon?.item ? [...this.items, this.balloon.item] : this.items;
@@ -1180,28 +1353,31 @@ export class Game {
       ctx.translate((Math.random() - 0.5) * a, (Math.random() - 0.5) * a * 0.75);
     }
     if (finale && fk > 1 && fk < 4.5) ctx.translate((Math.random() - 0.5) * 8, 0);
-    scenery(ctx, this.t, dark, this.lv.dusk);
-    finishBack(ctx, fin, this.t);
+    const L2 = this.level === 2;
+    if (L2) { scenery2(ctx, this.t, dark); finishBack2(ctx, fin, this.t); windColumn(ctx, this.t); }
+    else { scenery(ctx, this.t, dark, this.lv.dusk); finishBack(ctx, fin, this.t); }
     const quake = !!this.active('quake');
-    this.lv.plats.forEach((pl, i) => platform(ctx, pl, quake ? Math.sin(this.t * 40 + i) * 4 : 0));
+    this.lv.plats.forEach((pl, i) => platform(ctx, pl, quake ? Math.sin(this.t * 40 + i) * 4 : 0, false, (this.frag[i]?.t ?? 0) / this.fragLim(pl), this.gone(i), this.t));
     // plataformas que se movem (trilho e cabos)
     for (const m of this.movers) {
+      if (m.kind) continue;
       if (m.vertical) { ctx.strokeStyle = 'rgba(43,33,24,0.45)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(m.x + 12, 0); ctx.lineTo(m.x + 12, m.y); ctx.moveTo(m.x + m.w - 12, 0); ctx.lineTo(m.x + m.w - 12, m.y); ctx.stroke(); }
       else if (m.rail) { ctx.save(); ctx.setLineDash([10, 10]); ctx.strokeStyle = 'rgba(43,33,24,0.25)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(m.rail[0], m.y + 13); ctx.lineTo(m.rail[1], m.y + 13); ctx.stroke(); ctx.restore(); }
     }
-    this.movers.forEach((m) => platform(ctx, m, 0, true));
+    this.movers.forEach((m) => { if (m.kind !== 'see') platform(ctx, m, 0, true, 0, false, this.t); });
+    if (L2) seesaw(ctx, this.movers[this.movers.length - 2], this.movers[this.movers.length - 1]);
     this.lv.tramps.forEach((t, i) => trampoline(ctx, t.x, t.w, this.tramp[i] ?? 0));
     // a casa
     const prog = this.progress();
     if (this.debris.length) {
       // desmoronando: só o contorno do que era e os pedaços caindo
-      house(ctx, { stone: 0, brick: 0, tile: 0, wood: 0, glass: 0 }, this.t, { fin, stories: this.lv.stories, theme: this.lv.theme });
+      house(ctx, { stone: 0, brick: 0, tile: 0, wood: 0, glass: 0 }, this.t, { fin, stories: this.lv.stories, theme: this.lv.theme, dx: this.lv.site.dx, dy: this.lv.site.dy });
       this.debris.forEach((d) => drawDebris(ctx, d));
     } else {
       const shaking = finale && fk > 1 ? (this.complete ? 0.5 : 1 + Math.min(2.5, (fk - 1) * 0.9)) : quake ? 1 : 0;
-      house(ctx, prog, this.t, { wobble: shaking, fin, stories: this.lv.stories, theme: this.lv.theme });
+      house(ctx, prog, this.t, { wobble: shaking, fin, stories: this.lv.stories, theme: this.lv.theme, dx: this.lv.site.dx, dy: this.lv.site.dy });
     }
-    if (fin.decor < 1) scaffold(ctx);
+    if (fin.decor < 1 && !L2) scaffold(ctx);
     if (this.mode === 'lobby') this.lobbyOverlay(ctx); // por cima da casa e das plataformas, atrás dos bonequinhos
     // avisos de raio (no chão, atrás de todo mundo)
     this.bolts.forEach((b) => { if (b.t < 1.1) bolt(ctx, b.x, b.y, b.t / 1.1, this.t); });
@@ -1219,12 +1395,13 @@ export class Game {
       if (b.item) { glow(ctx, b.item.x, b.item.y - 18, 58, 1, QTY_STYLE[10].glow); item(ctx, b.item.type, b.item.x, b.item.y - 18, 10); }
     }
     this.ants.forEach((a) => ant(ctx, a.x, GROUND + 4, a.dir, this.t, a.carry?.type));
-    this.bears.forEach((b) => bear(ctx, b.x, GROUND + 2, b.dir, this.t, b.scared));
+    this.bears.forEach((b) => bear(ctx, b.x, b.y + 2, b.dir, this.t, b.scared));
     this.boulders.forEach((b) => boulder(ctx, b.x, GROUND - 34, 34, b.rot));
     // jogadores (de trás para frente)
     const finishing = this.phase >= PHASES.length && this.mode === 'play';
     const arr = Array.from(this.players.values()).sort((a, b) => a.y - b.y);
     for (const p of arr) {
+      if (p.eaten > 0) continue;
       const working = finishing && p.task;
       const f = p.fx, s = p.size;
       if (f.burn > 0) glow(ctx, p.x, p.y - 60 * s, 90 * s, 0.55 + 0.2 * Math.sin(this.t * 20), '255,140,50');
@@ -1270,6 +1447,13 @@ export class Game {
       if (finale) this.rain.forEach((d) => { d.y += 1500 / 60; d.x -= 5; });
       this.rain = this.rain.filter((d) => d.y < H);
     }
+    if (L2) {
+      const w = this.whale;
+      if (w?.ph === 'warn') { ctx.fillStyle = 'rgba(20,40,70,0.35)'; ctx.beginPath(); ctx.ellipse(w.x, RIVER.top + 30, 120 * Math.min(1, w.t), 26, 0, 0, TAU); ctx.fill(); }
+      if (w?.ph === 'jump') whale(ctx, w.x, w.y, w.dir, Math.atan2(w.vy, Math.abs(w.vx) + 400) * w.dir, !w.caught, this.t);
+      this.spits.forEach((sp) => whale(ctx, sp.x, RIVER.top + 70 - Math.sin(Math.PI * sp.t / 1.6) * 110, sp.dir, -0.5 * sp.dir, sp.t < 0.9, this.t));
+      riverWater(ctx, this.t);
+    }
     water(ctx, this.waterY(), this.t);
     if (this.active('fog')) this.drawFog(ctx);
     if (finale && fk > 1.4 && fk < (this.complete ? 4.2 : 7) && Math.floor(fk * 7) % 9 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(0, 0, W, H); }
@@ -1280,7 +1464,7 @@ export class Game {
     ctx.restore();
 
     // o QR do saguão fica sempre por cima, para ninguém tampar na hora de escanear
-    if (this.mode === 'lobby' && this.gameQR) { const x = W / 2 - 450; ctx.fillStyle = '#fff'; rr(ctx, x + 26, 116, 248, 248, 18); ctx.fill(); ctx.drawImage(this.gameQR, x + 36, 126, 228, 228); }
+    if (this.mode === 'lobby' && this.gameQR) { const q = LOBBY_QR; ctx.fillStyle = '#fff'; rr(ctx, q.x - 8, q.y - 8, q.s + 16, q.s + 16, 14); ctx.fill(); ctx.drawImage(this.gameQR, q.x, q.y, q.s, q.s); }
     if (this.mode === 'play') this.hud(ctx);
     if (this.banner && this.mode === 'play') this.bannerFlash(ctx);
     if (finale) this.finaleOverlay(ctx, fk);
@@ -1401,6 +1585,8 @@ export class Game {
 
   private qrPanel(ctx: Ctx) {
     const M = 64;
+    // na tela 2 a casa fica no alto à direita: o quadro do QR desce para a frente do penhasco
+    ctx.save(); if (this.level === 2) ctx.translate(0, 836);
     panel(ctx, W - M - 430, 44, 430, 156);
     if (this.gameQR) ctx.drawImage(this.gameQR, W - M - 414, 60, 124, 124);
     ctx.textAlign = 'left'; ctx.fillStyle = C.ink; fitText(ctx, 'Escaneie e entre já!', W - M - 272, 92, 236, 900, 25);
@@ -1408,6 +1594,7 @@ export class Game {
     ctx.fillStyle = C.cream; rr(ctx, W - M - 272, 136, 236, 46, 23); ctx.fill();
     ctx.fillStyle = C.muted; ctx.font = `800 17px ${FONT}`; ctx.fillText('EQUIPE', W - M - 254, 165);
     ctx.fillStyle = C.terra; ctx.font = `900 26px ${FONT}`; ctx.textAlign = 'right'; ctx.fillText(`${this.team} pts`, W - M - 52, 168);
+    ctx.restore();
   }
 
   private scoreStrip(ctx: Ctx, compact = false) {
@@ -1418,8 +1605,9 @@ export class Game {
     const gap = 10;
     // se não couber numa linha, encolhe
     const total = chips.reduce((a, c) => a + c.w, 0) + gap * (chips.length - 1) + 40;
-    const sc = Math.min(1, (W - 120) / total);
-    ctx.save(); ctx.translate(W / 2, 978); ctx.scale(sc, sc);
+    const side = this.level === 2 && this.mode === 'play' ? 470 : 0; // não cobre o QR que fica embaixo na tela 2
+    const sc = Math.min(1, (W - 120 - side) / total);
+    ctx.save(); ctx.translate((W - side) / 2, 978); ctx.scale(sc, sc);
     const sx = -total / 2, sy = 0;
     panel(ctx, sx, sy, total, 66, 33);
     let cx = sx + 20;
@@ -1436,23 +1624,31 @@ export class Game {
   }
 
   private lobbyOverlay(ctx: Ctx) {
-    const cw = 900, ch = 300, x = W / 2 - cw / 2, y = 90;
-    panel(ctx, x, y, cw, ch, 40);
-    if (this.gameQR) ctx.drawImage(this.gameQR, x + 36, y + 36, 228, 228);
-    ctx.textAlign = 'left'; ctx.fillStyle = C.terra; ctx.font = `900 22px ${FONT}`; ls(ctx, 5); ctx.fillText(`TELA ${this.level} · ${this.lv.name.toUpperCase()}${this.level === 2 ? ' · DIFÍCIL' : ''}`, x + 300, y + 80); ls(ctx, 0);
-    ctx.fillStyle = C.ink; ctx.font = `900 54px ${FONT}`; ctx.fillText('Escaneie e entre!', x + 300, y + 140);
-    ctx.fillStyle = C.brown; fitText(ctx, `${this.players.size} de ${MAX_PLAYERS} jogadores · sala ${this.room}`, x + 300, y + 184, cw - 340, 800, 26);
+    const { x0: x, y, w: cw, h: ch } = LOBBY;
+    panel(ctx, x, y, cw, ch, 36);
+    if (this.gameQR) ctx.drawImage(this.gameQR, LOBBY_QR.x, LOBBY_QR.y, LOBBY_QR.s, LOBBY_QR.s);
+    const tx = x + 224;
+    ctx.textAlign = 'left'; ctx.fillStyle = C.terra; ctx.font = `900 18px ${FONT}`; ls(ctx, 4); fitText(ctx, `SALA ${this.room}`, tx, y + 56, 260, 900, 18); ls(ctx, 0);
+    ctx.fillStyle = C.ink; fitText(ctx, 'Escaneie e entre!', tx, y + 104, 290, 900, 42);
+    ctx.fillStyle = C.brown; fitText(ctx, `${this.players.size} de ${MAX_PLAYERS} jogadores`, tx, y + 142, 290, 800, 24);
     const cd = Math.max(0, Math.ceil(this.countdown));
-    ctx.fillStyle = C.ink; rr(ctx, x + 300, y + 210, 300, 60, 30); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = `900 30px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(`Começa em ${cd}s`, x + 450, y + 251);
-    // escolha da tela (no celular ou teclas 1/2 da TV), dentro do quadro
-    let ox = x + 620;
-    for (const n of [1, 2] as const) {
-      const on = this.level === n, wv = n === 1 ? 108 : 132;
-      ctx.fillStyle = on ? C.terra : '#efe4d2'; rr(ctx, ox, y + 214, wv, 52, 26); ctx.fill();
-      ctx.fillStyle = on ? '#fff' : C.brown; ctx.textAlign = 'center'; fitText(ctx, `${on ? '✓ ' : ''}Tela ${n}`, ox + wv / 2, y + 249, wv - 20, 900, 22);
-      ox += wv + 12;
-    }
+    ctx.fillStyle = C.ink; rr(ctx, tx, y + 166, 250, 54, 27); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = `900 26px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(`Começa em ${cd}s`, tx + 125, y + 202);
+    // escolha da tela: miniaturas (no celular ou teclas 1 e 2 da TV)
+    const tw = 230, th = 130;
+    ([1, 2] as const).forEach((n, i) => {
+      const bx = x + 540 + i * (tw + 22), by = y + 34, on = this.level === n;
+      ctx.fillStyle = on ? C.terra : '#e4d8c4'; rr(ctx, bx - 6, by - 6, tw + 12, th + 12, 16); ctx.fill();
+      const img = stageThumb(n, tw, th);
+      ctx.save(); rr(ctx, bx, by, tw, th, 11); ctx.clip();
+      if (img) ctx.drawImage(img, bx, by, tw, th);
+      if (!on) { ctx.fillStyle = 'rgba(247,240,228,0.45)'; ctx.fillRect(bx, by, tw, th); }
+      ctx.restore();
+      if (on) { ctx.fillStyle = C.terra; ctx.beginPath(); ctx.arc(bx + tw - 6, by + 6, 20, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = `900 22px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('✓', bx + tw - 6, by + 14); }
+      ctx.textAlign = 'center'; ctx.fillStyle = on ? C.terra : C.brown;
+      fitText(ctx, `Tela ${n} · ${LEVELS[n].name}${n === 2 ? ' · difícil' : ''}`, bx + tw / 2, by + th + 36, tw + 10, 900, 21);
+    });
+    ctx.fillStyle = C.muted; ctx.textAlign = 'center'; fitText(ctx, 'Escolha a tela no celular ou com as teclas 1 e 2', x + 540 + tw + 11, y + ch - 22, 2 * tw + 22, 800, 17);
   }
 
   private finaleOverlay(ctx: Ctx, fk: number) {

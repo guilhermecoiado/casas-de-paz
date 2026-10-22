@@ -199,6 +199,8 @@ export class GameAudio {
       case 'crack': this.hiss(t, 0.25, 0.4, o, { type: 'highpass', f: 3000 }); seq([96, 91, 88], 0.04, 'triangle', 0.14, 0.2); break;
       case 'ouch': this.tone(520, t, 0.18, 'square', 0.1, o, { to: 260 }); break;
       case 'fog': this.tone(196, t, 2, 'sine', 0.1, o, { attack: 0.6 }); this.tone(233, t + 0.3, 1.8, 'sine', 0.08, o, { attack: 0.6 }); break;
+      case 'splash': this.hiss(t, 0.9, 0.5, o, { type: 'lowpass', f: 1400, to: 200 }, 0.02); this.tone(140, t, 0.4, 'sine', 0.3, o, { to: 60 }); break;
+      case 'gulp': this.tone(300, t, 0.25, 'sine', 0.35, o, { to: 90 }); this.tone(200, t + 0.25, 0.3, 'sine', 0.3, o, { to: 70 }); break;
       case 'drizzle': this.hiss(t, 4, 0.06, o, { type: 'highpass', f: 4000 }, 1); break;
     }
   }

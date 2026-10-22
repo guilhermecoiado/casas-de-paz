@@ -224,7 +224,7 @@ function Pad() {
       <p className={`shrink-0 truncate px-6 pt-2 text-center text-[14px] font-extrabold ${lost || st?.fx ? 'text-terra' : 'text-[#6b5643]'}`}>{lost ? 'Reconectando…' : st?.fx ?? status}</p>
       {st?.mode === 'lobby' && (
         <div className="flex shrink-0 justify-center gap-2 px-6 pt-2">
-          {([[1, 'Tela 1 · Casa na Rocha'], [2, 'Tela 2 · Casa Grande']] as const).map(([n, label]) => (
+          {([[1, 'Tela 1 · Casa na Rocha'], [2, 'Tela 2 · Vale do Rio']] as const).map(([n, label]) => (
             <button
               key={n}
               type="button"
