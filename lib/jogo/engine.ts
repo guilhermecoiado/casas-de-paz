@@ -233,9 +233,9 @@ export class Game {
   /** Gangorra (-1..1) e plataformas que somem/quebram (tela 2). */
   see = 0; seeTo = 0;
   frag: { t: number; gone: number }[] = [];
-  whale: { x: number; y: number; vx: number; vy: number; t: number; ph: 'warn' | 'jump'; dir: 1 | -1; tx: number; caught: string | null } | null = null;
+  whale: { x: number; y: number; vx: number; vy: number; t: number; ph: 'warn' | 'jump'; dir: 1 | -1; tx: number; caught: string | null; catchT: number } | null = null;
   whaleN = 0; whaleT = 0;
-  spits: { x: number; t: number; dir: 1 | -1 }[] = [];
+  spits: { x: number; t: number; dir: 1 | -1; id: string }[] = [];
   bears: { x: number; y: number; dir: 1 | -1; scared: boolean }[] = [];
   get lv() { return LEVELS[this.level]; }
   private solid() { return this.level === 1 ? [...this.lv.plats, ...STEPS] : this.lv.plats; }
@@ -640,7 +640,9 @@ export class Game {
         if (p.fx.burn > 0 && Math.random() < dt * 14) this.sparks.push({ x: p.x + (Math.random() - 0.5) * 40 * p.size, y: p.y - 120 * p.size, vx: (Math.random() - 0.5) * 60, vy: -260, t: 0.2, c: Math.random() < 0.5 ? '#F26B1D' : '#F2C230' });
         if (p.eaten > 0) {
           p.eaten -= dt; p.vx = 0; p.vy = 0; p.carry = null;
-          if (this.whale?.caught === p.id) { p.x = this.whale.x; p.y = this.whale.y; } else { p.x = clamp(p.x, RIVER.x0 + 60, RIVER.x1 - 60); p.y = RIVER.bed + 200; }
+          if (this.whale?.caught === p.id) { const [hx, hy] = this.whaleHead(this.whale); p.x = hx; p.y = hy; } else { p.x = clamp(p.x, RIVER.x0 + 120, RIVER.x1 - 120); p.y = RIVER.bed + 200; }
+          // a cabeça da baleia aparece um pouco antes, abre a boca e cospe
+          if (p.eaten <= 0.75 && !this.spits.some((sp) => sp.id === p.id)) this.spits.push({ x: p.x, t: 0, dir: (p.x < (RIVER.x0 + RIVER.x1) / 2 ? -1 : 1) as 1 | -1, id: p.id });
           if (p.eaten <= 0) this.spit(p);
           return;
         }
@@ -828,8 +830,8 @@ export class Game {
         let tg: Player | null = null, bd = Infinity;
         for (const p of live) { const d = Math.max(0, RIVER.x0 - p.x, p.x - RIVER.x1) + Math.abs(p.y - 820) * 0.4; if (d < bd) { bd = d; tg = p; } }
         const tx = tg && bd < 420 ? tg.x : RIVER.x0 + 100 + Math.random() * (RIVER.x1 - RIVER.x0 - 200);
-        const x = clamp(tx + (Math.random() < 0.5 ? -1 : 1) * 160, RIVER.x0 + 90, RIVER.x1 - 90);
-        this.whale = { x, y: RIVER.top + 70, vx: 0, vy: 0, t: 0, ph: 'warn', dir: tx < x ? -1 : 1, tx, caught: null };
+        const x = clamp(tx + (Math.random() < 0.5 ? -1 : 1) * 110, RIVER.x0 + 90, RIVER.x1 - 90);
+        this.whale = { x, y: RIVER.top + 150, vx: 0, vy: 0, t: 0, ph: 'warn', dir: tx < x ? -1 : 1, tx, caught: null, catchT: 0 };
         this.sfx('alert');
       }
     }
@@ -838,31 +840,35 @@ export class Game {
     w.t += dt;
     if (w.ph === 'warn') {
       if (Math.random() < dt * 30) this.sparks.push({ x: w.x + (Math.random() - 0.5) * 140, y: RIVER.top, vx: 0, vy: -200 - Math.random() * 200, t: 0.4, c: 'rgba(255,255,255,0.9)' });
-      if (w.t >= 1.2) { w.ph = 'jump'; w.vy = -1260; w.vx = clamp((w.tx - w.x) / 0.85, -520, 520); this.sfx('splash'); this.burst(w.x, RIVER.top, '#9fd0f0', 26); }
+      if (w.t >= 1.2) { w.ph = 'jump'; w.vy = -1380; w.vx = clamp((w.tx - w.x) / 0.9, -300, 300); this.sfx('splash'); this.burst(w.x, RIVER.top, '#9fd0f0', 26); }
     } else {
       w.x += w.vx * dt; w.y += w.vy * dt; w.vy += 1500 * dt;
       if (!w.caught && w.vy < 300) {
-        const mx = w.x + w.dir * 70, my = w.y - 50;
+        const [mx, my] = this.whaleHead(w);
         for (const p of live) {
           if (p.fx.shield > 0 || Math.hypot(p.x - mx, p.y - 70 * p.size - my) > 95) continue;
-          w.caught = p.id; p.eaten = 20; p.carry = null; p.power = null; p.fx = NO_FX(); p.dizzy = 0;
+          w.caught = p.id; w.catchT = w.t; p.eaten = 20; p.carry = null; p.power = null; p.fx = NO_FX(); p.dizzy = 0;
           this.float(p.x, p.y - 200, `${p.name} foi engolido! 🐳`, C.terra);
           this.onBuzz(p.id, 'rock'); this.sfx('gulp'); this.screen('#2F5F95', 0.6, 0.35, true); this.shake = 0.3;
           break;
         }
       }
-      if (w.vy > 0 && w.y > RIVER.top + 120) { this.burst(w.x, RIVER.top, '#9fd0f0', 30); this.sfx('splash'); this.shake = 0.25; this.whale = null; }
+      if (w.vy > 0 && w.y > RIVER.top + 260) { this.burst(w.x, RIVER.top, '#9fd0f0', 30); this.sfx('splash'); this.shake = 0.25; this.whale = null; }
     }
     this.spits.forEach((s) => (s.t += dt)); this.spits = this.spits.filter((s) => s.t < 1.6);
   }
-  /** A baleia volta e cospe o jogador com 10% a menos de pontos. */
+  /** Ponta da cabeça (boca) da baleia, seguindo a direção do salto. */
+  whaleHead(w: { x: number; y: number; vx: number; vy: number }): [number, number] {
+    const a = Math.atan2(w.vy, w.vx);
+    return [w.x + Math.cos(a) * 125, w.y + Math.sin(a) * 125];
+  }
+  /** A baleia (só a cabeça para fora d'água) cospe o jogador com 10% a menos de pontos. */
   private spit(p: Player) {
-    const x = clamp(p.x, RIVER.x0 + 120, RIVER.x1 - 120), dir = (x < (RIVER.x0 + RIVER.x1) / 2 ? -1 : 1) as 1 | -1;
-    this.spits.push({ x, t: 0, dir });
+    const sp = this.spits.find((s) => s.id === p.id), x = sp?.x ?? p.x, dir = sp?.dir ?? 1;
     const lose = Math.ceil(p.pts * 0.1);
-    p.pts -= lose; p.eaten = 0; p.x = x + dir * 60; p.y = RIVER.top - 40; p.vy = -1500; p.vx = dir * 420; p.onGround = false; p.mover = -1; p.boost = true; p.jumps = 1; p.dizzy = 1;
+    p.pts -= lose; p.eaten = 0; p.x = x; p.y = RIVER.top - 90; p.vy = -1400; p.vx = dir * 380; p.onGround = false; p.mover = -1; p.boost = true; p.jumps = 1; p.dizzy = 1;
     this.float(p.x, p.y - 220, `Cuspido! -${lose} 🐳`, C.terra);
-    this.onBuzz(p.id, 'boing'); this.sfx('splash'); this.burst(x, RIVER.top, '#9fd0f0', 24);
+    this.onBuzz(p.id, 'boing'); this.sfx('splash'); this.burst(x, RIVER.top - 120, '#9fd0f0', 24);
   }
 
   /** Desafios de toque: todo mundo toca rápido no celular para salvar a obra. */
@@ -1450,8 +1456,12 @@ export class Game {
     if (L2) {
       const w = this.whale;
       if (w?.ph === 'warn') { ctx.fillStyle = 'rgba(20,40,70,0.35)'; ctx.beginPath(); ctx.ellipse(w.x, RIVER.top + 30, 120 * Math.min(1, w.t), 26, 0, 0, TAU); ctx.fill(); }
-      if (w?.ph === 'jump') whale(ctx, w.x, w.y, w.dir, Math.atan2(w.vy, Math.abs(w.vx) + 400) * w.dir, !w.caught, this.t);
-      this.spits.forEach((sp) => whale(ctx, sp.x, RIVER.top + 70 - Math.sin(Math.PI * sp.t / 1.6) * 110, sp.dir, -0.5 * sp.dir, sp.t < 0.9, this.t));
+      if (w?.ph === 'jump') whale(ctx, w.x, w.y, Math.atan2(w.vy, w.vx), w.caught ? Math.max(0, 1 - (w.t - w.catchT) * 7) : clamp(1 - (w.vy - 200) / 400), this.t);
+      this.spits.forEach((sp) => {
+        const t = sp.t, rise = t < 0.45 ? 1 - Math.pow(1 - t / 0.45, 2) : t < 1.1 ? 1 : Math.max(0, 1 - (t - 1.1) / 0.5);
+        const open = t < 0.45 ? 0 : t < 0.75 ? (t - 0.45) / 0.3 : t < 1.1 ? 1 : Math.max(0, 1 - (t - 1.1) / 0.25);
+        whale(ctx, sp.x, RIVER.top + 200 - rise * 190, -Math.PI / 2 + sp.dir * 0.12, open, this.t);
+      });
       riverWater(ctx, this.t);
     }
     water(ctx, this.waterY(), this.t);
@@ -1635,20 +1645,20 @@ export class Game {
     ctx.fillStyle = C.ink; rr(ctx, tx, y + 166, 250, 54, 27); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.font = `900 26px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(`Começa em ${cd}s`, tx + 125, y + 202);
     // escolha da tela: miniaturas (no celular ou teclas 1 e 2 da TV)
-    const tw = 230, th = 130;
+    const tw = 206, th = 116;
     ([1, 2] as const).forEach((n, i) => {
-      const bx = x + 540 + i * (tw + 22), by = y + 34, on = this.level === n;
+      const bx = x + 532 + i * (tw + 26), by = y + 40, on = this.level === n;
       ctx.fillStyle = on ? C.terra : '#e4d8c4'; rr(ctx, bx - 6, by - 6, tw + 12, th + 12, 16); ctx.fill();
       const img = stageThumb(n, tw, th);
       ctx.save(); rr(ctx, bx, by, tw, th, 11); ctx.clip();
       if (img) ctx.drawImage(img, bx, by, tw, th);
       if (!on) { ctx.fillStyle = 'rgba(247,240,228,0.45)'; ctx.fillRect(bx, by, tw, th); }
       ctx.restore();
-      if (on) { ctx.fillStyle = C.terra; ctx.beginPath(); ctx.arc(bx + tw - 6, by + 6, 20, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = `900 22px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('✓', bx + tw - 6, by + 14); }
+      if (on) { ctx.fillStyle = C.terra; ctx.beginPath(); ctx.arc(bx + tw - 16, by + 16, 17, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = `900 20px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('✓', bx + tw - 16, by + 23); }
       ctx.textAlign = 'center'; ctx.fillStyle = on ? C.terra : C.brown;
-      fitText(ctx, `Tela ${n} · ${LEVELS[n].name}${n === 2 ? ' · difícil' : ''}`, bx + tw / 2, by + th + 36, tw + 10, 900, 21);
+      fitText(ctx, `Tela ${n} · ${LEVELS[n].name}${n === 2 ? ' · difícil' : ''}`, bx + tw / 2, by + th + 38, tw, 900, 20);
     });
-    ctx.fillStyle = C.muted; ctx.textAlign = 'center'; fitText(ctx, 'Escolha a tela no celular ou com as teclas 1 e 2', x + 540 + tw + 11, y + ch - 22, 2 * tw + 22, 800, 17);
+    ctx.fillStyle = C.muted; ctx.textAlign = 'center'; fitText(ctx, 'Escolha a tela no celular ou com as teclas 1 e 2', x + 532 + tw + 13, y + ch - 26, 2 * tw + 26, 800, 17);
   }
 
   private finaleOverlay(ctx: Ctx, fk: number) {

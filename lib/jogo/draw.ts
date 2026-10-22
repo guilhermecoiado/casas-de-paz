@@ -448,20 +448,31 @@ export function scenery2(ctx: Ctx, t: number, dark = 0) {
   ctx.fillStyle = C.terra; rr(ctx, 48 + sw, 858, 94, 12, 4); ctx.fill();
 }
 
-/** Baleia saltando (rot = inclinação, open = boca aberta). */
-export function whale(ctx: Ctx, x: number, y: number, dir: number, rot: number, open: boolean, t: number) {
-  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(dir, 1);
-  ctx.fillStyle = '#3E6E9E'; ctx.beginPath(); ctx.moveTo(-150, 0); ctx.quadraticCurveTo(-200, -40 + Math.sin(t * 8) * 10, -230, -70); ctx.lineTo(-210, -10); ctx.lineTo(-240, 30); ctx.quadraticCurveTo(-190, 20, -150, 20); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(-20, 0, 150, 72, 0, 0, TAU); ctx.fill();
-  ctx.fillStyle = '#DCEAF3'; ctx.beginPath(); ctx.ellipse(10, 34, 120, 34, 0, 0, Math.PI); ctx.fill();
-  ctx.strokeStyle = 'rgba(62,110,158,0.6)'; ctx.lineWidth = 3; for (let i = -60; i <= 80; i += 22) { ctx.beginPath(); ctx.moveTo(i, 38); ctx.lineTo(i + 6, 64); ctx.stroke(); }
-  ctx.fillStyle = '#2F5F95'; ctx.beginPath(); ctx.moveTo(-40, -60); ctx.lineTo(-10, -100); ctx.lineTo(10, -62); ctx.fill();
-  if (open) {
-    ctx.fillStyle = '#7A1F2B'; ctx.beginPath(); ctx.moveTo(60, -6); ctx.lineTo(150, -70); ctx.lineTo(150, 50); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#E26D9A'; ctx.beginPath(); ctx.ellipse(100, 20, 34, 12, -0.3, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#fff'; for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(80 + i * 18, -20 - i * 12); ctx.lineTo(90 + i * 18, -8 - i * 12); ctx.lineTo(96 + i * 18, -26 - i * 12); ctx.fill(); }
-  } else { ctx.strokeStyle = '#1F4570'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(60, 10); ctx.quadraticCurveTo(100, 18, 130, 4); ctx.stroke(); }
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(50, -26, 13, 0, TAU); ctx.fill(); ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(54, -26, 7, 0, TAU); ctx.fill();
+/** Baleia: rot = direção da cabeça (segue o salto), open 0..1 = boca. Tudo fica dentro do contorno do corpo. */
+export function whale(ctx: Ctx, x: number, y: number, rot: number, open: number, t: number) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+  if (Math.cos(rot) < 0) ctx.scale(1, -1); // indo para a esquerda: barriga continua para baixo
+  const body = () => { ctx.beginPath(); ctx.ellipse(0, 0, 140, 66, 0, 0, TAU); };
+  // cauda (presa no fim do corpo)
+  const flap = Math.sin(t * 9) * 12;
+  ctx.fillStyle = '#3E6E9E'; ctx.beginPath(); ctx.moveTo(-110, -16); ctx.quadraticCurveTo(-160, -10, -200, -58 + flap); ctx.quadraticCurveTo(-185, 0, -200, 58 + flap); ctx.quadraticCurveTo(-160, 10, -110, 16); ctx.closePath(); ctx.fill();
+  // nadadeira de cima
+  ctx.beginPath(); ctx.moveTo(-40, -58); ctx.quadraticCurveTo(-24, -96, 0, -100); ctx.quadraticCurveTo(-6, -76, 14, -60); ctx.closePath(); ctx.fill();
+  body(); ctx.fill();
+  ctx.save(); body(); ctx.clip();
+  ctx.fillStyle = '#DCEAF3'; ctx.beginPath(); ctx.ellipse(10, 54, 150, 40, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(62,110,158,0.5)'; ctx.lineWidth = 3; for (let i = -70; i <= 70; i += 20) { ctx.beginPath(); ctx.moveTo(i, 28); ctx.lineTo(i + 8, 70); ctx.stroke(); }
+  // boca: abre por dentro do corpo (articulação perto do olho)
+  const hx = 34, hy = 12, top = -6 - 34 * open, bot = 18 + 46 * open;
+  if (open > 0.05) {
+    ctx.fillStyle = '#7A1F2B'; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(150, top); ctx.lineTo(150, bot); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#E26D9A'; ctx.beginPath(); ctx.ellipse(96, bot - 8 * open, 34, 10 * open, 0.15, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 4; i++) { const k = 0.35 + i * 0.17, px = hx + (150 - hx) * k, py = hy + (top - hy) * k; ctx.beginPath(); ctx.moveTo(px - 6, py); ctx.lineTo(px + 6, py); ctx.lineTo(px, py + 12 * open); ctx.closePath(); ctx.fill(); }
+  } else { ctx.strokeStyle = '#1F4570'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(hx, hy + 4); ctx.quadraticCurveTo(90, 22, 140, 6); ctx.stroke(); }
+  ctx.restore();
+  // olho e borrifo
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(40, -26, 12, 0, TAU); ctx.fill(); ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(44, -26, 6, 0, TAU); ctx.fill();
   ctx.restore();
 }
 
