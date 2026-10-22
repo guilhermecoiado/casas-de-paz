@@ -195,16 +195,16 @@ function Pad() {
             : 'Aguardando a próxima partida';
 
   return (
-    <main
-      className="fixed inset-0 flex select-none flex-col overflow-hidden bg-cream"
-      style={{
-        touchAction: 'none', WebkitUserSelect: 'none',
-        animation: pulse && SHAKE_KINDS.has(pulse.k) ? 'cdp-shake .12s linear infinite' : env.has('quake') || env.has('storm') ? 'cdp-shake .3s linear infinite'
-          : pulse && WOBBLE_KINDS.has(pulse.k) ? 'cdp-wobble .45s ease-in-out 2' : undefined,
-      }}
-      onContextMenu={(e) => e.preventDefault()}
-    >
+    <main className="fixed inset-0 select-none overflow-hidden bg-cream" style={{ touchAction: 'none', WebkitUserSelect: 'none' }} onContextMenu={(e) => e.preventDefault()}>
       <style>{FX_CSS}</style>
+      {/* tudo que treme fica aqui dentro (com um leve zoom, para as bordas nunca aparecerem) */}
+      <div
+        className="absolute inset-0 flex flex-col bg-cream"
+        style={{
+          animation: pulse && SHAKE_KINDS.has(pulse.k) ? 'cdp-shakeall .12s linear infinite' : env.has('quake') || env.has('storm') ? 'cdp-shakeall .3s linear infinite'
+            : pulse && WOBBLE_KINDS.has(pulse.k) ? 'cdp-wobbleall .45s ease-in-out 2' : undefined,
+        }}
+      >
       <header className="flex shrink-0 items-center gap-4 py-3 text-white" style={{ background: color, paddingTop: 'max(env(safe-area-inset-top), 12px)', paddingLeft: 'max(env(safe-area-inset-left), 28px)', paddingRight: 'max(env(safe-area-inset-right), 28px)' }}>
         <Avatar slot={slot} />
         <div className="min-w-0 flex-1">
@@ -261,8 +261,8 @@ function Pad() {
         ) : (
           <div className="flex min-w-0 flex-1 items-center justify-between gap-3 pt-1 transition-transform duration-300" style={{ transform: `scale(${padScale})`, filter: fxs.has('slow') ? 'saturate(.35)' : undefined }}>
             <div className="flex shrink-0 gap-3">
-              <PadButton label="◀" onChange={(v) => press('l', v)} className="bg-white text-ink" />
-              <PadButton label="▶" onChange={(v) => press('r', v)} className="bg-white text-ink" />
+              <PadButton label="◀" onChange={(v) => press('l', v)} className="text-white" style={{ background: color }} />
+              <PadButton label="▶" onChange={(v) => press('r', v)} className="text-white" style={{ background: color }} />
             </div>
             {st?.mode === 'play' && st.power ? (
               <button
@@ -284,14 +284,16 @@ function Pad() {
             </div>
           </div>
         )}
-        <FxLayer fxs={fxs} env={env} onBreak={() => tap(0)} />
-        {st?.eaten != null && <WhaleBelly left={st.eaten} />}
-        {flash && (
-          <div className="pointer-events-none absolute inset-x-0 top-1 z-50 text-center">
-            <span className="inline-block whitespace-nowrap rounded-full bg-ink px-5 py-1.5 text-xl font-black text-white">{flash}</span>
-          </div>
-        )}
       </div>
+      </div>
+      {/* efeitos e clima: tela inteira, por cima de tudo e sem tremer junto */}
+      <FxLayer fxs={fxs} env={env} onBreak={() => tap(0)} />
+      {st?.eaten != null && <WhaleBelly left={st.eaten} />}
+      {flash && (
+        <div className="pointer-events-none absolute inset-x-0 top-1 z-50 text-center">
+          <span className="inline-block whitespace-nowrap rounded-full bg-ink px-5 py-1.5 text-xl font-black text-white">{flash}</span>
+        </div>
+      )}
 
       {pulse?.k === 'strike' && <div key={pulse.n} className="pointer-events-none fixed inset-0 z-40 bg-white" style={{ animation: 'cdp-flash .45s ease-out forwards' }} />}
       {pulse?.k === 'bolt' && <div key={pulse.n} className="pointer-events-none fixed inset-0 z-40" style={{ boxShadow: 'inset 0 0 0 10px #E25B45, inset 0 0 120px rgba(226,91,69,.6)', animation: 'cdp-glow .2s linear infinite' }} />}
@@ -364,6 +366,10 @@ function Avatar({ slot }: { slot: number }) {
 
 const FX_CSS = `
 @keyframes cdp-shake{0%{transform:translate(0,0) rotate(0)}20%{transform:translate(-7px,4px) rotate(-1deg)}40%{transform:translate(7px,-4px) rotate(1deg)}60%{transform:translate(-5px,-5px) rotate(-.6deg)}80%{transform:translate(6px,4px) rotate(.7deg)}100%{transform:translate(0,0) rotate(0)}}
+@keyframes cdp-shakeall{0%{transform:translate(0,0) rotate(0) scale(1.05)}20%{transform:translate(-7px,4px) rotate(-.8deg) scale(1.05)}40%{transform:translate(7px,-4px) rotate(.8deg) scale(1.05)}60%{transform:translate(-5px,-5px) rotate(-.5deg) scale(1.05)}80%{transform:translate(6px,4px) rotate(.6deg) scale(1.05)}100%{transform:translate(0,0) rotate(0) scale(1.05)}}
+@keyframes cdp-wobbleall{0%,100%{transform:rotate(0) scale(1)}25%{transform:rotate(-1.4deg) scale(1.07)}75%{transform:rotate(1.4deg) scale(1.07)}}
+@keyframes cdp-drop{from{transform:translate(0,-12vh) rotate(12deg)}to{transform:translate(-22vh,112vh) rotate(12deg)}}
+@keyframes cdp-splash{0%,70%{transform:scale(.2);opacity:0}80%{opacity:.8}100%{transform:scale(1.3);opacity:0}}
 @keyframes cdp-wobble{0%,100%{transform:rotate(0)}25%{transform:rotate(-2.5deg) scale(.98)}75%{transform:rotate(2.5deg) scale(.98)}}
 @keyframes cdp-flame{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-14px) scale(1.18)}}
 @keyframes cdp-rain{from{background-position:0 0}to{background-position:-60px 240px}}
@@ -377,14 +383,12 @@ const FX_CSS = `
 /** Camada de efeitos por cima do controle: gelo, fogo, turbo, escudo… e o clima da TV (chuva, neblina, vento). */
 function FxLayer({ fxs, env, onBreak }: { fxs: Set<string>; env: Set<string>; onBreak: () => void }) {
   const badge = (emoji: string, color: string) => (
-    <div className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl shadow" style={{ border: `3px solid ${color}`, animation: 'cdp-glow 1s ease-in-out infinite' }}>{emoji}</div>
+    <div className="absolute right-3 top-[86px] flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl shadow" style={{ border: `3px solid ${color}`, animation: 'cdp-glow 1s ease-in-out infinite' }}>{emoji}</div>
   );
   return (
     <>
       {/* clima */}
-      {(env.has('rain') || env.has('drizzle') || env.has('storm')) && (
-        <div className="pointer-events-none absolute inset-0 z-10" style={{ backgroundImage: `repeating-linear-gradient(105deg, rgba(120,170,220,${env.has('drizzle') ? '.22' : '.4'}) 0 2px, transparent 2px ${env.has('drizzle') ? 34 : 18}px)`, animation: `cdp-rain ${env.has('drizzle') ? '.9s' : '.45s'} linear infinite` }} />
-      )}
+      {(env.has('rain') || env.has('storm')) ? <Rain light={false} /> : env.has('drizzle') ? <Rain light /> : null}
       {env.has('wind') && <Streaks color="rgba(255,255,255,.9)" n={7} speed={0.7} />}
       {env.has('fog') && <div className="pointer-events-none absolute inset-0 z-10" style={{ background: 'radial-gradient(ellipse at center, rgba(240,240,236,.15), rgba(240,240,236,.75))' }} />}
       {env.has('lightning') && <div className="pointer-events-none absolute inset-0 z-10" style={{ background: 'rgba(40,50,70,.14)' }} />}
@@ -421,6 +425,28 @@ function FxLayer({ fxs, env, onBreak }: { fxs: Set<string>; env: Set<string>; on
         </button>
       )}
     </>
+  );
+}
+
+/** Chuva de verdade: gotas caindo inclinadas em velocidades diferentes, respingos no chão e o céu mais escuro. Garoa = poucas gotas finas e lentas. */
+function Rain({ light }: { light: boolean }) {
+  const n = light ? 44 : 64;
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" style={{ background: light ? 'linear-gradient(rgba(150,170,190,.18), rgba(150,170,190,.08))' : 'linear-gradient(rgba(60,80,110,.32), rgba(60,80,110,.14))' }}>
+      {Array.from({ length: n }, (_, i) => {
+        const r = (i * 61) % 100, dur = light ? 1.4 + (i % 5) * 0.18 : 0.55 + (i % 5) * 0.08;
+        return (
+          <span key={i} className="absolute top-0 rounded-full" style={{
+            left: `${(i * 37) % 118}%`, width: light ? 2.5 : 3.5, height: light ? `${3 + (i % 3)}vh` : `${7 + (i % 4) * 2}vh`,
+            background: light ? 'linear-gradient(rgba(90,140,195,0), rgba(90,140,195,.75))' : 'linear-gradient(rgba(70,120,180,0), rgba(70,120,180,.9))',
+            animation: `cdp-drop ${dur}s linear infinite`, animationDelay: `${-(r / 100) * dur}s`,
+          }} />
+        );
+      })}
+      {Array.from({ length: light ? 6 : 14 }, (_, i) => (
+        <span key={`s${i}`} className="absolute rounded-[50%] border-2 border-[#5a8cc3]/70" style={{ left: `${(i * 53) % 96}%`, bottom: `${2 + ((i * 29) % 30)}%`, width: 26, height: 8, animation: `cdp-splash ${light ? 1.6 : 0.9}s ease-out infinite`, animationDelay: `${(i * 0.23) % 1}s` }} />
+      ))}
+    </div>
   );
 }
 

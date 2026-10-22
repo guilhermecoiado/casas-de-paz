@@ -5,7 +5,7 @@ export function WhaleBelly({ left }: { left: number }) {
   const end = left <= 3;
   return (
     <div className="fixed inset-0 z-[45] flex items-center justify-center overflow-hidden" style={{ background: 'radial-gradient(ellipse at 50% 55%, #C2416A 0%, #7A1F3D 45%, #2A0A18 100%)', touchAction: 'none' }}>
-      <style>{'@keyframes cdp-breath{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}@keyframes cdp-bub{from{transform:translateY(0);opacity:.9}to{transform:translateY(-110vh);opacity:0}}@keyframes cdp-swim{from{transform:translateX(-20vw)}to{transform:translateX(120vw)}}'}</style>
+      <style>{'@keyframes cdp-breath{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}@keyframes cdp-bub{from{transform:translateY(0);opacity:.9}to{transform:translateY(-110vh);opacity:0}}@keyframes cdp-swim{from{transform:translateX(-20vw) scaleX(-1)}to{transform:translateX(120vw) scaleX(-1)}}'}</style>
       <svg className="absolute inset-0 h-full w-full" viewBox="0 0 160 90" preserveAspectRatio="none" style={{ animation: 'cdp-breath 2.6s ease-in-out infinite' }}>
         {[14, 32, 50, 68, 86, 104, 122, 140].map((x) => (
           <g key={x} fill="none" stroke="rgba(255,190,205,.28)" strokeWidth="3" strokeLinecap="round">

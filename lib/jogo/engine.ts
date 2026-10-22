@@ -499,9 +499,10 @@ export class Game {
   private toResults() {
     this.setMode('results');
     this.rain = [];
-    const bonus = this.finished ? 5 : this.complete ? 3 : 0;
+    // sugestão para o app: cerca de 12% dos pontos da partida (até 17% com a casa pronta), mínimo 2
+    const pct = 0.12 + (this.finished ? 0.05 : this.complete ? 0.03 : 0);
     this.results = Array.from(this.players.values())
-      .map((p) => ({ id: p.id, slot: p.slot, name: p.name, pts: p.pts, delivered: p.delivered, suggest: Math.min(30, Math.round(p.pts / 4)) + bonus }))
+      .map((p) => ({ id: p.id, slot: p.slot, name: p.name, pts: p.pts, delivered: p.delivered, suggest: Math.max(2, Math.round(p.pts * pct)) }))
       .sort((a, b) => b.pts - a.pts);
     this.sfx('results');
   }
