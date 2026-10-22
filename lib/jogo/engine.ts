@@ -257,7 +257,7 @@ export class Game {
     let amt = Math.max(0, Math.min(1, k / 4, (e.dur - k) / 4));
     // os toques do desafio "escoar a água" baixam o nível
     const d = this.chs.find((c) => c.kind === 'drain' && c.started);
-    if (d) amt *= 1 - 0.92 * (d.ok ? 1 : clamp(d.have / Math.max(1, d.need)));
+    if (d) amt *= 1 - (d.ok ? 1 : clamp(d.have / Math.max(1, d.need)));
     return GROUND + 40 - (GROUND + 40 - 470) * amt; // sobe até um pouco mais da metade da tela
   }
   /** Quanto o dilúvio subiu (0..1), para o celular mostrar a água. */
@@ -891,6 +891,8 @@ export class Game {
         c.ended = true; c.ok = c.have >= c.need;
         const info = CH_INFO[c.kind];
         if (c.ok) {
+          // escoou tudo: o dilúvio acaba na hora (sem sobrar água parada na TV nem no celular)
+          if (c.kind === 'drain') { const fl = this.active('flood'); if (fl) fl.dur = this.modeT - fl.at; }
           this.players.forEach((p) => { if (p.chTaps > 0) { p.pts += 3; p.happy = 1.2; this.float(p.x, p.y - 190, '+3', CHARS[p.slot].color); } });
           this.flash(info.ok, C.olive); this.burst(this.lv.site.cx, this.lv.site.top - 260, C.olive, 36); this.sfx('chWin'); this.screen(C.olive, 0.6, 0.3, true);
         } else {
