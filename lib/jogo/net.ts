@@ -52,6 +52,8 @@ export interface StateMsg {
   ch?: ChState;
   /** Poder guardado (o celular mostra o botão de usar). */
   power?: PowerId;
+  /** Segundos até o poder guardado sumir. */
+  powerLeft?: number;
   /** O que está acontecendo com o bonequinho agora (congelado, turbo…). */
   fx?: string;
   /** Efeitos ativos no bonequinho (para o controle ficar congelado, pegando fogo…). */
@@ -61,7 +63,7 @@ export interface StateMsg {
   /** Desafios acontecendo agora na TV (terremoto, chuva, neblina…). */
   env?: string[];
 }
-export interface ChState { kind: 'quake' | 'leak'; title: string; emoji: string; prog: number; per: number; left: number }
+export interface ChState { kind: 'quake' | 'leak' | 'drain'; title: string; emoji: string; prog: number; per: number; left: number }
 export type TaskId = 'paint' | 'light' | 'garden' | 'decor';
 export type PowerId = 'freeze' | 'speed' | 'giant' | 'shrink' | 'fire' | 'magnet' | 'shield' | 'wings' | 'double';
 export interface FinState {

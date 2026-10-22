@@ -66,7 +66,7 @@ export const LEVELS: Record<1 | 2, Level> = {
     lightSpots: [[530, 400], [1290, 420], [220, 520], [1560, 540], [440, 660], [1360, 680]],
     bag: ['drizzle', 'wind', 'boulders', 'ants', 'bees', 'fog', 'lightning', 'bear', 'bear', 'boulders', 'quake', 'bees', 'wind'],
     slots: [14, 28, 42, 56, 70, 84, 112, 150, 166, 182, 198, 214, 232],
-    fixed: [{ at: 98, type: 'quake', dur: 7 }, { at: 126, type: 'flood', dur: 18 }],
+    fixed: [{ at: 98, type: 'quake', dur: 7 }, { at: 126, type: 'flood', dur: 22 }],
   },
 };
 
@@ -107,7 +107,7 @@ interface Bolt { x: number; y: number; t: number; hit: boolean }
 type Ghost = Pick<Player, 'x' | 'y' | 'pts' | 'picks' | 'delivered' | 'task' | 'helping' | 'mine' | 'taps' | 'slot' | 'power'>;
 type EventType = 'wind' | 'quake' | 'rain' | 'ants' | 'drizzle' | 'fog' | 'bees' | 'boulders' | 'lightning' | 'bear' | 'flood';
 interface GameEvent { at: number; type: EventType; dur: number; dir?: 1 | -1; started?: boolean }
-interface TapCh { kind: 'quake' | 'leak'; at: number; dur: number; need: number; have: number; started?: boolean; ended?: boolean; ok?: boolean }
+interface TapCh { kind: 'quake' | 'leak' | 'drain'; at: number; dur: number; need: number; have: number; started?: boolean; ended?: boolean; ok?: boolean }
 
 const PHASES: { types: ItemType[]; title: string }[] = [
   { types: ['stone'], title: 'Fundação na rocha!' },
@@ -132,6 +132,7 @@ const EVENT_INFO: Record<EventType, { soon: string; now: string; emoji: string; 
 const CH_INFO: Record<TapCh['kind'], { title: string; emoji: string; ok: string; fail: string }> = {
   quake: { title: 'Segurem a casa!', emoji: '🌋', ok: 'A casa ficou firme! 💪', fail: 'Caiu um pedaço… 😬' },
   leak: { title: 'Tapem as goteiras!', emoji: '💧', ok: 'Goteiras tapadas! 🙌', fail: 'A água estragou material… 😬' },
+  drain: { title: 'Cliquem para escoar a água!', emoji: '🌊', ok: 'Água escoada! 🙌', fail: 'A água levou material… 😬' },
 };
 /** Quanto material cada fase pede: cresce com o número de jogadores (mesmo quem entra no meio). */
 const needFor = (n: number): Record<ItemType, number> => ({ stone: 15 + 8 * n, brick: 26 + 13 * n, tile: 20 + 10 * n, wood: 8 + 5 * n, glass: 5 + 3 * n });
@@ -187,8 +188,12 @@ export class Game {
   waterY() {
     const e = this.active('flood');
     if (!e) return H + 50;
-    const k = this.modeT - e.at, amt = Math.min(1, k / 4, (e.dur - k) / 4);
-    return GROUND + 40 - 170 * Math.max(0, amt);
+    const k = this.modeT - e.at;
+    let amt = Math.max(0, Math.min(1, k / 4, (e.dur - k) / 4));
+    // os toques do desafio "escoar a água" baixam o nível
+    const d = this.chs.find((c) => c.kind === 'drain' && c.started);
+    if (d) amt *= 1 - 0.92 * (d.ok ? 1 : clamp(d.have / Math.max(1, d.need)));
+    return GROUND + 40 - (GROUND + 40 - 470) * amt; // sobe até um pouco mais da metade da tela
   }
   /** Modo foto: no resultado, esconde o placar para ver (e fotografar) a casa. */
   photo = false;
@@ -233,7 +238,7 @@ export class Game {
       input: { l: false, r: false, j: false }, prevJ: false, carry: null, pts: g?.pts ?? 0, picks: g?.picks ?? 0, delivered: g?.delivered ?? 0,
       dizzy: 0, walk: 0, lastSeen: this.t, happy: 0,
       task: g?.task ?? null, helping: g?.helping ?? false, mine: g?.mine ?? 0, taps: g?.taps ?? 0, budget: 20, budgetT: this.t, work: 0, chTaps: 0,
-      power: g?.power ?? null, powerT: 0, fx: NO_FX(), size: 1, hitCd: 0,
+      power: g?.power ?? null, powerT: this.t, fx: NO_FX(), size: 1, hitCd: 0,
     };
     this.ghosts.delete(id);
     this.players.set(id, p);
@@ -409,7 +414,7 @@ export class Game {
     ].sort((a, b) => a.at - b.at);
     this.chs = [
       { kind: 'quake', at: 98, dur: 7, need: 0, have: 0 },
-      { kind: 'leak', at: 136, dur: 7, need: 0, have: 0 },
+      this.level === 2 ? { kind: 'drain', at: 131, dur: 10, need: 0, have: 0 } : { kind: 'leak', at: 136, dur: 7, need: 0, have: 0 },
     ];
     this.spawnT = 0.5; this.balloonT = 16; this.powerT = 9;
     this.sfx('go');
@@ -495,6 +500,7 @@ export class Game {
       suggest: this.mode === 'results' ? r?.suggest : undefined,
       complete: this.complete, fin, ch,
       power: play && p.power ? p.power : undefined,
+      powerLeft: play && p.power ? Math.max(0, Math.ceil(30 - (this.t - p.powerT))) : undefined,
       fx: play ? this.fxText(p) : undefined,
       level: this.level,
       fxs: play ? (Object.keys(p.fx) as (keyof Fx)[]).filter((k) => p.fx[k] > 0) : undefined,
@@ -554,6 +560,8 @@ export class Game {
       this.players.forEach((p) => {
         if (p.bot) this.botThink(p);
         p.work = Math.max(0, p.work - dt * 4);
+        // poder guardado some depois de 30s sem usar (para dar lugar a outro)
+        if (p.power && this.t - p.powerT > 30) { p.power = null; this.float(p.x, p.y - 200 * p.size, 'O poder sumiu…', C.muted); }
         p.hitCd = Math.max(0, p.hitCd - dt);
         (Object.keys(p.fx) as (keyof Fx)[]).forEach((k) => (p.fx[k] = Math.max(0, p.fx[k] - dt)));
         const target = p.fx.giant > 0 ? 1.55 : p.fx.tiny > 0 ? 0.55 : 1;
@@ -605,7 +613,7 @@ export class Game {
         if (e.type === 'ants') this.ants.push({ x: -40, dir: 1, carry: null, flee: false }, { x: W + 40, dir: -1, carry: null, flee: false });
         if (e.type === 'bees') { const n = this.players.size > 4 ? 2 : 1; for (let i = 0; i < n; i++) this.swarms.push({ x: i ? W + 60 : -60, y: 300, target: null, t: 0 }); }
         if (e.type === 'boulders') this.boulderT = 0;
-        if (e.type === 'bear') for (let i = 0; i < (this.players.size > 5 ? 2 : 1); i++) { const d = (i % 2 ? -1 : Math.random() < 0.5 ? 1 : -1) as 1 | -1; this.bears.push({ x: d > 0 ? -90 : W + 90, dir: d, scared: false }); }
+        if (e.type === 'bear') this.bears.push({ x: -90, dir: 1, scared: false }, { x: W + 90, dir: -1, scared: false }); // um de cada lado
         if (e.type === 'lightning') this.boltT = 0.6;
         this.sfx(EVENT_INFO[e.type].sfx);
         if (e.type === 'quake') { this.buzzAll('storm'); this.quakeT = 0.4; }
@@ -836,7 +844,7 @@ export class Game {
     const dir = frozen ? 0 : (p.input.r ? 1 : 0) - (p.input.l ? 1 : 0);
     const stunned = p.dizzy > 0 || frozen;
     p.dizzy = Math.max(0, p.dizzy - dt); p.happy = Math.max(0, p.happy - dt);
-    const wet = p.y > this.waterY() + 20;
+    const wy = this.waterY(), wet = p.y > wy + 20, swim = p.y > wy + 40 && !p.onGround;
     const spd = (f.fast > 0 ? 1.6 : 1) * (f.burn > 0 ? 0.55 : 1) * (f.tiny > 0 ? 0.8 : 1) * (f.slow > 0 ? 0.6 : 1) * (this.active('drizzle') ? 0.72 : 1) * (wet ? 0.55 : 1);
     const acc = (p.onGround ? (rain ? 900 : 3400) : 1900) * Math.max(0.7, spd);
     if (dir && !stunned) { p.vx += dir * acc * dt; p.face = dir as 1 | -1; }
@@ -847,7 +855,12 @@ export class Game {
     // pulo (com tolerância na borda), pulo duplo no ar e pulo mais baixo se soltar cedo
     const jm = (f.fast > 0 ? 1.08 : 1) * (f.tiny > 0 ? 0.88 : 1) * (f.giant > 0 ? 1.06 : 1);
     p.coyote = p.onGround ? 0.09 : Math.max(0, p.coyote - dt);
-    if (p.input.j && !p.prevJ && !stunned) {
+    if (p.input.j && !p.prevJ && !stunned && p.y > wy + 40) {
+      // nadando: cada toque é uma braçada; perto da superfície, pula para fora
+      p.vy = p.y - wy < 140 ? -980 : -560; p.onGround = false; p.jumps = 1; p.mover = -1; p.boost = true;
+      for (let i = 0; i < 5; i++) this.sparks.push({ x: p.x + (Math.random() - 0.5) * 40, y: p.y - 90, vx: (Math.random() - 0.5) * 80, vy: -160, t: 0.3, c: 'rgba(255,255,255,0.9)' });
+      this.sfx('jump');
+    } else if (p.input.j && !p.prevJ && !stunned) {
       if (p.onGround || p.coyote > 0) { p.vy = JUMP * jm; p.onGround = false; p.coyote = 0; p.jumps = 1; p.boost = false; p.mover = -1; this.sfx('jump'); }
       else if (p.jumps < 2 || f.wings > 0) { if (f.wings > 0) for (let i = 0; i < 6; i++) this.sparks.push({ x: p.x + (Math.random() - 0.5) * 60, y: p.y - 60, vx: (Math.random() - 0.5) * 200, vy: 120, t: 0.3, c: '#E9F5C8' }); p.vy = JUMP * 0.9 * jm; p.jumps = 2; p.boost = false; this.puff(p.x, p.y); this.sfx('jump2'); }
     }
@@ -856,7 +869,8 @@ export class Game {
     p.prevJ = p.input.j;
     // em cima de plataforma que se move: vai junto
     if (p.onGround && p.mover >= 0) { const m = this.movers[p.mover]; p.x += m.x - m.px; p.y = m.y; }
-    p.vy += GRAV * dt;
+    p.vy += GRAV * (swim ? 0.2 : 1) * dt;
+    if (swim) { p.vy = Math.min(p.vy, 160) * (1 - 1.2 * dt); if (Math.random() < dt * 3) this.sparks.push({ x: p.x, y: p.y - 120, vx: 0, vy: -120, t: 0.4, c: 'rgba(255,255,255,0.8)' }); }
     const prevY = p.y;
     p.x += p.vx * dt; p.y += p.vy * dt;
     p.x = Math.max(30, Math.min(W - 30, p.x));
@@ -885,7 +899,7 @@ export class Game {
       const pw = this.items.find((i) => i.power && near(i));
       if (pw) {
         this.items = this.items.filter((i) => i !== pw);
-        p.power = pw.power!;
+        p.power = pw.power!; p.powerT = this.t;
         const P = POWERS[p.power];
         this.float(p.x, p.y - 200 * p.size, `${P.emoji} ${P.label}`, P.color);
         this.onBuzz(p.id, 'power'); this.sfx('power');

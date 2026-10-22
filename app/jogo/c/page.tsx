@@ -272,6 +272,7 @@ function Pad() {
               >
                 <span className="text-[min(7vw,12vh)] leading-none">{POWERS[st.power].emoji}</span>
                 <span className="mt-1 whitespace-nowrap text-[min(2.6vw,4.4vh)] font-black" style={{ color: POWERS[st.power].color }}>{POWERS[st.power].label}</span>
+                {st.powerLeft != null && <span className="whitespace-nowrap text-[min(2.2vw,3.6vh)] font-bold text-[#a8927a]">{st.powerLeft}s</span>}
               </button>
             ) : (
               <p className="min-w-0 flex-1 truncate text-center text-xs font-bold text-[#c4b29c]">Pegue bolhas ✨ e ganhe poderes</p>
